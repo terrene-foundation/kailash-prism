@@ -1,0 +1,11 @@
+# Kailash Prism — Navigation Patterns
+# Defines Sidebar, top-nav, bottom-nav, breadcrumb patterns.
+# See docs/specs/ for navigation specifications.
+
+version: "0.1.0"
+
+patterns:
+  - sidebar
+  - top-nav
+  - bottom-nav
+  - breadcrumb

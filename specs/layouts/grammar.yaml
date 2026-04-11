@@ -1,0 +1,13 @@
+# Kailash Prism — Layout Grammar
+# Defines Stack, Row, Grid, Split, Layer, Scroll primitives.
+# See docs/specs/04-layout-grammar.md for the full specification.
+
+version: "0.1.0"
+
+primitives:
+  - Stack
+  - Row
+  - Grid
+  - Split
+  - Layer
+  - Scroll

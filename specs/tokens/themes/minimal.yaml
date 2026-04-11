@@ -1,0 +1,7 @@
+# Kailash Prism — Minimal Theme
+# Monochrome/spacious palette.
+# See docs/specs/02-token-architecture.md for token definitions.
+
+theme:
+  name: minimal
+  description: Monochrome spacious palette

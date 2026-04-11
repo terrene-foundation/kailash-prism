@@ -1,0 +1,7 @@
+# Kailash Prism — Modern Theme
+# Vibrant/clean startup palette.
+# See docs/specs/02-token-architecture.md for token definitions.
+
+theme:
+  name: modern
+  description: Vibrant clean startup palette

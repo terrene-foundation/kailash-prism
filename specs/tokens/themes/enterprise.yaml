@@ -1,0 +1,7 @@
+# Kailash Prism — Enterprise Theme
+# Navy/slate professional palette.
+# See docs/specs/02-token-architecture.md for token definitions.
+
+theme:
+  name: enterprise
+  description: Professional enterprise palette — navy/slate

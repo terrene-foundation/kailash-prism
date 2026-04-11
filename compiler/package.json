@@ -1,0 +1,25 @@
+{
+  "name": "@kailash/prism-compiler",
+  "version": "0.1.0",
+  "description": "Kailash Prism token compiler — design specs to framework tokens",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest"
+  },
+  "keywords": [
+    "kailash",
+    "prism",
+    "design-tokens",
+    "compiler"
+  ],
+  "author": "Terrene Foundation",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/terrene-foundation/kailash-prism.git",
+    "directory": "compiler"
+  }
+}

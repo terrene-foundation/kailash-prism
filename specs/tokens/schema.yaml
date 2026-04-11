@@ -1,0 +1,14 @@
+# Kailash Prism — Token Schema
+# Defines the design token structure for all themes.
+# See docs/specs/02-token-architecture.md for the full specification.
+
+version: "0.1.0"
+
+categories:
+  color: {}
+  typography: {}
+  spacing: {}
+  elevation: {}
+  border: {}
+  motion: {}
+  breakpoint: {}
