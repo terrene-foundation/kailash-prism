@@ -1,16 +1,16 @@
 ---
 paths:
+  - "**/*.py"
+  - "**/*.rs"
   - "**/*.ts"
   - "**/*.tsx"
-  - "**/*.dart"
-  - "**/*.rs"
+  - "**/*.js"
+  - "**/*.jsx"
 ---
 
 # Observability Rules
 
 If a code path is not logged, it does not exist. Post-deployment integration failures are almost always failures to observe what was already broken in dev. Logs are not a debugging convenience — they are the contract that lets the next session know what happened.
-
-> **Note**: Code examples below use Python syntax to illustrate patterns. In kailash-prism, apply the same patterns using: `console.log`/`console.error` or a structured logger (pino, winston) for TypeScript; `debugPrint`/`log` or `package:logging` for Dart; `tracing` crate for Rust (Tauri).
 
 ## Mandatory Log Points
 
@@ -136,11 +136,8 @@ Before any of `/implement`, `/redteam`, `/deploy`, `/wrapup` reports complete, M
 **Concrete scan commands** (run all that apply to the project):
 
 ```bash
-# Test runner output (web — most recent run)
-npx vitest run 2>&1 | grep -iE 'warn|error|deprecat|fail' | sort -u
-
-# Test runner output (flutter)
-flutter test 2>&1 | grep -iE 'warn|error|deprecat|fail' | sort -u
+# Test runner output (most recent run)
+pytest --tb=short 2>&1 | grep -iE 'warn|error|deprecat|fail' | sort -u
 
 # Project log directory (any *.log file modified in the last 2 hours — proxy for "this session")
 find . -name "*.log" -mmin -120 -exec grep -HnE 'WARN|ERROR|FAIL' {} +
@@ -150,6 +147,7 @@ npm run build 2>&1 | grep -iE 'warn|error' | sort -u
 cargo build 2>&1 | grep -iE 'warning|error'
 
 # Dependency resolver
+pip check 2>&1
 npm ls --all 2>&1 | grep -iE 'missing|warn|err'
 ```
 
@@ -166,6 +164,76 @@ npm ls --all 2>&1 | grep -iE 'missing|warn|err'
 **Exception:** Hooks and cleanup paths where failure is expected may emit WARN entries that are pre-acknowledged in code via a comment marker. Same carve-out as `zero-tolerance.md` Rule 3.
 
 **Why:** Logs that no one reads are worse than no logs at all — they create the illusion of observability while letting the underlying problem fester. Without dedup, a 200-warning test run becomes 200 disposition lines and the agent rationally skips the gate; with dedup, it becomes 5–10 unique entries that are tractable.
+
+### 6. Mask Helper Output Forms
+
+Credential masking helpers MUST fail loudly and uniformly. A helper that bails on a malformed URL but returns a success-shaped string makes log triage believe the credential was masked when in fact it was written elsewhere.
+
+#### 6.1 Mask Failure Sentinels Distinct From Masked Output
+
+A masking helper that fails to parse its input MUST return a sentinel string distinguishable from any successful mask output. Returning the masked-success template (e.g. `"redis://***"`) on failure is BLOCKED.
+
+```python
+# DO — distinct sentinel
+def mask_url(url: str) -> str:
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "<unparseable redis url>"  # grep-able failure marker
+    if not parsed.scheme or not parsed.hostname:
+        return "<unparseable redis url>"
+    return f"{parsed.scheme}://***@{parsed.hostname}:{parsed.port or ''}{parsed.path}"
+
+# DO NOT — success-shape on failure
+def mask_url(url: str) -> str:
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "redis://***"  # looks masked; is actually "helper bailed"
+```
+
+**Why:** A mask helper that returns the success-shape on failure makes log triage believe the credential was masked when in fact the helper bailed and the credential may have been written to a sibling log line. Distinct sentinels surface the failure to grep.
+
+#### 6.2 Mask Form Uniform Across Helpers
+
+All URL-masking helpers in the codebase MUST emit the canonical `scheme://***@host[:port]/path` form. Variant forms (stripping userinfo entirely, masking only password) are BLOCKED.
+
+```python
+# DO — canonical form, grep-able via `***@`
+return f"redis://***@cache:6379/0"
+return f"postgresql://***@db.internal:5432/kailash"
+
+# DO NOT — userinfo stripped; audit cannot find it
+return "redis://cache:6379/0"             # looks like "no credentials" — is actually "stripped"
+return f"postgresql://user:***@db/kailash"  # partial mask leaks username
+```
+
+**Why:** A grep audit for credential leakage searches for `***@`. Helpers that strip userinfo silently bypass that audit. Uniform output form is what makes the masking layer auditable at all.
+
+### 7. Bulk Operations MUST Log Partial Failures at WARN
+
+Any bulk operation (BulkCreate, BulkUpdate, BulkDelete, BulkUpsert) that catches per-row exceptions MUST emit at least one WARN-level log line when `failed > 0`, including: operation name, total rows, failure count, and a sample error. Exception handlers in bulk ops MUST NOT use `except Exception: continue` or `except Exception: pass` without a WARN log.
+
+```python
+# DO — WARN on partial failure
+if failed_count > 0:
+    logger.warning(
+        "bulk_create.partial_failure",
+        attempted=total, failed=failed_count,
+        first_error=str(errors[0]) if errors else "unknown",
+    )
+
+# DO NOT — silent swallow (confirmed absent in kailash-py bulk_create.py:496-498)
+except Exception:
+    continue  # zero logging, zero signal
+```
+
+**Why:** Source audit confirmed: `BulkCreate._handle_batch_error()` has `except Exception: continue` with zero logging; `BulkUpsert` uses `print()` instead of a structured logger. A bulk op returning `failed: 10663` with no WARN line is invisible to alerting pipelines. See 0052-DISCOVERY §2.1 and `guides/deterministic-quality/06-observability-primitives.md` §2.
+
+**BLOCKED responses:**
+- "The caller will see the return value, no log needed"
+- "We return a failure list, that's enough"
+- "We already log at DEBUG"
 
 ## MUST NOT
 
