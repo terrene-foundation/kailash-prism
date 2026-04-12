@@ -55,7 +55,7 @@ export interface RouteNode {
   template?: string;
   position?: 'top' | 'bottom';
   children?: RouteNode[];
-  badge?: { type: 'count' | 'dot'; source?: string };
+  badge?: { type: 'count' | 'dot'; value?: number; source?: string };
   navVisible?: boolean;
   dividerBefore?: boolean;
   group?: string;
@@ -370,7 +370,7 @@ function NavItemButton({
               textAlign: 'center',
             }}
           >
-            {route.badge.type === 'dot' ? '●' : '0'}
+            {route.badge.type === 'dot' ? '●' : String(route.badge.value ?? 0)}
           </span>
         )}
       </button>
