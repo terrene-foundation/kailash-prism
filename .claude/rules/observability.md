@@ -1,16 +1,16 @@
 ---
 paths:
-  - "**/*.py"
-  - "**/*.rs"
   - "**/*.ts"
   - "**/*.tsx"
-  - "**/*.js"
-  - "**/*.jsx"
+  - "**/*.dart"
+  - "**/*.rs"
 ---
 
 # Observability Rules
 
 If a code path is not logged, it does not exist. Post-deployment integration failures are almost always failures to observe what was already broken in dev. Logs are not a debugging convenience — they are the contract that lets the next session know what happened.
+
+> **Note**: Code examples below use Python syntax to illustrate patterns. In kailash-prism, apply the same patterns using: `console.log`/`console.error` or a structured logger (pino, winston) for TypeScript; `debugPrint`/`log` or `package:logging` for Dart; `tracing` crate for Rust (Tauri).
 
 ## Mandatory Log Points
 

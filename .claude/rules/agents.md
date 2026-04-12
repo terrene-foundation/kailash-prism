@@ -54,19 +54,19 @@ Pre-existing failures MUST be fixed (see `rules/zero-tolerance.md` Rule 1). No w
 
 ## MUST: Worktree Isolation for Compiling Agents
 
-When launching agents that will compile Rust code (build, test, implement), MUST use `isolation: "worktree"` to avoid build directory lock contention.
+When launching agents that will compile Rust code (tauri-rs builds), MUST use `isolation: "worktree"` to avoid build directory lock contention. This applies to Tauri Rust compilation only — web (TypeScript) and Flutter (Dart) builds do not use exclusive file locks and can run in parallel without worktrees.
 
 ```
-# DO: Independent target/ dirs, compile in parallel
-Agent(isolation: "worktree", prompt: "implement feature X...")
-Agent(isolation: "worktree", prompt: "implement feature Y...")
+# DO: Independent target/ dirs for Rust compilation
+Agent(isolation: "worktree", prompt: "build tauri-rs feature X...")
+Agent(isolation: "worktree", prompt: "build tauri-rs feature Y...")
 
-# DO NOT: Multiple agents sharing same target/ (serializes on lock)
-Agent(prompt: "implement feature X...")
-Agent(prompt: "implement feature Y...")  # Blocks waiting for X's build lock
+# OK WITHOUT WORKTREE: Web and Flutter builds (no lock contention)
+Agent(prompt: "implement React component X...")
+Agent(prompt: "implement Flutter widget Y...")
 ```
 
-**Why:** Cargo uses an exclusive filesystem lock on `target/`. Two cargo processes in the same directory serialize completely, turning parallel agents into sequential execution. Worktrees give each agent its own `target/` directory.
+**Why:** Cargo uses an exclusive filesystem lock on `target/`. Two cargo processes in the same directory serialize completely. Worktrees give each agent its own `target/` directory. This only affects the `tauri-rs/` directory; `web/` and `flutter/` builds are safe in parallel.
 
 ## MUST NOT
 

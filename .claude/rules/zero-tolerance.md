@@ -51,9 +51,10 @@ A warning is not "less broken" than an error. It is an error that the framework 
 Production code MUST NOT contain:
 
 - `TODO`, `FIXME`, `HACK`, `STUB`, `XXX` markers
-- `raise NotImplementedError`
-- `pass # placeholder`, empty function bodies
-- `return None # not implemented`
+- `throw new Error('Not implemented')` / `throw UnimplementedError()` (TypeScript/Dart)
+- `raise NotImplementedError` (Python, if any helper scripts)
+- Empty function bodies, `return undefined`, `return null // not implemented`
+- `pass # placeholder` (Python)
 
 **No simulated/fake data:**
 
@@ -67,17 +68,19 @@ Production code MUST NOT contain:
 - `generate*()` / `mock*()` functions producing synthetic data
 - `Math.random()` used for display data
 
-**Why:** Frontend mock data is invisible to Python detection but has the same effect — users see fake data presented as real.
+**Why:** Frontend mock data is invisible to static detection but has the same effect — users see fake data presented as real.
 
 ## Rule 3: No Silent Fallbacks or Error Hiding
 
-- `except: pass` (bare except with pass) — BLOCKED
-- `catch(e) {}` (empty catch) — BLOCKED
-- `except Exception: return None` without logging — BLOCKED
+- `catch(e) {}` (empty catch in TypeScript) — BLOCKED
+- `catch (_) {}` (empty catch in Dart) — BLOCKED
+- `catch(e) { return null }` without logging — BLOCKED
+- `.catch(() => {})` (swallowed promise rejection) — BLOCKED
+- `except: pass` (bare except with pass, if any Python) — BLOCKED
 
 **Why:** Silent error swallowing hides bugs until they cascade into data corruption or production outages with no stack trace to diagnose.
 
-**Acceptable:** `except: pass` in hooks/cleanup where failure is expected.
+**Acceptable:** Empty catch in cleanup/disposal where failure is expected and documented.
 
 ## Rule 4: No Workarounds for Core SDK Issues
 
