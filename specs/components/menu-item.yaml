@@ -1,0 +1,143 @@
+name: MenuItem
+category: molecule
+version: 0.1.0
+description: Individual item within a menu, supporting icons, keyboard shortcuts, submenus, and destructive variants
+
+composed_of:
+  - Icon
+  - Typography
+  - Kbd
+  - Divider
+
+props:
+  - name: label
+    type: string
+    required: true
+    default: null
+    description: Text label displayed for the menu item
+  - name: icon
+    type: IconName
+    required: false
+    default: null
+    description: Icon displayed before the label
+  - name: shortcut
+    type: string
+    required: false
+    default: null
+    description: Keyboard shortcut text displayed at the end of the item
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: Whether the menu item is disabled
+  - name: onClick
+    type: "() => void"
+    required: false
+    default: null
+    description: Callback invoked when the item is activated
+  - name: children
+    type: "MenuItem[]"
+    required: false
+    default: null
+    description: Nested menu items for submenu support
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Normal state, not highlighted
+    - name: hover
+      description: Item is highlighted by mouse or keyboard focus
+    - name: active
+      description: Item's submenu is open
+    - name: disabled
+      description: Item is non-interactive and visually dimmed
+  transitions:
+    - from: default
+      to: hover
+      trigger: Mouse enters or keyboard navigates to the item
+      visual_change: Background changes to hover color
+    - from: hover
+      to: default
+      trigger: Mouse leaves or keyboard navigates away
+      visual_change: Background returns to default
+    - from: hover
+      to: active
+      trigger: Item with submenu is activated (click or ArrowRight)
+      visual_change: Submenu panel appears to the side
+    - from: active
+      to: default
+      trigger: Submenu closes (ArrowLeft or Escape)
+      visual_change: Submenu panel hidden, background returns to default
+    - from: "*"
+      to: disabled
+      trigger: disabled prop set to true
+      visual_change: Text and icon become dimmed, item non-interactive
+
+variants:
+  - name: default
+    description: Standard menu item
+  - name: destructive
+    description: Red-colored text for dangerous actions (delete, remove)
+  - name: separator
+    description: Renders a visual Divider line instead of an interactive item
+
+accessibility:
+  role: menuitem
+  aria_attributes:
+    - attribute: aria-haspopup
+      source: Set to true when children (submenu) are present
+      required: false
+    - attribute: aria-disabled
+      source: Set to true when disabled prop is true
+      required: true
+    - attribute: aria-expanded
+      source: Set when item has submenu, indicates if submenu is open
+      required: false
+  keyboard:
+    - key: ArrowDown
+      action: Moves focus to the next menu item
+    - key: ArrowUp
+      action: Moves focus to the previous menu item
+    - key: ArrowRight
+      action: Opens submenu if present
+    - key: ArrowLeft
+      action: Closes submenu and returns focus to parent
+    - key: Enter
+      action: Activates the menu item
+    - key: Space
+      action: Activates the menu item
+  focus:
+    tabindex: "-1"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: label prop provides the accessible name, shortcut announced after
+    announcements:
+      - Submenu state announced when opened or closed
+
+responsive:
+  - breakpoint: mobile
+    behavior: Same layout across all breakpoints (always in floating context)
+  - breakpoint: tablet
+    behavior: Same layout across all breakpoints
+  - breakpoint: desktop
+    behavior: Same layout across all breakpoints
+  - breakpoint: wide
+    behavior: Same layout across all breakpoints
+
+tokens:
+  consumes:
+    - menu-item.default.bg
+    - menu-item.hover.bg
+    - menu-item.default.text
+    - menu-item.hover.text
+    - menu-item.default.padding
+    - menu-item.default.gap
+    - menu-item.default.height
+  inherits_from: null

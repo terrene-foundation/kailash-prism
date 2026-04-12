@@ -1,0 +1,125 @@
+name: ToggleGroup
+category: molecule
+version: 0.1.0
+description: Group of toggle segments for single or multiple selection, functioning as a segmented control
+
+composed_of:
+  - Button
+  - Icon
+
+props:
+  - name: options
+    type: "{ value: string; label: string; icon?: IconName }[]"
+    required: true
+    default: null
+    description: Array of toggle options with values, display labels, and optional icons
+  - name: value
+    type: "string | string[]"
+    required: true
+    default: null
+    description: Currently selected value(s); string for single selection, array for multiple
+  - name: onChange
+    type: "(value: string | string[]) => void"
+    required: true
+    default: null
+    description: Callback invoked when the selection changes
+  - name: multiple
+    type: boolean
+    required: false
+    default: false
+    description: Whether multiple segments can be selected simultaneously
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: Whether the entire toggle group is disabled
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Segment is not selected and not hovered
+    - name: hover
+      description: User is hovering over a segment
+    - name: selected
+      description: Segment is currently selected
+    - name: disabled
+      description: Segment is non-interactive
+  transitions:
+    - from: default
+      to: hover
+      trigger: Mouse enters a segment
+      visual_change: Segment background changes to hover color
+    - from: hover
+      to: default
+      trigger: Mouse leaves the segment
+      visual_change: Segment background returns to default
+    - from: default
+      to: selected
+      trigger: User clicks or activates a segment
+      visual_change: Segment background changes to selected color, text becomes selected color
+    - from: selected
+      to: default
+      trigger: Another segment is selected (single mode) or segment is toggled off (multiple mode)
+      visual_change: Segment returns to default styling
+    - from: "*"
+      to: disabled
+      trigger: disabled prop set to true
+      visual_change: All segments become non-interactive with reduced opacity
+
+variants:
+  - name: default
+    description: Outlined segments with border
+  - name: pill
+    description: Rounded ends on the toggle group container
+
+accessibility:
+  role: radiogroup
+  aria_attributes:
+    - attribute: role
+      source: radiogroup for single selection, group for multiple selection
+      required: true
+    - attribute: aria-label
+      source: Describes the toggle group purpose
+      required: true
+  keyboard:
+    - key: ArrowLeft
+      action: Moves focus to the previous segment
+    - key: ArrowRight
+      action: Moves focus to the next segment
+    - key: Enter
+      action: Selects the focused segment
+    - key: Space
+      action: Selects or toggles the focused segment
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: aria-label on the group container
+    announcements:
+      - Selected state announced when segment is toggled
+
+responsive:
+  - breakpoint: mobile
+    behavior: Same layout across all breakpoints
+  - breakpoint: tablet
+    behavior: Same layout across all breakpoints
+  - breakpoint: desktop
+    behavior: Same layout across all breakpoints
+  - breakpoint: wide
+    behavior: Same layout across all breakpoints
+
+tokens:
+  consumes:
+    - toggle-group.default.bg
+    - toggle-group.default.border
+    - toggle-group.default.radius
+    - toggle-group.segment.selected.bg
+    - toggle-group.segment.selected.text
+  inherits_from: null

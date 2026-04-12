@@ -1,0 +1,76 @@
+name: Breadcrumb
+category: molecule
+version: 0.1.0
+description: Hierarchical navigation trail showing the current page location within the site structure
+
+composed_of:
+  - Link
+  - Typography
+  - Icon
+
+props:
+  - name: items
+    type: "{ label: string; href: string }[]"
+    required: true
+    default: null
+    description: Array of breadcrumb items with display label and navigation href
+  - name: separator
+    type: ReactNode
+    required: false
+    default: "/"
+    description: Visual separator between breadcrumb items
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Static display showing all breadcrumb items with the last item as current page
+  transitions: []
+
+variants:
+  - name: default
+    description: Full breadcrumb trail with all items visible
+
+accessibility:
+  role: navigation
+  aria_attributes:
+    - attribute: aria-label
+      source: Set to "Breadcrumb"
+      required: true
+    - attribute: aria-current
+      source: Set to "page" on the last item in the trail
+      required: true
+  keyboard:
+    - key: Tab
+      action: Moves focus between breadcrumb links
+    - key: Enter
+      action: Navigates to the focused breadcrumb link
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: aria-label "Breadcrumb" on the nav element
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: Middle items collapse to ellipsis with dropdown to reveal full path
+  - breakpoint: tablet
+    behavior: Middle items may collapse if trail exceeds available width
+  - breakpoint: desktop
+    behavior: Full breadcrumb trail visible
+  - breakpoint: wide
+    behavior: Full breadcrumb trail visible
+
+tokens:
+  consumes:
+    - breadcrumb.default.gap
+    - breadcrumb.separator.color
+    - breadcrumb.current.text
+  inherits_from: null

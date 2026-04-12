@@ -1,0 +1,130 @@
+name: DropdownMenu
+category: molecule
+version: 0.1.0
+description: Floating menu triggered by a button, containing a list of selectable menu items
+
+composed_of:
+  - Button
+  - IconButton
+  - MenuItem
+
+props:
+  - name: trigger
+    type: ReactNode
+    required: true
+    default: null
+    description: Element that triggers the menu (Button or IconButton)
+  - name: items
+    type: "MenuItem[]"
+    required: true
+    default: null
+    description: Array of menu item definitions
+  - name: align
+    type: '"start" | "center" | "end"'
+    required: false
+    default: "start"
+    description: Horizontal alignment of the menu relative to the trigger
+  - name: side
+    type: '"top" | "bottom"'
+    required: false
+    default: "bottom"
+    description: Vertical side on which the menu appears relative to the trigger
+  - name: onSelect
+    type: "(item: MenuItem) => void"
+    required: false
+    default: null
+    description: Callback invoked when a menu item is selected
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: closed
+  states:
+    - name: closed
+      description: Menu is hidden, only trigger is visible
+    - name: open
+      description: Menu is visible as a floating panel
+    - name: navigating
+      description: User is navigating items with keyboard
+  transitions:
+    - from: closed
+      to: open
+      trigger: User clicks the trigger element
+      visual_change: Floating menu panel appears with menu items
+    - from: open
+      to: navigating
+      trigger: User presses arrow keys to navigate items
+      visual_change: Focus highlight moves between menu items
+    - from: open
+      to: closed
+      trigger: User selects an item, clicks outside, or presses Escape
+      visual_change: Menu panel closes, focus returns to trigger
+    - from: navigating
+      to: closed
+      trigger: User selects an item or presses Escape
+      visual_change: Menu panel closes, focus returns to trigger
+
+variants:
+  - name: default
+    description: Standard floating dropdown menu
+
+accessibility:
+  role: menu
+  aria_attributes:
+    - attribute: aria-haspopup
+      source: Set to "menu" on the trigger element
+      required: true
+    - attribute: aria-expanded
+      source: Set to true on trigger when menu is open
+      required: true
+    - attribute: role
+      source: menu on the container element
+      required: true
+  keyboard:
+    - key: Enter
+      action: Opens menu when trigger is focused, activates item when navigating
+    - key: Space
+      action: Opens menu when trigger is focused, activates item when navigating
+    - key: Escape
+      action: Closes the menu and returns focus to trigger
+    - key: ArrowDown
+      action: Opens menu or moves to next item
+    - key: ArrowUp
+      action: Moves to previous item
+    - key: Home
+      action: Moves to first menu item
+    - key: End
+      action: Moves to last menu item
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: true
+  screen_reader:
+    label_source: Trigger element label provides the menu's accessible name
+    announcements:
+      - Menu open/close state announced
+      - Current item announced as focus moves
+
+responsive:
+  - breakpoint: mobile
+    behavior: May render as a bottom sheet instead of floating dropdown
+  - breakpoint: tablet
+    behavior: Floating dropdown positioned relative to trigger
+  - breakpoint: desktop
+    behavior: Floating dropdown positioned relative to trigger
+  - breakpoint: wide
+    behavior: Floating dropdown positioned relative to trigger
+
+tokens:
+  consumes:
+    - dropdown-menu.default.bg
+    - dropdown-menu.default.border
+    - dropdown-menu.default.radius
+    - dropdown-menu.default.shadow
+    - dropdown-menu.default.padding
+    - dropdown-menu.default.min_width
+    - dropdown-menu.default.max_height
+  inherits_from: null

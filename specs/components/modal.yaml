@@ -1,0 +1,141 @@
+# Kailash Prism — Modal Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.5
+# Overlay dialog with backdrop, focus trapping, and animated open/close transitions.
+
+version: "0.1.0"
+
+name: Modal
+category: organism
+description: "Overlay dialog with backdrop, focus trapping, and animated open/close transitions."
+
+composed_of:
+  atoms:
+    - IconButton      # Close button
+  molecules:
+    - DialogActions   # Footer action buttons (confirm/cancel)
+
+props:
+  - name: open
+    type: boolean
+    required: true
+    default: null
+    description: "Whether the modal is currently open"
+  - name: onClose
+    type: "() => void"
+    required: true
+    default: null
+    description: "Callback fired when the modal should close (Escape, backdrop click, close button)"
+  - name: title
+    type: string
+    required: true
+    default: null
+    description: "Modal header title text"
+  - name: description
+    type: string
+    required: false
+    default: null
+    description: "Secondary description text below the title"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Modal body content"
+  - name: size
+    type: '"sm" | "md" | "lg" | "xl" | "full"'
+    required: false
+    default: "md"
+    description: "Dialog max-width: sm=400px, md=560px, lg=720px, xl=960px, full=100vw"
+  - name: closable
+    type: boolean
+    required: false
+    default: true
+    description: "Whether the modal can be closed by the user (Escape and close button)"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: closed
+  states:
+    - name: closed
+      description: "Modal is not rendered or visible"
+    - name: opening
+      description: "Entry animation is playing (fade in backdrop, scale up dialog)"
+    - name: open
+      description: "Modal is fully visible and interactive; focus is trapped inside"
+    - name: closing
+      description: "Exit animation is playing (fade out backdrop, scale down dialog)"
+  transitions:
+    - from: closed
+      to: opening
+      trigger: "open prop changes from false to true"
+      visual_change: "Backdrop fades in; dialog scales up from center"
+    - from: opening
+      to: open
+      trigger: "Entry animation completes"
+      visual_change: "Focus moves to first focusable element inside the dialog"
+    - from: open
+      to: closing
+      trigger: "User presses Escape, clicks backdrop, or clicks close button"
+      visual_change: "Dialog scales down; backdrop fades out"
+    - from: closing
+      to: closed
+      trigger: "Exit animation completes"
+      visual_change: "Modal removed from DOM; focus returns to the trigger element"
+
+composition_slots:
+  - name: children
+    description: "Custom modal body content"
+  - name: footer
+    description: "Action buttons area (confirm, cancel, custom actions)"
+
+accessibility:
+  role: dialog
+  aria_attributes:
+    - attribute: aria-modal
+      source: "Static: true"
+      required: true
+    - attribute: aria-labelledby
+      source: "ID of the modal title element"
+      required: true
+    - attribute: aria-describedby
+      source: "ID of the modal description element (when present)"
+      required: false
+  keyboard:
+    - key: Escape
+      action: "Close the modal (when closable=true)"
+    - key: Tab
+      action: "Cycle focus within the modal (focus trap)"
+    - key: Shift+Tab
+      action: "Cycle focus backwards within the modal (focus trap)"
+  focus:
+    tabindex: "-1"
+    focus_visible: true
+    trap: true
+  screen_reader:
+    label_source: "aria-labelledby pointing to the title element"
+    announcements:
+      - "Dialog opened: [title]"
+      - "Dialog closed"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-screen modal regardless of size prop"
+  - breakpoint: tablet
+    behavior: "Centered dialog with size-based max-width"
+  - breakpoint: desktop
+    behavior: "Centered dialog with size-based max-width"
+  - breakpoint: wide
+    behavior: "Centered dialog with size-based max-width"
+
+tokens:
+  consumes:
+    - modal.overlay.bg
+    - modal.dialog.bg
+    - modal.dialog.radius
+    - modal.dialog.shadow
+    - modal.dialog.padding
+    - modal.dialog.max_width
+  inherits_from: null

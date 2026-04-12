@@ -1,0 +1,167 @@
+# IconButton Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.2
+
+name: IconButton
+category: atom
+description: "Icon-only button with required tooltip for accessibility."
+
+props:
+  - name: icon
+    type: IconName
+    required: true
+    default: null
+    description: "Icon to display"
+  - name: label
+    type: string
+    required: true
+    default: null
+    description: "Accessible label (shown as tooltip)"
+  - name: variant
+    type: '"primary" | "secondary" | "tertiary" | "destructive" | "ghost"'
+    required: false
+    default: "ghost"
+    description: "Visual style variant"
+  - name: size
+    type: '"sm" | "md" | "lg"'
+    required: false
+    default: "md"
+    description: "Height: sm=32px, md=40px, lg=44px"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Non-interactive state"
+  - name: loading
+    type: boolean
+    required: false
+    default: false
+    description: "Shows spinner replacing icon"
+  - name: onClick
+    type: "() => void"
+    required: false
+    default: null
+    description: "Click handler"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Idle state"
+    - name: hover
+      description: "Cursor over, tooltip visible after delay"
+    - name: active
+      description: "Being pressed"
+    - name: focus
+      description: "Has keyboard focus, tooltip visible"
+    - name: disabled
+      description: "Non-interactive"
+    - name: loading
+      description: "Action in progress"
+  transitions:
+    - from: default
+      to: hover
+      trigger: "Mouse enters"
+      visual_change: "Background tint appears, tooltip shown after 500ms delay"
+    - from: hover
+      to: default
+      trigger: "Mouse leaves"
+      visual_change: "Background tint removed, tooltip hidden"
+    - from:
+        - default
+        - hover
+      to: active
+      trigger: "Mouse down or Enter/Space key"
+      visual_change: "Scale to 0.95"
+    - from: active
+      to:
+        - default
+        - hover
+      trigger: "Mouse up or key up"
+      visual_change: "Scale returns to 1.0"
+    - from: "*"
+      to: focus
+      trigger: "Tab key"
+      visual_change: "Focus ring, tooltip shown immediately"
+    - from: "*"
+      to: disabled
+      trigger: "disabled=true"
+      visual_change: "Opacity 0.6"
+    - from: "*"
+      to: loading
+      trigger: "loading=true"
+      visual_change: "Icon replaced by Spinner"
+
+variants:
+  - name: primary
+    description: "Same color scheme as Button primary but square/circular shape"
+  - name: secondary
+    description: "Outlined variant"
+  - name: tertiary
+    description: "Text-colored, no background"
+  - name: destructive
+    description: "Destructive color scheme"
+  - name: ghost
+    description: "Transparent, icon inherits text color. Default for toolbar icons."
+
+accessibility:
+  role: "button"
+  aria_attributes:
+    - attribute: "aria-label"
+      source: "label prop (REQUIRED)"
+      required: true
+    - attribute: "aria-disabled"
+      source: "disabled prop"
+      required: true
+  keyboard:
+    - key: "Enter"
+      action: "Triggers onClick"
+    - key: "Space"
+      action: "Triggers onClick"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "label prop"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Touch target 44px minimum regardless of visual size"
+  - breakpoint: tablet
+    behavior: "Same as mobile"
+  - breakpoint: desktop
+    behavior: "Visual size matches size prop; hover shows tooltip"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "button.{variant}.bg"
+    - "button.{variant}.text"
+    - "button.{variant}.border"
+    - "button.{variant}.radius"
+    - "button.{variant}.height"
+    - "button.{variant}.padding_x"
+    - "button.{variant}.hover.bg"
+    - "button.{variant}.active.bg"
+    - "button.{variant}.focus.ring_color"
+    - "button.{variant}.focus.ring_width"
+    - "button.{variant}.focus.ring_offset"
+    - "button.{variant}.disabled.bg"
+    - "button.{variant}.disabled.text"
+    - "button.{variant}.disabled.opacity"
+  inherits_from: Button
+
+platform_notes:
+  web:
+    - "Uses native <button> element with icon child"
+    - "Tooltip implemented via Tooltip component wrapping the button"
+    - "Square aspect ratio (equal padding on all sides) unlike Button"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KIconButton"
+    - "Tooltip provided via Flutter Tooltip widget wrapping InkWell"
+    - "Padding overridden for square aspect ratio compared to KButton"
+    - "Loading spinner sized to match icon dimensions"

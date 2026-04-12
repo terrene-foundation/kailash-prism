@@ -1,0 +1,137 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.20
+version: 0.1.0
+
+name: Typography
+category: atom
+description: "Text rendering component with semantic variants."
+
+props:
+  - name: variant
+    type: '"display" | "h1" | "h2" | "h3" | "h4" | "body" | "body-sm" | "caption" | "code" | "label"'
+    required: false
+    default: "body"
+    description: "Typography scale variant"
+  - name: as
+    type: '"h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "span" | "div" | "label" | "code" | "pre"'
+    required: false
+    default: null
+    description: "HTML element to render (auto-detected from variant if not specified)"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Text content"
+  - name: color
+    type: '"primary" | "secondary" | "disabled" | "error" | "success" | "inherit"'
+    required: false
+    default: "primary"
+    description: "Text color semantic"
+  - name: truncate
+    type: boolean
+    required: false
+    default: false
+    description: "Truncate with ellipsis on overflow"
+  - name: maxLines
+    type: "number | undefined"
+    required: false
+    default: null
+    description: "Maximum lines before truncation"
+  - name: align
+    type: '"left" | "center" | "right"'
+    required: false
+    default: "left"
+    description: "Text alignment"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Renders text with specified style"
+  transitions: []
+
+variants:
+  - name: h1
+    description: "typography.heading.h1 tokens"
+  - name: h2
+    description: "typography.heading.h2 tokens"
+  - name: h3
+    description: "typography.heading.h3 tokens"
+  - name: h4
+    description: "typography.heading.h4 tokens"
+  - name: body
+    description: "typography.body.default tokens"
+  - name: body-sm
+    description: "typography.body.small tokens"
+  - name: caption
+    description: "typography.caption tokens"
+  - name: code
+    description: "typography.code tokens (monospace)"
+  - name: label
+    description: "typography.label tokens"
+
+accessibility:
+  role: "none (semantic role from HTML element)"
+  aria_attributes: []
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "Text content; heading levels from HTML element"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Font size may scale down by 1 step for h1, h2 on mobile"
+  - breakpoint: desktop
+    behavior: "Full size scale"
+
+tokens:
+  consumes:
+    - "typography.heading.h1.font_size"
+    - "typography.heading.h1.line_height"
+    - "typography.heading.h1.font_weight"
+    - "typography.heading.h2.font_size"
+    - "typography.heading.h2.line_height"
+    - "typography.heading.h2.font_weight"
+    - "typography.heading.h3.font_size"
+    - "typography.heading.h3.line_height"
+    - "typography.heading.h3.font_weight"
+    - "typography.heading.h4.font_size"
+    - "typography.heading.h4.line_height"
+    - "typography.heading.h4.font_weight"
+    - "typography.body.default.font_size"
+    - "typography.body.default.line_height"
+    - "typography.body.small.font_size"
+    - "typography.body.small.line_height"
+    - "typography.caption.font_size"
+    - "typography.caption.line_height"
+    - "typography.code.font_size"
+    - "typography.code.font_family"
+    - "typography.label.font_size"
+    - "typography.label.font_weight"
+    - "text.primary"
+    - "text.secondary"
+    - "text.disabled"
+    - "status.error"
+    - "status.success"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    When the "as" prop is not specified, auto-detect the HTML element from the
+    variant: h1-h4 map to their respective heading elements, body/body-sm/caption
+    map to <p>, code maps to <code>, label maps to <label>, display maps to <h1>.
+    For truncation, use CSS text-overflow: ellipsis with overflow: hidden and
+    white-space: nowrap. For maxLines, use -webkit-line-clamp with
+    display: -webkit-box. Ensure heading hierarchy is semantically correct even
+    when visual variant and rendered element differ (e.g., variant="h2" as="h3").
+  flutter: >
+    Map each variant to a TextStyle from the ThemeData.textTheme. Use the Text
+    widget with maxLines and overflow: TextOverflow.ellipsis for truncation.
+    The "as" prop concept does not apply in Flutter — semantics come from the
+    Semantics widget (e.g., Semantics(header: true) for headings). For the
+    code variant, use a monospace fontFamily. Align via TextAlign parameter.
+    Use DefaultTextStyle.merge for inherited color overrides.

@@ -1,0 +1,110 @@
+# Label Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.9
+
+name: Label
+category: atom
+description: "Text label associated with a form field."
+
+props:
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Label text"
+  - name: htmlFor
+    type: string
+    required: false
+    default: null
+    description: "ID of associated form field"
+  - name: required
+    type: boolean
+    required: false
+    default: false
+    description: "Shows required indicator"
+  - name: optional
+    type: boolean
+    required: false
+    default: false
+    description: "Shows (optional) text"
+  - name: error
+    type: boolean
+    required: false
+    default: false
+    description: "Error color"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Standard label"
+    - name: required
+      description: "Shows required asterisk (*) in error color"
+    - name: optional
+      description: "Shows '(optional)' in secondary text"
+    - name: error
+      description: "Label text in error color"
+  transitions:
+    - from: "*"
+      to: required
+      trigger: "required=true"
+      visual_change: "Red asterisk appended"
+    - from: "*"
+      to: error
+      trigger: "error=true"
+      visual_change: "Text color changes to status.error"
+
+variants:
+  - name: default
+    description: "text.primary, label typography"
+  - name: required
+    description: "Same as default with status.error asterisk"
+  - name: optional
+    description: "Same as default with text.secondary '(optional)' suffix"
+  - name: error
+    description: "status.error text color"
+
+accessibility:
+  role: "label"
+  aria_attributes: []
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "Children text content"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full width, stacks above input"
+  - breakpoint: tablet
+    behavior: "Same as mobile"
+  - breakpoint: desktop
+    behavior: "Can be inline or stacked depending on form layout"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "label.default.text"
+    - "label.default.font_size"
+    - "label.default.font_weight"
+    - "label.required.indicator_color"
+    - "label.error.text"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Uses native <label> element for semantic HTML"
+    - "htmlFor prop maps to HTML for attribute, associating label with input"
+    - "Clicking the label focuses the associated form field"
+    - "Required asterisk rendered as <span> with aria-hidden='true'"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KLabel"
+    - "Rendered as a Row containing Text widgets"
+    - "htmlFor concept does not exist in Flutter; association is structural (parent widget)"
+    - "Required asterisk is a separate Text widget with error color"
+    - "Optional suffix is a Text widget with secondary text style"

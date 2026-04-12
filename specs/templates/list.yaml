@@ -1,0 +1,173 @@
+# Kailash Prism — List Page Template
+# Filterable, sortable collection of records with pagination and bulk actions.
+# See docs/specs/06-page-templates.md section 6.2.2 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: List
+  description: >
+    Displays a filterable, sortable collection of records
+    with pagination and bulk actions.
+  use_cases:
+    - Contacts
+    - Orders
+    - Products
+    - Users
+    - Invoices
+    - Tickets
+    - Any CRUD list
+
+  navigation:
+    renders_inside: navigation-engine
+    breadcrumb: "Home > {section}"
+
+  layout:
+    root: Stack
+    direction: vertical
+
+  zones:
+    page-header:
+      description: Title + primary action (Add/Create) + optional bulk actions.
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      sticky: false
+      default_organism: Toolbar
+      default_props:
+        title: "{entity_plural}"
+        actions:
+          - label: "Add {entity_singular}"
+            variant: primary
+            icon: plus
+            on_click: "navigate:/{entity_path}/new"
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    filter-bar:
+      description: Search + column filters + clear button.
+      content_type: any
+      layout:
+        primitive: Row
+        props:
+          gap: 12
+          wrap: true
+      sticky: false
+      default_organism: FilterPanel
+      default_props:
+        search:
+          placeholder: "Search {entity_plural}..."
+          fields: []
+        filters: []
+      responsive:
+        wide:
+          mode: inline
+          description: All filter controls visible.
+        desktop:
+          mode: inline
+          description: Same as wide. Filter controls wrap if more than 5.
+        tablet:
+          mode: collapsed
+          description: >
+            Collapses to SearchBar + "Filters" button
+            (opens FilterPanel in SlideOver).
+        mobile:
+          mode: icon-only
+          description: >
+            SearchBar only + filter icon button.
+
+    content:
+      description: DataTable engine (primary) or CardGrid organism.
+      content_type: data
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      sticky: false
+      default_engine: DataTable
+      default_props:
+        data: "api:/{entity_path}"
+        columns: []
+        selection:
+          enabled: true
+          mode: multi
+        bulk_actions: []
+      responsive:
+        wide:
+          display: data-table
+          description: Full DataTable with all columns visible.
+        desktop:
+          display: data-table
+          description: Full DataTable with all columns visible.
+        tablet:
+          display: data-table
+          description: DataTable hides low-priority columns.
+        mobile:
+          display: card-list
+          description: >
+            Switches from DataTable to card list
+            (per DataTable responsive contract).
+
+    footer:
+      description: Result count + Pagination.
+      content_type: any
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      sticky: false
+      default_organism: Pagination
+      default_props:
+        total_count: "bind:{entity_plural}.totalCount"
+        page_size_options:
+          - 25
+          - 50
+          - 100
+      responsive:
+        wide:
+          mode: full
+          description: Text result count + full pagination controls.
+        desktop:
+          mode: full
+          description: Text result count + full pagination controls.
+        tablet:
+          mode: full
+          description: Text result count + full pagination controls.
+        mobile:
+          mode: load-more
+          description: Pagination becomes "Load more" button.
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Full layout as shown. All filter controls visible.
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Same as wide. Filter controls wrap if more than 5.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        filter-bar collapses to SearchBar + Filters button (opens FilterPanel
+        in SlideOver). DataTable hides low-priority columns.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        filter-bar becomes SearchBar only + filter icon button.
+        content switches from DataTable to card list.
+        footer pagination becomes Load more button.

@@ -1,0 +1,78 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.18
+version: 0.1.0
+
+name: Divider
+category: atom
+description: "Visual separator between content sections."
+
+props:
+  - name: orientation
+    type: '"horizontal" | "vertical"'
+    required: false
+    default: "horizontal"
+    description: "Direction"
+  - name: label
+    type: "string | undefined"
+    required: false
+    default: null
+    description: "Optional text label centered on the divider"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Static line"
+  transitions: []
+
+variants:
+  - name: horizontal
+    description: "1px height, full width, border.subtle color"
+  - name: vertical
+    description: "1px width, full height, border.subtle color"
+  - name: with-label
+    description: "Line interrupted by centered label text in text.secondary"
+
+accessibility:
+  role: "separator"
+  aria_attributes:
+    - attribute: "aria-orientation"
+      source: "orientation prop"
+      required: true
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "label prop if provided"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Same across breakpoints"
+  - breakpoint: desktop
+    behavior: "Same across breakpoints"
+
+tokens:
+  consumes:
+    - "divider.default.color"
+    - "divider.default.thickness"
+    - "divider.label.text_color"
+    - "divider.label.font_size"
+    - "divider.default.margin"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Render as an <hr> element for horizontal orientation or a <div> with
+    role="separator" for vertical. For the with-label variant, use a flex
+    container with two flex-grow lines and a centered span. Set
+    aria-orientation to match the orientation prop. Vertical dividers should
+    use align-self: stretch within a flex row parent.
+  flutter: >
+    Use the built-in Divider widget for horizontal and VerticalDivider for
+    vertical orientation. For the with-label variant, build a Row with two
+    Expanded(child: Divider()) widgets flanking a Padding(child: Text())
+    center element. Map thickness and color to the Divider's thickness and
+    color properties. Use Semantics(label: ...) when a label is provided.

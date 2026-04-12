@@ -1,14 +1,1525 @@
 # Kailash Prism — Token Schema
-# Defines the design token structure for all themes.
+# Machine-parseable schema defining the structure, required tokens, and constraints
+# for all design token categories across the three-tier system.
+#
+# The token compiler reads this schema to validate theme files.
 # See docs/specs/02-token-architecture.md for the full specification.
+#
+# Tier 1 (Primitive): Raw value scales. No semantic meaning. Named {category}.raw.{name}
+# Tier 2 (Semantic):  Intent mapped to primitives. Named {category}.{intent}.{variant}
+# Tier 3 (Component): Scoped to a component. References Tier 2 only. Named {component}.{variant}.{property}
 
 version: "0.1.0"
+spec_version: "0.1.0"
+spec_source: "docs/specs/02-token-architecture.md"
 
+# ---------------------------------------------------------------------------
+# Reference syntax used in theme files:
+#   $primitive.{path}  — references a Tier 1 value
+#   $semantic.{path}   — references a Tier 2 value
+#   Literal values that exist in the primitive scale are also valid.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Compilation errors the compiler MUST reject (not warn) on:
+# ---------------------------------------------------------------------------
+compilation_errors:
+  - code: UNRESOLVED_REFERENCE
+    description: "A $primitive.* or $semantic.* reference points to a non-existent token"
+  - code: CIRCULAR_REFERENCE
+    description: "Token A references Token B which references Token A (at any depth)"
+  - code: CONSTRAINT_VIOLATION
+    description: "A contrast ratio, touch-target, spacing-grid, or color-pairing constraint fails"
+  - code: MISSING_REQUIRED_TOKEN
+    description: "A required semantic or component token is absent"
+  - code: INVALID_VALUE
+    description: "A value does not match its type constraint (e.g., hex code wrong format, spacing not on 4px grid)"
+  - code: TIER_VIOLATION
+    description: "A component token references a primitive directly instead of going through semantic"
+  - code: THEME_INCOMPLETE
+    description: "A theme does not provide mappings for all semantic color tokens"
+  - code: SCALE_ORDER
+    description: "A scale is not strictly ascending"
+
+# ---------------------------------------------------------------------------
+# Compilation determinism rules:
+#   - Token output order is alphabetical within each section
+#   - No timestamps or session-specific data in output (source version only)
+#   - Floating-point values rounded to 4 decimal places
+#   - Color hex codes are uppercase
+#   - CSS values use consistent spacing (no trailing spaces, single space after colons)
+#   - Identical input MUST always produce byte-identical output
+# ---------------------------------------------------------------------------
+
+# ===========================================================================
+# CATEGORIES
+# ===========================================================================
 categories:
-  color: {}
-  typography: {}
-  spacing: {}
-  elevation: {}
-  border: {}
-  motion: {}
-  breakpoint: {}
+
+  # =========================================================================
+  # COLOR
+  # =========================================================================
+  color:
+    description: "Color palette, semantic assignments, and theme-aware mappings"
+
+    tier1:
+      naming_convention: "color.raw.{hue}-{shade}"
+      description: "Enumerated palette. Every color used anywhere MUST exist as a primitive."
+
+      required_tokens:
+        # Each family must have at least the minimum shades spanning light to dark.
+        # Shade numbers: 50-950 in increments of 50 or 100.
+        families:
+          - name: blue
+            purpose: "Interactive elements (or brand primary hue)"
+            min_shades: 3
+            shade_constraint: "light, default, dark"
+          - name: gray
+            purpose: "Text, borders, surfaces (or neutral)"
+            min_shades: 6
+            shade_constraint: "At minimum shades 50, 100, 200, 300, 500, 900"
+          - name: red
+            purpose: "Destructive, error"
+            min_shades: 3
+          - name: green
+            purpose: "Success"
+            min_shades: 3
+          - name: amber
+            purpose: "Warning"
+            min_shades: 3
+
+      optional_tokens:
+        # Additional hue families are permitted.
+        # Implicit primitives white (#FFFFFF) and black (#000000) need not be declared.
+        additional_families: true
+        implicit_values:
+          - name: white
+            value: "#FFFFFF"
+          - name: black
+            value: "#000000"
+
+      constraints:
+        - id: hex_format
+          rule: "Every value MUST be a 6-digit hex code"
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        - id: luminance_order
+          rule: "Within a hue family, lower shade numbers MUST have higher luminance (lighter) than higher shade numbers"
+          formula: "L = 0.2126 * R_lin + 0.7152 * G_lin + 0.0722 * B_lin (WCAG relative luminance)"
+        - id: palette_size_min
+          rule: "The palette MUST contain at least 15 distinct colors"
+          min: 15
+        - id: palette_size_max
+          rule: "The palette MUST contain no more than 80 colors"
+          max: 80
+        - id: shade_range
+          rule: "Shade numbers are in range 50-950 in increments of 50 or 100"
+
+    tier2:
+      naming_convention: "color.{intent}.{variant}"
+      description: "Semantic color tokens assigning intent to primitive values. Theme-switching layer."
+
+      token_fields:
+        - name: value
+          type: string
+          required: true
+          description: "Reference to a primitive color ($primitive.color.raw.{hue}-{shade}) for the default/light theme"
+        - name: usage
+          type: string
+          required: true
+          description: "String describing when to use this color"
+        - name: contrast_min
+          type: number
+          required: false
+          description: "Minimum contrast ratio (decimal, e.g. 4.5) against expected background. Compiler validates when present."
+
+      required_tokens:
+        # 19 required semantic color tokens
+        - path: color.interactive.primary
+          usage: "Primary actions, active states, links"
+        - path: color.interactive.primary-hover
+          usage: "Hover state for primary elements"
+        - path: color.interactive.secondary
+          usage: "Secondary actions, less prominent"
+        - path: color.interactive.destructive
+          usage: "Delete, remove, destructive actions"
+        - path: color.surface.page
+          usage: "Page background"
+        - path: color.surface.card
+          usage: "Card and container backgrounds"
+        - path: color.surface.elevated
+          usage: "Elevated surfaces (modals, popovers)"
+        - path: color.text.primary
+          usage: "High-emphasis text, headings"
+        - path: color.text.secondary
+          usage: "Low-emphasis text, descriptions"
+        - path: color.text.disabled
+          usage: "Disabled text, placeholders"
+        - path: color.text.on-primary
+          usage: "Text on primary-colored backgrounds"
+        - path: color.text.on-destructive
+          usage: "Text on destructive-colored backgrounds"
+        - path: color.border.default
+          usage: "Input borders, container borders"
+        - path: color.border.subtle
+          usage: "Dividers, separators"
+        - path: color.status.success
+          usage: "Success states, positive indicators"
+        - path: color.status.warning
+          usage: "Warning states, caution indicators"
+        - path: color.status.error
+          usage: "Error states, validation failures"
+        - path: color.status.info
+          usage: "Informational states, help indicators"
+
+      optional_tokens:
+        - path: color.interactive.primary-active
+        - path: color.interactive.secondary-hover
+        - path: color.interactive.destructive-hover
+        - path: color.surface.overlay
+          description: "Backdrop overlays"
+        - path: color.text.on-secondary
+        - path: color.text.on-success
+        - path: color.text.on-warning
+        - path: color.text.on-error
+        - path: color.text.on-info
+        - path: color.status.success-bg
+          description: "Tinted background variant"
+        - path: color.status.warning-bg
+          description: "Tinted background variant"
+        - path: color.status.error-bg
+          description: "Tinted background variant"
+        - path: color.status.info-bg
+          description: "Tinted background variant"
+        - path: color.border.focus
+          description: "Focus ring color, if distinct from interactive.primary"
+
+      constraints:
+        - id: value_references_primitive
+          rule: "Every value MUST reference a Tier 1 primitive color"
+        - id: required_count
+          # Spec states 19 but enumerates 18 tokens. Schema follows the enumerated list.
+          rule: "All enumerated required semantic color tokens must be present"
+          count: 18
+
+    tier3:
+      naming_convention: "{component}.{variant_or_state}.{property}"
+      description: "Component-scoped color tokens. MUST reference Tier 2 semantic tokens only (no direct Tier 1 references)."
+
+      required_tokens: []  # Defined per-component in the components section below
+      optional_tokens: []
+
+      constraints:
+        - id: no_primitive_references
+          rule: "Component color tokens MUST NOT reference Tier 1 primitives directly; MUST go through Tier 2 semantic tokens"
+
+    # Theme switching rules
+    theme_rules:
+      required_themes:
+        - light  # Default theme, MUST be defined
+        - dark   # MUST be defined
+      additional_themes_allowed: true  # e.g., brand-a, high-contrast
+      theme_completeness: "Every theme MUST provide a mapping for every semantic color token"
+      non_color_tokens: "Theme-invariant by default. A theme MAY override non-color tokens but overridden values MUST still satisfy all constraints."
+
+  # =========================================================================
+  # TYPOGRAPHY
+  # =========================================================================
+  typography:
+    description: "Font families, size scales, weight scales, line heights, and semantic type styles"
+
+    tier1:
+      naming_convention: "typography.raw.{sub_category}.{name}"
+      description: "Raw scales for font families, font sizes, font weights, and line heights"
+
+      required_tokens:
+        families:
+          # Naming: typography.raw.family.{name}
+          # Value: CSS font-family string (e.g. "Inter, system-ui, sans-serif")
+          - name: sans
+            required: true
+            description: "A sans-serif family"
+          - name: mono
+            required: true
+            description: "A monospace family"
+        optional_families:
+          - serif
+          - display
+
+        size_scale:
+          # Naming: typography.raw.size.{value}
+          # Values are positive integers representing pixels.
+          type: integer
+          recommended: [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 45, 57]
+          recommended_ratio: "Major Third = 1.25"
+
+        weight_scale:
+          # Naming: typography.raw.weight.{value}
+          # Values MUST be multiples of 100 in range [100, 900].
+          required_values: [400, 500, 600, 700]
+          optional_values: [100, 200, 300, 800, 900]
+
+        line_height_scale:
+          # Naming: typography.raw.line-height.{value}
+          # Values are unitless ratios.
+          required_values: [1.25, 1.4, 1.5]
+          additional_range: [1.0, 2.0]
+
+      optional_tokens:
+        families:
+          - serif
+          - display
+          - "any named family"
+
+      constraints:
+        - id: size_scale_count
+          rule: "Size scale MUST contain at least 8 values"
+          min_count: 8
+        - id: size_scale_ascending
+          rule: "Size scale MUST be strictly ascending"
+        - id: size_scale_body_range
+          rule: "Size scale MUST include a value in range [14, 18] (body text)"
+          range: [14, 18]
+        - id: size_scale_heading_range
+          rule: "Size scale MUST include a value >= 28 (heading range)"
+          min: 28
+        - id: size_scale_caption_range
+          rule: "Size scale MUST include a value in range [10, 13] (caption range)"
+          range: [10, 13]
+        - id: size_scale_gap_ratio
+          rule: "Gaps between adjacent size values MUST NOT exceed a 2x ratio (no value may be more than double the preceding value)"
+          max_ratio: 2.0
+        - id: weight_multiples
+          rule: "Weight values MUST be multiples of 100 in range [100, 900]"
+          min: 100
+          max: 900
+          divisor: 100
+        - id: line_height_ascending
+          rule: "Line height scale MUST be strictly ascending"
+        - id: line_height_range
+          rule: "Additional line height values MUST be in range [1.0, 2.0]"
+          min: 1.0
+          max: 2.0
+
+    tier2:
+      naming_convention: "typography.{intent}.{variant}"
+      description: "Composite semantic typography tokens mapping intent to primitive values"
+
+      token_fields:
+        - name: family
+          type: string
+          required: true
+          description: "MUST reference a primitive family name (sans, mono, etc.)"
+        - name: size
+          type: integer
+          required: true
+          description: "MUST be a value in typography.raw.size scale"
+        - name: weight
+          type: integer
+          required: true
+          description: "MUST be a value in typography.raw.weight scale"
+        - name: line_height
+          type: number
+          required: true
+          description: "MUST be a value in typography.raw.line-height scale"
+        - name: usage
+          type: string
+          required: true
+          description: "Description of when to use this style"
+
+      required_tokens:
+        - path: typography.heading.h1
+          usage: "Page titles"
+          constraints:
+            - "size MUST be >= 28"
+        - path: typography.heading.h2
+          usage: "Section headings"
+          constraints:
+            - "size MUST be < h1.size"
+        - path: typography.heading.h3
+          usage: "Sub-section headings"
+          constraints:
+            - "size MUST be < h2.size"
+        - path: typography.heading.h4
+          usage: "Card headings, group labels"
+          constraints:
+            - "size MUST be < h3.size"
+        - path: typography.body.default
+          usage: "Standard body text"
+          constraints:
+            - "size MUST be in range [14, 18]"
+        - path: typography.body.small
+          usage: "Compact text, table cells"
+          constraints:
+            - "size MUST be < body.default.size"
+        - path: typography.caption
+          usage: "Captions, helper text"
+          constraints:
+            - "size MUST be in range [10, 13]"
+        - path: typography.code
+          usage: "Code snippets"
+          constraints:
+            - "family MUST be 'mono'"
+        - path: typography.label
+          usage: "Form labels, button text"
+          constraints:
+            - "weight MUST be >= 500"
+
+      optional_tokens: []
+
+      constraints:
+        - id: heading_size_order
+          rule: "Strict ordering: h1.size > h2.size > h3.size > h4.size > body.default.size > body.small.size > caption.size"
+        - id: family_references_primitive
+          rule: "family field MUST reference a declared primitive family name"
+        - id: size_in_scale
+          rule: "size field MUST be a value in typography.raw.size scale"
+        - id: weight_in_scale
+          rule: "weight field MUST be a value in typography.raw.weight scale"
+        - id: line_height_in_scale
+          rule: "line_height field MUST be a value in typography.raw.line-height scale"
+
+    tier3:
+      naming_convention: "{component}.{variant}.font_size | font_weight | line_height"
+      description: "Component-scoped typography tokens. Font size and weight values reference the primitive scales."
+
+      required_tokens: []  # Defined per-component in the components section below
+      optional_tokens: []
+
+      constraints:
+        - id: font_size_in_scale
+          rule: "Every font_size value MUST be a value in typography.raw.size scale"
+        - id: font_weight_in_scale
+          rule: "Every font_weight value MUST be a value in typography.raw.weight scale"
+
+  # =========================================================================
+  # SPACING
+  # =========================================================================
+  spacing:
+    description: "Spatial scale for padding, margin, gap, and layout values"
+
+    tier1:
+      naming_convention: "spacing.raw.{value}"
+      description: "Strictly ascending scale of positive integers, each divisible by 4"
+
+      required_tokens:
+        values: [4, 8, 12, 16, 24, 32, 48, 64]
+
+      optional_tokens:
+        description: "Additional values are permitted. Values above 128 SHOULD have explicit justification in the usage field."
+        high_value_threshold: 128
+
+      constraints:
+        - id: divisible_by_4
+          rule: "Every value MUST be divisible by 4"
+          divisor: 4
+        - id: minimum_value
+          rule: "Minimum value is 4"
+          min: 4
+        - id: strictly_ascending
+          rule: "The scale MUST be strictly ascending: each value > the previous"
+        - id: min_count
+          rule: "The scale MUST contain at least 6 values"
+          min_count: 6
+
+    tier2:
+      naming_convention: "spacing.{intent}.{variant}"
+      description: "Semantic spacing tokens mapping intent to primitive spacing values"
+
+      required_tokens:
+        - path: spacing.component.padding
+          usage: "Default internal padding for components"
+          constraints:
+            - range: [12, 24]
+        - path: spacing.component.gap
+          usage: "Default gap between sibling elements"
+          constraints:
+            - range: [8, 16]
+        - path: spacing.page.margin
+          usage: "Horizontal page margins"
+          constraints:
+            - range: [16, 32]
+        - path: spacing.section.gap
+          usage: "Vertical gap between page sections"
+          constraints:
+            - range: [24, 48]
+
+      optional_tokens:
+        - path: spacing.component.padding-sm
+          description: "Small padding variant"
+        - path: spacing.component.padding-lg
+          description: "Large padding variant"
+        - path: spacing.component.gap-tight
+          description: "Tight gap within compact component groups"
+          constraints:
+            - range: [4, 12]
+        - path: spacing.component.gap-loose
+          description: "Loose gap for spacious layouts"
+          constraints:
+            - range: [16, 32]
+        - path: spacing.page.margin-mobile
+          description: "Mobile override"
+          constraints:
+            - rule: "MUST be <= spacing.page.margin"
+        - path: spacing.page.gutter
+          description: "Gutter between page-level columns such as navigation and content"
+          constraints:
+            - range: [8, 24]
+        - path: spacing.section.padding
+          description: "Padding inside a section container"
+          constraints:
+            - range: [12, 32]
+        - path: spacing.inline.gap
+          description: "Gap between inline elements like icon and label"
+          constraints:
+            - range: [4, 12]
+        - path: spacing.inline.gap-tight
+          description: "Tight inline gap such as icon inside button"
+          constraints:
+            - range: [4, 8]
+
+      constraints:
+        - id: value_in_scale
+          rule: "Every value MUST be an integer that appears in spacing.raw"
+
+    tier3:
+      naming_convention: "{component}.{variant}.padding | padding_x | padding_y | gap | height | min_width"
+      description: "Component-scoped spacing tokens"
+
+      required_tokens: []  # Defined per-component in the components section below
+      optional_tokens: []
+
+      constraints:
+        - id: spacing_in_scale_or_touch_target
+          rule: >
+            Every integer value for padding, padding_x, padding_y, gap, height, min_width
+            MUST be a value in spacing.raw OR the product of a spacing.raw value and an integer
+            multiplier. Touch-target heights (e.g. 44px) are valid even if not on the 4px grid
+            because touch-target constraints override spacing grid for heights specifically.
+        - id: grid_consistency
+          rule: >
+            Every spacing value MUST be divisible by 4.
+            Exceptions: 1px borders, 2px focus ring widths, font sizes (follow type scale),
+            line heights (ratios, exempt), touch target heights (44px, 48px),
+            icon sizes (16px, 20px, 24px).
+
+  # =========================================================================
+  # ELEVATION (maps to "shadow" in spec)
+  # =========================================================================
+  elevation:
+    description: "Box shadow definitions for visual depth. Category name is 'elevation' in schema; primitive naming uses 'shadow'."
+
+    tier1:
+      naming_convention: "shadow.raw.{name}"
+      description: "Shadow primitives. Each value is 'none' or a CSS box-shadow value string."
+
+      required_tokens:
+        - name: none
+          constraint: "MUST equal the string 'none'"
+        - name: sm
+          constraint: "Blur radius MUST be <= 4px"
+        - name: md
+          constraint: "Blur radius MUST be > sm blur and <= 10px"
+        - name: lg
+          constraint: "Blur radius MUST be > md blur and <= 20px"
+        - name: xl
+          constraint: "Blur radius MUST be > lg blur"
+
+      optional_tokens:
+        description: "Additional named shadows are permitted"
+
+      constraints:
+        - id: shadow_format
+          rule: >
+            Each shadow value (except 'none') MUST conform to:
+            {offset-x}px {offset-y}px {blur-radius}px {spread-radius}px rgba({r}, {g}, {b}, {a})
+          fields:
+            offset_x: "integer (positive, negative, or zero)"
+            offset_y: "integer (positive, negative, or zero)"
+            blur_radius: "non-negative integer"
+            spread_radius: "integer (positive, negative, or zero)"
+            r: "integer in [0, 255]"
+            g: "integer in [0, 255]"
+            b: "integer in [0, 255]"
+            a: "decimal in range (0.0, 1.0) exclusive — fully transparent (0.0) is meaningless, opaque (1.0) looks unnatural"
+        - id: composite_shadows
+          rule: "Composite shadows (multiple shadows separated by commas) are permitted"
+        - id: blur_ordering
+          rule: "Blur radii MUST be strictly ascending: sm < md < lg < xl"
+
+    tier2:
+      naming_convention: "shadow.component.{name}"
+      description: "Semantic shadow tokens for component elevation levels"
+
+      required_tokens:
+        - path: shadow.component.none
+          usage: "No shadow"
+          constraint: "MUST reference primitive 'none'"
+        - path: shadow.component.card
+          usage: "Card elevation"
+          constraint: "MUST reference primitive 'sm' or 'md'"
+        - path: shadow.component.dropdown
+          usage: "Dropdown/popover elevation"
+          constraint: "MUST reference primitive 'md' or 'lg'"
+        - path: shadow.component.modal
+          usage: "Modal/dialog elevation"
+          constraint: "MUST reference primitive 'lg' or 'xl'"
+        - path: shadow.component.tooltip
+          usage: "Tooltip/overlay elevation"
+          constraint: "MUST reference primitive 'xl'"
+
+      optional_tokens: []
+
+      constraints:
+        - id: elevation_ordering
+          rule: >
+            Elevation ordering: none < card < dropdown < modal <= tooltip.
+            If two tokens reference the same primitive, they MUST be adjacent in this ordering.
+        - id: references_primitive
+          rule: "Every value MUST reference a Tier 1 shadow primitive"
+
+    tier3:
+      naming_convention: "{component}.{variant}.shadow"
+      description: "Component-scoped shadow tokens. MUST reference Tier 2 semantic shadow tokens."
+
+      required_tokens: []  # Defined per-component in the components section below
+      optional_tokens: []
+
+      constraints:
+        - id: no_primitive_references
+          rule: "Component shadow tokens MUST NOT reference Tier 1 primitives directly"
+
+  # =========================================================================
+  # BORDER (maps to "radius" in spec)
+  # =========================================================================
+  border:
+    description: "Border radius definitions. Category name is 'border' in schema; primitive naming uses 'radius'."
+
+    tier1:
+      naming_convention: "radius.raw.{value}"
+      description: "Strictly ascending scale of non-negative integers for border-radius values"
+
+      required_tokens:
+        values:
+          - 0      # No rounding
+          - 9999   # Fully rounded (pill shape)
+        additional_required: "At least 3 additional values between 0 and 9999 MUST be present"
+        example: [0, 2, 4, 8, 12, 16, 9999]
+
+      optional_tokens:
+        description: "Additional radius values between 0 and 9999 are permitted"
+
+      constraints:
+        - id: non_negative_integers
+          rule: "All values MUST be non-negative integers"
+        - id: min_count
+          rule: "The scale MUST contain at least 5 values (including 0 and 9999)"
+          min_count: 5
+        - id: strictly_ascending
+          rule: "The scale MUST be strictly ascending"
+        - id: endpoints_required
+          rule: "Values 0 and 9999 MUST be present"
+
+    tier2:
+      naming_convention: "radius.component.{name}"
+      description: "Semantic radius tokens for component border-radius"
+
+      required_tokens:
+        - path: radius.component.none
+          usage: "No rounding"
+          constraint: "MUST equal 0"
+        - path: radius.component.small
+          usage: "Subtle rounding"
+          constraint: "MUST be in range [2, 6]"
+        - path: radius.component.default
+          usage: "Standard rounding"
+          constraints:
+            - "MUST be > small"
+            - "MUST be in range [4, 12]"
+        - path: radius.component.large
+          usage: "Pronounced rounding"
+          constraints:
+            - "MUST be > default"
+            - "MUST be in range [8, 20]"
+        - path: radius.component.pill
+          usage: "Fully rounded"
+          constraint: "MUST equal 9999"
+
+      optional_tokens: []
+
+      constraints:
+        - id: values_in_scale
+          rule: "All values MUST appear in radius.raw"
+        - id: ascending_order
+          rule: "none < small < default < large < pill"
+
+    tier3:
+      naming_convention: "{component}.{variant}.radius"
+      description: "Component-scoped radius tokens. MUST reference Tier 2 semantic radius tokens."
+
+      required_tokens: []  # Defined per-component in the components section below
+      optional_tokens: []
+
+      constraints:
+        - id: no_primitive_references
+          rule: "Component radius tokens MUST NOT reference Tier 1 primitives directly"
+
+  # =========================================================================
+  # MOTION
+  # =========================================================================
+  motion:
+    description: "Animation durations and easing functions"
+
+    tier1:
+      naming_convention: "motion.raw.duration.{value} | motion.raw.easing.{name}"
+      description: "Raw duration scale (milliseconds) and easing function definitions"
+
+      required_tokens:
+        duration_scale:
+          # Naming: motion.raw.duration.{value}
+          # Values are non-negative integers representing milliseconds.
+          values: [0, 100, 150, 200, 300, 500]
+          description: "Value 0 represents no animation. Additional values are permitted."
+
+        easing_functions:
+          # Naming: motion.raw.easing.{name}
+          - name: linear
+            value: "linear"
+            purpose: "Constant speed, used for progress bars and reduced-motion"
+          - name: default
+            value_type: "cubic-bezier()"
+            purpose: "Standard easing for most interactions"
+          - name: emphasize
+            value_type: "cubic-bezier()"
+            purpose: "Emphasizing entrances and layout shifts"
+          - name: decelerate
+            value_type: "cubic-bezier()"
+            purpose: "Elements entering the screen"
+          - name: accelerate
+            value_type: "cubic-bezier()"
+            purpose: "Elements leaving the screen"
+
+      optional_tokens:
+        additional_durations: true
+        additional_easings: true
+
+      constraints:
+        - id: duration_ascending
+          rule: "Duration scale MUST be strictly ascending"
+        - id: duration_max
+          rule: "Maximum permitted duration is 2000ms (animations longer than 2s are orchestrated sequences, not motion tokens)"
+          max: 2000
+        - id: duration_non_negative
+          rule: "All duration values MUST be non-negative integers"
+        - id: easing_format
+          rule: >
+            Each easing value MUST be either 'linear' or match:
+            ^cubic-bezier\(\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*\)$
+
+    tier2:
+      naming_convention: "motion.interaction.{name}"
+      description: "Composite semantic motion tokens mapping interaction intent to duration + easing"
+
+      token_fields:
+        - name: duration
+          type: integer
+          required: true
+          description: "MUST be a value in motion.raw.duration scale"
+        - name: easing
+          type: string
+          required: true
+          description: "MUST reference a primitive easing name"
+        - name: usage
+          type: string
+          required: true
+          description: "Description of the interaction this token governs"
+
+      required_tokens:
+        - path: motion.interaction.micro
+          usage: "Toggles, checks, small state changes"
+          constraints:
+            - "duration MUST be in range [50, 150]"
+        - path: motion.interaction.state
+          usage: "Hover, focus, press transitions"
+          constraints:
+            - "duration MUST be in range [150, 250]"
+        - path: motion.interaction.content
+          usage: "Tab switch, accordion, content reveal"
+          constraints:
+            - "duration MUST be in range [250, 400]"
+        - path: motion.interaction.layout
+          usage: "Sidebar collapse, modal enter/exit"
+          constraints:
+            - "duration MUST be in range [350, 600]"
+
+      optional_tokens: []
+
+      constraints:
+        - id: duration_ordering
+          rule: "micro.duration < state.duration < content.duration < layout.duration"
+        - id: duration_in_scale
+          rule: "duration field MUST be a value in motion.raw.duration scale"
+        - id: easing_references_primitive
+          rule: "easing field MUST reference a declared primitive easing name"
+
+    tier3:
+      naming_convention: "{component}.{variant}.duration | easing"
+      description: "Component-scoped motion tokens"
+
+      required_tokens: []
+      optional_tokens: []
+
+      constraints: []
+
+    # Motion constraint rules applied globally
+    motion_constraints:
+      prefers_reduced_motion:
+        rule: "When user prefers reduced motion"
+        duration_override: "0.01ms"
+        duration_override_reason: "Not 0ms because 0ms may skip the animation end state"
+        easing_override: "linear"
+        exception: "Opacity transitions are exempt (instant but still reach target value)"
+
+      gpu_only_animation:
+        rule: "CSS animations and transitions MUST only animate GPU-composited properties"
+        allowed_properties:
+          - transform
+          - opacity
+          - filter
+          - clip-path
+        blocked_properties:
+          - width
+          - height
+          - top
+          - left
+          - margin
+          - padding
+          - border
+          - background-color
+        color_transition_note: "Color transitions permitted only via filter property or by transitioning opacity between two layered elements"
+        flutter_equivalent: >
+          Animations MUST use AnimatedOpacity, AnimatedSlide, ScaleTransition,
+          FadeTransition, or equivalent compositor-friendly widgets.
+          AnimatedContainer is permitted only for decoration changes (compositor properties),
+          not for size changes.
+
+  # =========================================================================
+  # BREAKPOINT
+  # =========================================================================
+  breakpoint:
+    description: "Responsive viewport breakpoints"
+
+    tier1:
+      naming_convention: "breakpoint.raw.{name}"
+      description: "Non-negative integers representing minimum viewport width in pixels"
+
+      required_tokens:
+        - name: mobile
+          value: 0
+          purpose: "Base breakpoint, smallest viewports"
+        - name: tablet
+          value: 768
+          purpose: "Tablet portrait, phone landscape"
+        - name: desktop
+          value: 1024
+          purpose: "Standard desktop"
+        - name: wide
+          value: 1440
+          purpose: "Wide desktop, large monitors"
+
+      optional_tokens:
+        description: "Additional breakpoints are NOT permitted (exactly 4 required for consistent responsive behavior)"
+        additional_allowed: false
+
+      constraints:
+        - id: strictly_ascending
+          rule: "Values MUST be strictly ascending: mobile < tablet < desktop < wide"
+        - id: exact_count
+          rule: "Exactly 4 breakpoints are REQUIRED"
+          count: 4
+        - id: fixed_values
+          rule: "mobile MUST equal 0, tablet MUST equal 768, desktop MUST equal 1024, wide MUST equal 1440"
+
+    tier2:
+      naming_convention: "breakpoint.{name}"
+      description: "Semantic breakpoint tokens extending primitives with min/max range and usage"
+
+      token_fields:
+        - name: min
+          type: integer
+          required: true
+          description: "Minimum viewport width (inclusive)"
+        - name: max
+          type: integer_or_null
+          required: true
+          description: "Maximum viewport width (inclusive). null for the widest breakpoint (unbounded)."
+        - name: usage
+          type: string
+          required: false
+
+      required_tokens:
+        - path: breakpoint.mobile
+          min: 0
+          max: "tablet.min - 1"
+          description: "{ min: 0, max: 767 }"
+        - path: breakpoint.tablet
+          min: 768
+          max: "desktop.min - 1"
+          description: "{ min: 768, max: 1023 }"
+        - path: breakpoint.desktop
+          min: 1024
+          max: "wide.min - 1"
+          description: "{ min: 1024, max: 1439 }"
+        - path: breakpoint.wide
+          min: 1440
+          max: null
+          description: "{ min: 1440, max: null (unbounded) }"
+
+      optional_tokens: []
+
+      constraints:
+        - id: contiguous_ranges
+          rule: "The max of each breakpoint MUST equal min of the next breakpoint minus 1"
+        - id: wide_unbounded
+          rule: "The 'wide' breakpoint has max: null (no upper bound)"
+
+    tier3:
+      naming_convention: "N/A"
+      description: "Breakpoints do not have component-level tokens. Components use semantic breakpoints for responsive behavior."
+
+      required_tokens: []
+      optional_tokens: []
+      constraints: []
+
+# ===========================================================================
+# COMPONENT TOKEN STRUCTURE
+# ===========================================================================
+# Defines the required properties and states for each component category.
+# Tier 3 tokens are organized per-component referencing Tier 2 semantics.
+# ===========================================================================
+
+component_token_structure:
+
+  # ---------------------------------------------------------------------------
+  # Property definitions available for component tokens
+  # ---------------------------------------------------------------------------
+  properties:
+    bg:
+      type: string
+      description: "Background color — $semantic.color.{...}"
+    text:
+      type: string
+      description: "Text color — $semantic.color.{...}"
+    border:
+      type: string
+      description: "Border color — $semantic.color.{...} or 'none'"
+    shadow:
+      type: string
+      description: "Box shadow — $semantic.shadow.{...}"
+    radius:
+      type: string
+      description: "Border radius — $semantic.radius.{...}"
+    padding:
+      type: integer
+      description: "Internal padding (shorthand) — must be in spacing.raw or valid multiplier"
+    padding_x:
+      type: integer
+      description: "Horizontal padding"
+    padding_y:
+      type: integer
+      description: "Vertical padding"
+    height:
+      type: integer
+      description: "Component height (for interactive components)"
+    min_width:
+      type: integer
+      description: "Minimum width (optional)"
+    font_size:
+      type: integer
+      description: "Font size — must be in typography.raw.size"
+    font_weight:
+      type: integer
+      description: "Font weight — must be in typography.raw.weight"
+    line_height:
+      type: number
+      description: "Line height ratio"
+    gap:
+      type: integer
+      description: "Internal gap between children"
+    icon_size:
+      type: integer
+      description: "Icon dimensions (square, optional)"
+    # Focus-state-specific properties
+    ring_color:
+      type: string
+      description: "Focus ring color — $semantic.color.{...}"
+    ring_width:
+      type: integer
+      description: "Focus ring width in pixels (2px permitted as exception to 4px grid)"
+    ring_offset:
+      type: integer
+      description: "Focus ring offset in pixels"
+
+  # ---------------------------------------------------------------------------
+  # Component categories and their required property sets
+  # ---------------------------------------------------------------------------
+  categories:
+
+    interactive_atoms:
+      description: "Atoms with interactive states"
+      components:
+        - button
+        - icon-button
+        - text-input
+        - text-area
+        - select
+        - checkbox
+        - radio
+        - toggle
+        - link
+      required_properties:
+        - bg
+        - text
+        - border
+        - radius
+        - height
+      required_states:
+        - hover
+        - active
+        - focus
+        - disabled
+      focus_state_required_properties:
+        - ring_color
+        - ring_width
+        - ring_offset
+
+    display_atoms:
+      description: "Atoms for display (non-interactive or minimally interactive)"
+      components:
+        - badge
+        - avatar
+        - tag
+        - tooltip
+        - spinner
+        - progress-bar
+        - skeleton
+        - divider
+        - image
+        - status-dot
+        - separator
+        - kbd
+      required_properties:
+        - bg
+        - text       # where applicable
+        - radius     # where applicable
+      required_states: []  # No interactive states required
+
+    special_atoms:
+      description: "Atoms with special token rules"
+      components:
+        - typography     # Uses semantic typography tokens directly; no separate component token set
+        - visually-hidden  # No visual tokens (invisible by design)
+        - icon           # Uses color + size tokens only
+        - label          # Uses typography + color tokens only
+
+    molecules:
+      description: "Molecules — container-level tokens only; internal atoms inherit their own token sets"
+      components:
+        - form-field
+        - search-bar
+        - select-field
+        - date-picker
+        - file-upload
+        - nav-item
+        - breadcrumb
+        - pagination
+        - tab
+        - alert-banner
+        - toast
+        - empty-state
+        - metric-card
+        - user-card
+        - list-item
+        - menu-item
+        - dropdown-menu
+        - popover
+        - dialog-actions
+        - tag-input
+        - toggle-group
+        - step-indicator
+      required_properties:
+        - bg
+        - border       # or "none"
+        - radius
+        - padding
+
+    organisms:
+      description: "Organisms — container-level tokens; internal molecules/atoms inherit their own token sets"
+      components:
+        - app-header
+        - sidebar
+        - data-table
+        - form
+        - modal
+        - command-palette
+        - slide-over
+        - filter-panel
+        - card-grid
+        - list-view
+        - toolbar
+        - stats-row
+        - form-wizard
+        - notification-center
+        - settings-section
+        - chat-message
+        - chat-input
+        - stream-of-thought
+        - action-plan
+        - citation-panel
+        - conversation-sidebar
+        - suggestion-chips
+      required_properties:
+        - bg
+        - border       # or "none"
+        - radius
+        - padding
+
+  # ---------------------------------------------------------------------------
+  # Per-component variant and state definitions
+  # ---------------------------------------------------------------------------
+  component_variants:
+
+    # -- Atoms --
+
+    button:
+      variants: [primary, secondary, tertiary, destructive, ghost]
+      states_per_variant: [default, hover, active, focus, disabled, loading]
+
+    icon-button:
+      variants: [primary, secondary, tertiary, destructive, ghost]
+      states_per_variant: [default, hover, active, focus, disabled, loading]
+
+    text-input:
+      states: [default, focus, error, disabled, readonly]
+
+    text-area:
+      states: [default, focus, error, disabled, readonly]
+
+    select:
+      states: [default, open, focus, error, disabled]
+
+    checkbox:
+      variants: [unchecked, checked, indeterminate, disabled]
+      states_per_variant: [default, hover, focus]
+
+    radio:
+      variants: [unselected, selected, disabled]
+      states_per_variant: [default, hover, focus]
+
+    toggle:
+      variants: [off, on, disabled]
+      states_per_variant: [default, hover, focus]
+
+    label:
+      states: [default, required, optional, error]
+
+    badge:
+      variants: [neutral, success, warning, error, info]
+
+    avatar:
+      variants: [image, initials, fallback]
+      sizes:
+        sm: 24
+        md: 32
+        lg: 40
+        xl: 48
+
+    icon:
+      variants: [default, primary, secondary, disabled]
+      sizes:
+        sm: 16
+        md: 20
+        lg: 24
+
+    tag:
+      states: [default, selected, removable, disabled]
+
+    tooltip:
+      variants: [default]
+      note: "Single variant; positioned by logic, not tokens"
+
+    spinner:
+      variants: [default]
+      sizes:
+        sm: 16
+        md: 24
+        lg: 32
+
+    progress-bar:
+      variants: [default, success, error]
+
+    skeleton:
+      variants: [default]
+      note: "Single variant, animated"
+
+    divider:
+      variants: [horizontal, vertical, with-label]
+
+    link:
+      states: [default, hover, visited, focus, disabled]
+
+    image:
+      states: [loading, loaded, error]
+
+    kbd:
+      variants: [default]
+
+    status-dot:
+      variants: [success, warning, error, info, neutral]
+
+    separator:
+      variants: [default]
+
+    # -- Molecules --
+
+    form-field:
+      token_scope: "Container: padding, gap between label/input/help-text"
+
+    search-bar:
+      token_scope: "Container: bg, border, radius, height"
+
+    select-field:
+      token_scope: "Container: same as form-field"
+
+    date-picker:
+      token_scope: "Container + calendar popup: bg, border, radius, shadow"
+
+    file-upload:
+      token_scope: "Drop zone: bg, border (dashed), border-active, radius"
+
+    nav-item:
+      states: [default, hover, active, disabled]
+      token_scope: "padding, gap, text, bg"
+
+    breadcrumb:
+      token_scope: "Container: gap; separator: text color"
+
+    pagination:
+      token_scope: "Container: gap; page buttons use button tokens"
+
+    tab:
+      states: [default, active, hover, disabled]
+      token_scope: "indicator color and position"
+
+    alert-banner:
+      variants: [info, success, warning, error]
+      token_scope: "bg, border, text, icon-color"
+
+    toast:
+      variants: [info, success, warning, error]
+      token_scope: "bg, border, text, shadow"
+
+    empty-state:
+      token_scope: "Container: padding; icon: color, size; text: color"
+
+    metric-card:
+      token_scope: "Container: bg, border, radius, padding; value: font-size, weight; trend: up-color, down-color"
+
+    user-card:
+      token_scope: "Container: bg, border, radius, padding; uses avatar + typography tokens"
+
+    list-item:
+      states: [default, hover, selected, disabled]
+      token_scope: "bg, text, border-bottom, padding"
+
+    menu-item:
+      states: [default, hover, active, disabled]
+      token_scope: "bg, text, padding, gap"
+
+    dropdown-menu:
+      token_scope: "Container: bg, border, radius, shadow, padding"
+
+    popover:
+      token_scope: "Container: bg, border, radius, shadow, padding"
+
+    dialog-actions:
+      token_scope: "Container: padding, gap, border-top"
+
+    tag-input:
+      token_scope: "Container: bg, border, radius; reuses tag + text-input tokens"
+
+    toggle-group:
+      token_scope: "Container: bg, border, radius; segment uses button-like tokens"
+
+    step-indicator:
+      states: [completed, current, upcoming]
+      token_scope: "Step circle: bg, text, border, size; connector: color, width"
+
+    # -- Organisms --
+
+    app-header:
+      token_scope: "Container: bg, shadow, height, padding; uses nav-item + avatar tokens"
+
+    sidebar:
+      token_scope: "Container: bg, width, width-collapsed, border-right, padding"
+
+    data-table:
+      token_scope: "Header: bg, text, border; row: bg, hover-bg, border; cell: padding"
+
+    form:
+      token_scope: "Container: padding, gap between fields"
+
+    modal:
+      token_scope: "Overlay: bg-color + opacity; dialog: bg, radius, shadow, padding, max-width"
+
+    command-palette:
+      token_scope: "Container: bg, border, radius, shadow; search: uses search-bar tokens"
+
+    slide-over:
+      token_scope: "Overlay: same as modal; panel: bg, shadow, width, padding"
+
+    filter-panel:
+      token_scope: "Container: bg, border, radius, padding"
+
+    card-grid:
+      token_scope: "Container: gap (responsive), columns (responsive)"
+
+    list-view:
+      token_scope: "Container: gap; items use list-item tokens"
+
+    toolbar:
+      token_scope: "Container: bg, border-bottom, padding, gap, height"
+
+    stats-row:
+      token_scope: "Container: gap (responsive), columns (responsive)"
+
+    form-wizard:
+      token_scope: "Container: padding; step-indicator tokens + form tokens"
+
+    notification-center:
+      token_scope: "Container: bg, border, radius, shadow, max-height; item: padding, border-bottom"
+
+    settings-section:
+      token_scope: "Container: padding, border-bottom; heading: typography token"
+
+    chat-message:
+      variants: [user, assistant]
+      token_scope: "bg, text, radius, padding"
+
+    chat-input:
+      token_scope: "Container: bg, border, radius, padding, min-height"
+
+    stream-of-thought:
+      token_scope: "Step: icon-size, gap"
+      state_colors: [queued-color, running-color, done-color, error-color]
+
+    action-plan:
+      token_scope: "Step: padding, border, radius"
+      state_backgrounds: [pending-bg, approved-bg, rejected-bg]
+
+    citation-panel:
+      token_scope: "Container: bg, border, radius, padding; citation: bg, border-left, padding"
+
+    conversation-sidebar:
+      token_scope: "Container: bg, border-right, width; thread: padding, hover-bg, active-bg"
+
+    suggestion-chips:
+      token_scope: "Chip: bg, border, radius, padding, text; hover: bg, border"
+
+  # ---------------------------------------------------------------------------
+  # Size variant constraints for interactive components
+  # ---------------------------------------------------------------------------
+  size_constraints:
+    description: "Interactive component heights MUST meet touch-target minimums"
+    variants:
+      sm:
+        min_height: 32
+        usage: "Dense UIs, toolbars"
+        note: "FAILS touch-target on mobile; desktop-only"
+      md:
+        min_height: 40
+        usage: "Default for most contexts"
+      lg:
+        min_height: 44
+        usage: "Mobile-first, accessibility-focused"
+      xl:
+        min_height: 48
+        usage: "Hero CTAs, prominent actions"
+
+    touch_target_rule: >
+      For components on mobile viewports, rendered height MUST be >= 44px.
+      Components with height < 44px MUST have sufficient padding or margin to
+      create a 44x44px touch target area.
+    desktop_only_minimum: 32
+    desktop_only_note: "Components explicitly marked desktop-only are exempt from 44px but MUST meet 32px"
+
+# ===========================================================================
+# CONSTRAINT SYSTEM
+# ===========================================================================
+# Cross-cutting constraints validated during compilation and runtime.
+# ===========================================================================
+
+constraints:
+
+  # ---------------------------------------------------------------------------
+  # Contrast ratios (WCAG 2.1 AA)
+  # ---------------------------------------------------------------------------
+  contrast:
+    description: "WCAG 2.1 AA contrast ratio requirements"
+
+    formulas:
+      contrast_ratio: "(L1 + 0.05) / (L2 + 0.05) where L1 = lighter, L2 = darker"
+      relative_luminance: "L = 0.2126 * R_lin + 0.7152 * G_lin + 0.0722 * B_lin"
+      linearization: >
+        C_lin = C_srgb / 12.92                     if C_srgb <= 0.04045
+        C_lin = ((C_srgb + 0.055) / 1.055) ^ 2.4   if C_srgb > 0.04045
+        where C_srgb = C_8bit / 255
+
+    thresholds:
+      normal_text:
+        description: "font-size < 18px, or < 14px bold"
+        min_ratio: 4.5
+      large_text:
+        description: "font-size >= 18px, or >= 14px bold"
+        min_ratio: 3.0
+      ui_components:
+        description: "UI components and graphical objects"
+        min_ratio: 3.0
+
+    # Required pairs the compiler MUST validate for every theme
+    required_pairs:
+      - foreground: color.text.primary
+        background: color.surface.page
+        min_ratio: 4.5
+      - foreground: color.text.primary
+        background: color.surface.card
+        min_ratio: 4.5
+      - foreground: color.text.secondary
+        background: color.surface.page
+        min_ratio: 4.5
+      - foreground: color.text.secondary
+        background: color.surface.card
+        min_ratio: 4.5
+      - foreground: color.text.on-primary
+        background: color.interactive.primary
+        min_ratio: 4.5
+      - foreground: color.text.on-destructive
+        background: color.interactive.destructive
+        min_ratio: 4.5
+      - foreground: color.interactive.primary
+        background: color.surface.page
+        min_ratio: 3.0
+      - foreground: color.interactive.primary
+        background: color.surface.card
+        min_ratio: 3.0
+      - foreground: color.interactive.destructive
+        background: color.surface.page
+        min_ratio: 3.0
+      - foreground: color.border.default
+        background: color.surface.card
+        min_ratio: 3.0
+      - foreground: color.status.success
+        background: color.surface.card
+        min_ratio: 3.0
+      - foreground: color.status.warning
+        background: color.surface.card
+        min_ratio: 3.0
+      - foreground: color.status.error
+        background: color.surface.card
+        min_ratio: 3.0
+      - foreground: color.status.info
+        background: color.surface.card
+        min_ratio: 3.0
+
+  # ---------------------------------------------------------------------------
+  # Color pairing rules
+  # ---------------------------------------------------------------------------
+  color_pairing:
+    description: "Semantic color combination rules preventing confusing pairings"
+
+    hard_rules:
+      - id: no_error_on_destructive
+        rule: "color.status.error text MUST NOT appear on color.interactive.destructive background (red-on-red)"
+      - id: no_success_on_success
+        rule: "color.status.success text MUST NOT appear on color.status.success background (green-on-green)"
+      - id: no_disabled_as_link
+        rule: "color.text.disabled MUST NOT be used as a link color (disabled text that looks clickable)"
+      - id: on_primary_background_restriction
+        rule: >
+          color.text.on-primary MUST only appear on backgrounds that use
+          color.interactive.primary or color.interactive.destructive or color.status.* tokens
+
+    soft_rules:
+      - id: no_status_as_interactive
+        rule: "Status colors (success, warning, error, info) SHOULD NOT be used as primary interactive colors"
+        severity: warn
+      - id: elevated_surface_contrast_parity
+        rule: "color.text.primary on color.surface.elevated SHOULD have the same contrast ratio as on color.surface.card"
+        severity: warn
+
+  # ---------------------------------------------------------------------------
+  # Touch target minimums
+  # ---------------------------------------------------------------------------
+  touch_targets:
+    description: "Every interactive component MUST have a touch target area of at least 44x44px"
+    default_minimum: 44
+    desktop_only_minimum: 32
+    applicable_components:
+      - button
+      - icon-button
+      - text-input
+      - text-area
+      - select
+      - checkbox
+      - radio
+      - toggle
+    expansion_note: >
+      Components with visual size < 44px MUST use padding, margin, or
+      ::before/::after pseudo-elements to expand clickable area to 44x44px.
+      The spec does not mandate visual size >= 44px, only clickable area >= 44px.
+
+  # ---------------------------------------------------------------------------
+  # Spacing grid
+  # ---------------------------------------------------------------------------
+  spacing_grid:
+    description: "Every spacing value MUST be divisible by 4"
+    divisor: 4
+    exceptions:
+      - "1px borders (border-width is not a spacing token)"
+      - "2px focus ring widths"
+      - "Font sizes (follow the type scale, not the 4px grid)"
+      - "Line heights (ratios, not pixel values)"
+      - "Touch target heights (44px, 48px)"
+      - "Icon sizes (16px, 20px, 24px — icon sizing follows its own scale)"
+
+  # ---------------------------------------------------------------------------
+  # Tier reference rules
+  # ---------------------------------------------------------------------------
+  tier_references:
+    description: "Tier boundary enforcement"
+    rules:
+      - "Tier 2 (semantic) tokens MUST reference Tier 1 (primitive) values"
+      - "Tier 3 (component) tokens MUST reference Tier 2 (semantic) tokens for color, shadow, and radius"
+      - "Tier 3 tokens MUST NOT reference Tier 1 primitives directly"
+      - "No circular references: a token MUST NOT transitively reference itself"
+      - "Tier 3 integer values for font_size MUST be in typography.raw.size"
+      - "Tier 3 integer values for font_weight MUST be in typography.raw.weight"
+
+  # ---------------------------------------------------------------------------
+  # Compilation output
+  # ---------------------------------------------------------------------------
+  validation_report:
+    description: "The compiler MUST produce a constraint validation report alongside compiled tokens"
+    categories:
+      - CONTRAST
+      - TOUCH
+      - GRID
+      - PAIRING
+      - MOTION
+    severity_levels:
+      FAIL: "Compilation MUST be blocked"
+      WARN: "Advisory only, compilation proceeds"
+      PASS: "Constraint satisfied"
+    format: >
+      Each line: {PASS|FAIL|WARN} [{CATEGORY}] {token_path} — {actual_value} ({constraint_description})
+    summary: "SUMMARY: {n} FAIL, {n} WARN, {n} PASS"
+    blocking_rule: "Compilation MUST NOT produce partial output when any FAIL exists. All-or-nothing."

@@ -1,0 +1,136 @@
+name: FileUpload
+category: molecule
+version: 0.1.0
+description: File upload area with drag-and-drop zone, progress tracking, and file list
+
+composed_of:
+  - Button
+  - ProgressBar
+  - ListItem
+  - Icon
+  - Typography
+
+props:
+  - name: accept
+    type: string
+    required: false
+    default: null
+    description: Accepted file types as comma-separated MIME types or extensions
+  - name: maxSize
+    type: number
+    required: false
+    default: null
+    description: Maximum file size in bytes
+  - name: maxFiles
+    type: number
+    required: false
+    default: null
+    description: Maximum number of files allowed
+  - name: multiple
+    type: boolean
+    required: false
+    default: false
+    description: Whether multiple files can be selected at once
+  - name: onUpload
+    type: "(files: File[]) => void"
+    required: true
+    default: null
+    description: Callback invoked when files are dropped or selected
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: Whether the upload zone is disabled
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: idle
+  states:
+    - name: idle
+      description: Drop zone visible with instructions, no files being processed
+    - name: dragover
+      description: User is dragging a file over the drop zone
+    - name: uploading
+      description: Files are being uploaded, progress bar visible
+    - name: complete
+      description: All files uploaded, file list shown with success indicators
+    - name: error
+      description: Upload failed, error message displayed
+  transitions:
+    - from: idle
+      to: dragover
+      trigger: User drags a file over the drop zone
+      visual_change: Drop zone border becomes active color, background highlights
+    - from: dragover
+      to: uploading
+      trigger: User drops files onto the zone
+      visual_change: Progress bar appears, drop zone styling returns to default
+    - from: idle
+      to: uploading
+      trigger: User selects files via the file picker button
+      visual_change: Progress bar appears
+    - from: uploading
+      to: complete
+      trigger: All files finish uploading
+      visual_change: Progress bar replaced by file list with success indicators
+    - from: uploading
+      to: error
+      trigger: Upload fails (network error, file too large, invalid type)
+      visual_change: Error message appears, retry button shown
+    - from: dragover
+      to: idle
+      trigger: User drags file out of the drop zone
+      visual_change: Drop zone returns to default styling
+    - from: error
+      to: idle
+      trigger: User dismisses error or retries
+      visual_change: Error cleared, drop zone returns to idle state
+
+variants:
+  - name: default
+    description: Full drop zone with dashed border and upload button
+  - name: compact
+    description: Button-only trigger without visible drop zone
+
+accessibility:
+  role: button
+  aria_attributes:
+    - attribute: aria-label
+      source: Describes accepted file types and size limits
+      required: true
+  keyboard:
+    - key: Enter
+      action: Opens native file picker dialog
+    - key: Space
+      action: Opens native file picker dialog
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: aria-label describing accepted file types
+    announcements:
+      - Upload progress announced via aria-live="polite"
+      - Upload complete or error announced via aria-live="polite"
+
+responsive:
+  - breakpoint: mobile
+    behavior: Full width drop zone, compact layout
+  - breakpoint: tablet
+    behavior: Full width drop zone
+  - breakpoint: desktop
+    behavior: Full width drop zone within container
+  - breakpoint: wide
+    behavior: Full width drop zone within container
+
+tokens:
+  consumes:
+    - file-upload.zone.border
+    - file-upload.zone.bg
+    - file-upload.zone.border_active
+    - file-upload.zone.radius
+  inherits_from: null

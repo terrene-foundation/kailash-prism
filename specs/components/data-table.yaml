@@ -1,0 +1,191 @@
+# Kailash Prism — DataTable Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.3
+# Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll.
+
+version: "0.1.0"
+
+name: DataTable
+category: organism
+description: "Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll."
+
+composed_of:
+  atoms:
+    - Checkbox        # Row selection checkboxes
+    - IconButton      # Sort indicators, action buttons
+  molecules:
+    - Pagination      # Page navigation
+    - Toolbar         # Bulk action bar
+    - FilterPanel     # Optional filter panel
+
+props:
+  - name: columns
+    type: "ColumnDef[]"
+    required: true
+    default: null
+    description: "Column definitions including header label, accessor, width, and sortability"
+  - name: data
+    type: "T[]"
+    required: true
+    default: null
+    description: "Array of row data objects"
+  - name: loading
+    type: boolean
+    required: false
+    default: false
+    description: "Whether to display skeleton loading rows"
+  - name: selectable
+    type: boolean
+    required: false
+    default: false
+    description: "Whether rows can be selected via checkboxes"
+  - name: sortable
+    type: boolean
+    required: false
+    default: false
+    description: "Whether columns can be sorted by clicking headers"
+  - name: pagination
+    type: "PaginationConfig | undefined"
+    required: false
+    default: null
+    description: "Pagination configuration (page size, total items)"
+  - name: onRowClick
+    type: "(row: T) => void"
+    required: false
+    default: null
+    description: "Callback fired when a row is clicked"
+  - name: bulkActions
+    type: "BulkAction[]"
+    required: false
+    default: "[]"
+    description: "Actions available when rows are selected (delete, export, etc.)"
+  - name: emptyState
+    type: ReactNode
+    required: false
+    default: null
+    description: "Content displayed when data array is empty"
+  - name: virtualScroll
+    type: boolean
+    required: false
+    default: false
+    description: "Whether to use virtual scrolling for large datasets (1000+ rows)"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: "Skeleton rows displayed while data is being fetched"
+    - name: loaded
+      description: "Data rows are displayed"
+    - name: empty
+      description: "No data available; empty state content is shown"
+    - name: error
+      description: "Data fetch failed; error message is shown"
+    - name: selecting
+      description: "One or more rows are checked; bulk action bar appears"
+    - name: sorting
+      description: "A column sort is active; sort indicator shown on column header"
+    - name: filtering
+      description: "Filter is applied; filtered result set displayed"
+  transitions:
+    - from: loading
+      to: loaded
+      trigger: "Data fetch completes successfully"
+      visual_change: "Skeleton rows replaced by real data rows"
+    - from: loading
+      to: empty
+      trigger: "Data fetch completes with zero results"
+      visual_change: "Skeleton rows replaced by empty state content"
+    - from: loading
+      to: error
+      trigger: "Data fetch fails"
+      visual_change: "Skeleton rows replaced by error message"
+    - from: loaded
+      to: selecting
+      trigger: "User checks one or more row checkboxes"
+      visual_change: "Selected rows highlighted; bulk action toolbar appears"
+    - from: selecting
+      to: loaded
+      trigger: "User unchecks all row checkboxes"
+      visual_change: "Row highlighting removed; bulk action toolbar disappears"
+    - from: loaded
+      to: sorting
+      trigger: "User clicks a sortable column header"
+      visual_change: "Sort indicator appears on column; rows reorder"
+    - from: loaded
+      to: filtering
+      trigger: "User applies a filter"
+      visual_change: "Row set narrows to match filter criteria"
+    - from: filtering
+      to: loaded
+      trigger: "User clears all filters"
+      visual_change: "Full data set restored"
+
+composition_slots:
+  - name: emptyState
+    description: "Custom content for the zero-results state"
+  - name: bulkActions
+    description: "Action definitions for the selection toolbar"
+  - name: columns
+    description: "Column definitions including custom cell renderers"
+
+accessibility:
+  role: table
+  aria_attributes:
+    - attribute: aria-label
+      source: "Provided by consumer or inferred from context"
+      required: false
+    - attribute: aria-sort
+      source: "Column header reflects current sort direction (ascending, descending, none)"
+      required: true
+    - attribute: aria-label
+      source: "Row checkboxes include row identifier in label"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between table controls (headers, checkboxes, pagination)"
+    - key: Enter
+      action: "Activate sort on focused column header or trigger row click"
+    - key: Space
+      action: "Toggle row selection checkbox"
+    - key: ArrowUp
+      action: "Move focus to previous row"
+    - key: ArrowDown
+      action: "Move focus to next row"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the table element"
+    announcements:
+      - "Sorted by [column] ascending/descending when sort changes"
+      - "[N] rows selected when selection changes"
+      - "Page [N] of [M] when pagination changes"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Card layout (each row becomes a card) or horizontal scroll with sticky first column"
+  - breakpoint: tablet
+    behavior: "Horizontal scroll with visible column headers"
+  - breakpoint: desktop
+    behavior: "Full table layout with all columns visible"
+  - breakpoint: wide
+    behavior: "Full table layout with extra spacing"
+
+tokens:
+  consumes:
+    - data-table.header.bg
+    - data-table.header.text
+    - data-table.header.border
+    - data-table.row.bg
+    - data-table.row.hover_bg
+    - data-table.row.selected_bg
+    - data-table.row.border
+    - data-table.cell.padding
+    - data-table.default.radius
+  inherits_from: null

@@ -1,0 +1,144 @@
+# Kailash Prism — CommandPalette Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.6
+# Keyboard-driven command launcher with fuzzy search, recent commands, and shortcut display.
+
+version: "0.1.0"
+
+name: CommandPalette
+category: organism
+description: "Keyboard-driven command launcher with fuzzy search, recent commands, and shortcut display."
+
+composed_of:
+  atoms:
+    - Kbd             # Keyboard shortcut display
+  molecules:
+    - SearchBar       # Command search input
+    - MenuItem        # Filtered command list items
+
+props:
+  - name: commands
+    type: "Command[]"
+    required: true
+    default: null
+    description: "Available commands with label, action, category, and optional keyboard shortcut"
+  - name: onSelect
+    type: "(command: Command) => void"
+    required: true
+    default: null
+    description: "Callback fired when a command is selected"
+  - name: placeholder
+    type: string
+    required: false
+    default: "Type a command..."
+    description: "Placeholder text in the search input"
+  - name: recentCommands
+    type: "Command[]"
+    required: false
+    default: "[]"
+    description: "Recently used commands displayed before search results"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: closed
+  states:
+    - name: closed
+      description: "Command palette is not visible"
+    - name: open
+      description: "Palette is open showing recent commands or all commands"
+    - name: searching
+      description: "User is typing; results are filtered in real-time"
+    - name: navigating
+      description: "User is using arrow keys to move through the filtered list"
+    - name: selected
+      description: "User has selected a command (brief state before closing)"
+  transitions:
+    - from: closed
+      to: open
+      trigger: "User presses Cmd+K (Mac) or Ctrl+K (Windows/Linux)"
+      visual_change: "Palette fades in centered on screen with search input focused"
+    - from: open
+      to: searching
+      trigger: "User starts typing in the search input"
+      visual_change: "Command list filters to match query; recent commands section hides"
+    - from: searching
+      to: navigating
+      trigger: "User presses ArrowDown or ArrowUp"
+      visual_change: "Highlighted item moves through the filtered list"
+    - from: navigating
+      to: selected
+      trigger: "User presses Enter on highlighted item"
+      visual_change: "Selected item briefly highlighted"
+    - from: selected
+      to: closed
+      trigger: "Command executed"
+      visual_change: "Palette fades out"
+    - from: "*"
+      to: closed
+      trigger: "User presses Escape or clicks outside the palette"
+      visual_change: "Palette fades out"
+
+composition_slots:
+  - name: commands
+    description: "Command definitions with categories, icons, and shortcuts"
+  - name: footer
+    description: "Optional footer area for keyboard shortcut hints"
+
+accessibility:
+  role: dialog
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Command palette'"
+      required: true
+    - attribute: role
+      source: "combobox on the search input inside the dialog"
+      required: true
+    - attribute: aria-expanded
+      source: "Whether the command list is visible"
+      required: true
+    - attribute: aria-activedescendant
+      source: "ID of the currently highlighted command item"
+      required: true
+  keyboard:
+    - key: "Cmd+K / Ctrl+K"
+      action: "Open the command palette"
+    - key: Escape
+      action: "Close the command palette"
+    - key: ArrowDown
+      action: "Move highlight to next command"
+    - key: ArrowUp
+      action: "Move highlight to previous command"
+    - key: Enter
+      action: "Execute the highlighted command"
+  focus:
+    tabindex: "-1"
+    focus_visible: true
+    trap: true
+  screen_reader:
+    label_source: "aria-label on the dialog"
+    announcements:
+      - "[N] results found when search results update"
+      - "No results found when search matches nothing"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width with reduced padding"
+  - breakpoint: tablet
+    behavior: "Centered with max-width 640px"
+  - breakpoint: desktop
+    behavior: "Centered with max-width 640px"
+  - breakpoint: wide
+    behavior: "Centered with max-width 640px"
+
+tokens:
+  consumes:
+    - command-palette.default.bg
+    - command-palette.default.border
+    - command-palette.default.radius
+    - command-palette.default.shadow
+    - command-palette.default.max_width
+    - command-palette.default.max_height
+  inherits_from: null

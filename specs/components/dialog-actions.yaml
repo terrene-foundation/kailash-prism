@@ -1,0 +1,106 @@
+name: DialogActions
+category: molecule
+version: 0.1.0
+description: Action button row for dialogs with cancel and confirm buttons, supporting loading and destructive variants
+
+composed_of:
+  - Button
+
+props:
+  - name: cancelLabel
+    type: string
+    required: false
+    default: "Cancel"
+    description: Text label for the cancel button
+  - name: confirmLabel
+    type: string
+    required: true
+    default: null
+    description: Text label for the confirm button
+  - name: confirmVariant
+    type: '"primary" | "destructive"'
+    required: false
+    default: "primary"
+    description: Visual variant for the confirm button
+  - name: onCancel
+    type: "() => void"
+    required: true
+    default: null
+    description: Callback invoked when the cancel button is clicked
+  - name: onConfirm
+    type: "() => void"
+    required: true
+    default: null
+    description: Callback invoked when the confirm button is clicked
+  - name: loading
+    type: boolean
+    required: false
+    default: false
+    description: Whether the confirm button shows a loading state
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Both buttons are interactive and ready
+    - name: confirming
+      description: Confirm button shows loading spinner, both buttons may be disabled
+  transitions:
+    - from: default
+      to: confirming
+      trigger: loading prop set to true
+      visual_change: Confirm button shows loading spinner, buttons become non-interactive
+    - from: confirming
+      to: default
+      trigger: loading prop set to false
+      visual_change: Loading spinner removed, buttons become interactive again
+
+variants:
+  - name: default
+    description: Primary confirm button with secondary cancel button
+  - name: destructive
+    description: Destructive (red) confirm button for dangerous actions
+
+accessibility:
+  role: group
+  aria_attributes:
+    - attribute: aria-label
+      source: Set to "Dialog actions"
+      required: false
+  keyboard:
+    - key: Tab
+      action: Moves focus between cancel and confirm buttons
+    - key: Enter
+      action: Activates the focused button
+    - key: Space
+      action: Activates the focused button
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: Button labels provide accessible names
+    announcements:
+      - Loading state announced when confirming
+
+responsive:
+  - breakpoint: mobile
+    behavior: Full-width stacked buttons with confirm on top
+  - breakpoint: tablet
+    behavior: Inline buttons right-aligned
+  - breakpoint: desktop
+    behavior: Inline buttons right-aligned
+  - breakpoint: wide
+    behavior: Inline buttons right-aligned
+
+tokens:
+  consumes:
+    - dialog-actions.default.padding
+    - dialog-actions.default.gap
+    - dialog-actions.default.border_top
+  inherits_from: null

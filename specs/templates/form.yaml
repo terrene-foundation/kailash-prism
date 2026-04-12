@@ -1,0 +1,165 @@
+# Kailash Prism — Form Page Template
+# Dedicated page for creating or editing a record with structured form sections.
+# See docs/specs/06-page-templates.md section 6.2.4 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Form
+  description: >
+    Dedicated page for creating or editing a record with
+    structured form sections.
+  use_cases:
+    - Create contact
+    - Edit order
+    - New product
+    - Profile settings
+    - Registration
+
+  navigation:
+    renders_inside: navigation-engine
+    breadcrumb: "Home > {section} > Create/Edit {entity}"
+    back_button: true
+    back_target: parent-list
+    unsaved_changes_warning: true
+
+  layout:
+    root: Stack
+    direction: vertical
+
+  zones:
+    form-header:
+      description: Back navigation + form title + inline action buttons.
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      sticky: true
+      sticky_position: top
+      default_organism: Toolbar
+      default_props:
+        back:
+          path: "/{entity_path}"
+        title: "{form_mode} {entity_singular}"
+        actions:
+          - label: Cancel
+            variant: ghost
+            on_click: "navigate:/{entity_path}"
+          - label: Save
+            variant: primary
+            type: submit
+      responsive:
+        wide:
+          visible: true
+          actions_display: inline
+        desktop:
+          visible: true
+          actions_display: inline
+        tablet:
+          visible: true
+          actions_display: inline
+        mobile:
+          visible: true
+          actions_display: title-only
+          description: >
+            Shows only title (actions move to form-actions zone).
+
+    form-content:
+      description: Form Engine content with sections.
+      content_type: form
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+          gap: section.gap
+      default_engine: Form
+      default_props:
+        layout: two-column
+        fields: []
+        on_submit: "api:POST /{entity_path}"
+      responsive:
+        wide:
+          max_width: 720px
+          centered: true
+          field_layout: two-column
+          description: >
+            form-content centered with maxWidth 720px.
+            Two-column field layout within form.
+        desktop:
+          max_width: 640px
+          centered: true
+          field_layout: two-column
+          description: >
+            Same as wide. maxWidth 640px.
+        tablet:
+          max_width: null
+          centered: false
+          field_layout: single-column
+          description: >
+            Single-column field layout. Form fills available width with padding.
+        mobile:
+          max_width: null
+          centered: false
+          field_layout: single-column
+          description: >
+            Single-column.
+
+    form-actions:
+      description: Cancel + secondary actions (left) + primary submit (right).
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      sticky: true
+      sticky_position: bottom
+      default_organism: DialogActions
+      default_props:
+        cancel:
+          label: Cancel
+          on_click: "navigate:/{entity_path}"
+        secondary:
+          label: Save Draft
+          on_click: saveDraft
+        primary:
+          label: "{form_mode} {entity_singular}"
+          type: submit
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+          sticky: true
+          sticky_position: bottom
+          description: >
+            form-actions fixed to bottom of viewport.
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        form-content centered with maxWidth 720px.
+        Two-column field layout within form.
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Same as wide. maxWidth 640px.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        Single-column field layout. Form fills available width with padding.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        Single-column. form-header shows only title (actions in form-actions).
+        form-actions fixed to bottom of viewport.

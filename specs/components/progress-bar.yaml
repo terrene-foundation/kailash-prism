@@ -1,0 +1,118 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.16
+version: 0.1.0
+
+name: ProgressBar
+category: atom
+description: "Determinate or indeterminate progress indicator."
+
+props:
+  - name: value
+    type: "number | undefined"
+    required: false
+    default: null
+    description: "Progress 0-100 (undefined = indeterminate)"
+  - name: variant
+    type: '"default" | "success" | "error"'
+    required: false
+    default: "default"
+    description: "Color variant"
+  - name: label
+    type: "string | undefined"
+    required: false
+    default: null
+    description: "Visible label"
+  - name: showValue
+    type: boolean
+    required: false
+    default: false
+    description: "Show percentage text"
+  - name: size
+    type: '"sm" | "md"'
+    required: false
+    default: "md"
+    description: "Track height: sm=4px, md=8px"
+
+states:
+  initial: indeterminate
+  states:
+    - name: indeterminate
+      description: "Animated sliding bar, no percentage"
+    - name: determinate
+      description: "Bar fills to value percentage"
+    - name: complete
+      description: "Bar fully filled (value=100)"
+  transitions:
+    - from: indeterminate
+      to: determinate
+      trigger: "value prop provided"
+      visual_change: "Bar transitions from animation to filled"
+    - from: determinate
+      to: complete
+      trigger: "value reaches 100"
+      visual_change: "Bar fully filled, may change to success color"
+
+variants:
+  - name: default
+    description: "interactive.primary fill on border.subtle track"
+  - name: success
+    description: "status.success fill"
+  - name: error
+    description: "status.error fill"
+
+accessibility:
+  role: "progressbar"
+  aria_attributes:
+    - attribute: "aria-valuenow"
+      source: "value prop"
+      required: true
+    - attribute: "aria-valuemin"
+      source: "Always 0"
+      required: true
+    - attribute: "aria-valuemax"
+      source: "Always 100"
+      required: true
+    - attribute: "aria-label"
+      source: "label prop"
+      required: false
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "label prop or associated heading"
+    announcements:
+      - "Percentage change announced at 25%, 50%, 75%, 100%"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full width of container"
+  - breakpoint: desktop
+    behavior: "Full width of container"
+
+tokens:
+  consumes:
+    - "progress-bar.default.track_bg"
+    - "progress-bar.default.fill_bg"
+    - "progress-bar.success.fill_bg"
+    - "progress-bar.error.fill_bg"
+    - "progress-bar.default.radius"
+    - "progress-bar.sm.height"
+    - "progress-bar.md.height"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Indeterminate mode uses a CSS keyframe animation that slides a shorter bar
+    back and forth along the track. Determinate mode uses a width transition
+    (transition: width 300ms ease) on the fill element. Use
+    prefers-reduced-motion to disable the indeterminate animation and show a
+    static partial fill instead. Percentage announcements use a debounced
+    aria-live region to avoid flooding screen readers on rapid updates.
+  flutter: >
+    Use LinearProgressIndicator with value=null for indeterminate and
+    value=(prop/100) for determinate mode. Map variant colors through
+    valueColor and backgroundColor. For the showValue label, overlay a
+    Text widget using a Stack. Ensure the bar respects
+    MediaQuery.disableAnimations for reduced motion.

@@ -1,13 +1,1208 @@
 # Kailash Prism — Layout Grammar
-# Defines Stack, Row, Grid, Split, Layer, Scroll primitives.
+# Machine-readable definition of the 6 layout primitives + Custom escape hatch.
 # See docs/specs/04-layout-grammar.md for the full specification.
+#
+# All spacing values reference design tokens from specs/tokens/schema.yaml.
+# All values in logical pixels (dp on Flutter, px on web at 1x).
 
 version: "0.1.0"
 
+# ---------------------------------------------------------------------------
+# Breakpoints
+# ---------------------------------------------------------------------------
+breakpoints:
+  mobile:
+    min: 0
+    max: 767
+    css: "@media (max-width: 767px)"
+  tablet:
+    min: 768
+    max: 1023
+    css: "@media (min-width: 768px) and (max-width: 1023px)"
+  desktop:
+    min: 1024
+    max: 1439
+    css: "@media (min-width: 1024px) and (max-width: 1439px)"
+  wide:
+    min: 1440
+    max: null
+    css: "@media (min-width: 1440px)"
+
+cascade_order: [mobile, tablet, desktop, wide]
+cascade_rule: >-
+  Mobile-first: the mobile value (or scalar default) is the base.
+  Larger breakpoints override in ascending order. Unspecified breakpoints
+  inherit from the next smaller breakpoint that has a value.
+
+# ---------------------------------------------------------------------------
+# Responsive value format
+# ---------------------------------------------------------------------------
+responsive_value:
+  description: >-
+    Any prop that accepts SpacingToken also accepts ResponsiveValue<SpacingToken>.
+    A scalar applies to all breakpoints. A map keyed by breakpoint name is
+    resolved using mobile-first cascade.
+  examples:
+    scalar: 16
+    responsive:
+      mobile: 12
+      tablet: 16
+      desktop: 24
+    partial:
+      mobile: 1
+      desktop: 3
+
+# ---------------------------------------------------------------------------
+# Spacing system
+# ---------------------------------------------------------------------------
+spacing:
+  scale: [0, 4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 128]
+  required_subset: [4, 8, 12, 16, 24, 32, 48, 64]
+  extended: [0, 80, 96, 128]
+  constraint: "All values MUST be divisible by 4. No value outside this scale is valid."
+
+  semantic_tokens:
+    page.margin:
+      value: { mobile: 16, tablet: 24, desktop: 32, wide: 48 }
+      usage: "Outer margin of the page content area"
+    page.gutter:
+      value: 16
+      usage: "Gutter between page-level columns (navigation + content)"
+    section.gap:
+      value: { mobile: 24, desktop: 32 }
+      usage: "Vertical gap between major page sections (between zones)"
+    section.padding:
+      value: { mobile: 16, desktop: 24 }
+      usage: "Padding inside a section container (zone internal padding)"
+    component.gap:
+      value: 12
+      usage: "Gap between sibling components within a zone"
+    component.padding:
+      value: 16
+      usage: "Padding inside a component (card, form field group)"
+    component.gap-tight:
+      value: 8
+      usage: "Tight gap within compact component groups (button row, tag list)"
+    component.gap-loose:
+      value: 24
+      usage: "Loose gap for spacious layouts (settings sections)"
+    inline.gap:
+      value: 8
+      usage: "Gap between inline elements (icon + label, badge + text)"
+    inline.gap-tight:
+      value: 4
+      usage: "Tight inline gap (icon inside button)"
+
+  rules:
+    - "No raw values: every gap, padding, margin MUST reference a spacing token."
+    - "Scale adherence: values MUST come from spacing.scale."
+    - "Responsive spacing: page-level and section-level tokens are responsive; component-level tokens are constant unless explicitly overridden."
+    - "Minimum touch target: interactive elements MUST have a minimum tappable area of 44x44px."
+    - "Consistent axis: within a single container, one spacing token governs all gaps. Mixed gap values in a single VStack or Row are forbidden."
+
+# ---------------------------------------------------------------------------
+# Shared type definitions
+# ---------------------------------------------------------------------------
+types:
+  SpacingToken:
+    type: number
+    constraint: "Must be a value from spacing.scale"
+
+  SpacingEdges:
+    type: object
+    properties:
+      top: { type: SpacingToken }
+      right: { type: SpacingToken }
+      bottom: { type: SpacingToken }
+      left: { type: SpacingToken }
+
+  Breakpoint:
+    type: string
+    enum: [mobile, tablet, desktop, wide]
+
+  Alignment:
+    type: string
+    enum: [start, center, end, stretch]
+
+  RowAlignment:
+    type: string
+    enum: [start, center, end, stretch, baseline]
+
+  Justification:
+    type: string
+    enum: [start, center, end, between, around, evenly]
+
+  LayerTier:
+    type: string
+    enum: [page, popover, modal, toast, tooltip]
+
+  ScrollDirection:
+    type: string
+    enum: [vertical, horizontal, both]
+
+  SnapAlignment:
+    type: string
+    enum: [none, start, center]
+
+  LayerAnchor:
+    type: string
+    enum: [viewport, parent]
+    note: "Also accepts an ElementRef for anchoring to a specific element"
+
+  LayerPosition:
+    type: string
+    enum: [center, top, bottom, start, end]
+    note: "Also accepts PositionXY {x, y} for pixel offsets. start/end are logical (LTR/RTL aware)."
+
+  LayerAnimation:
+    type: string
+    enum: [fade, slide, scale, none]
+
+  ContentType:
+    type: string
+    enum: [any, navigation, form, data, stats, actions, media, chat, steps]
+
+  VisibilityRule:
+    type: string
+    enum: [visible, hidden, drawer, modal, collapsed]
+
+# ---------------------------------------------------------------------------
+# Primitives
+# ---------------------------------------------------------------------------
 primitives:
-  - Stack
-  - Row
-  - Grid
-  - Split
-  - Layer
-  - Scroll
+
+  # =========================================================================
+  # VStack
+  # =========================================================================
+  VStack:
+    purpose: >-
+      Arranges children vertically, top to bottom. Named VStack to avoid
+      collision with Flutter's Stack widget (Z-axis overlay).
+    props:
+      gap:
+        type: "SpacingToken | ResponsiveValue<SpacingToken>"
+        default: 0
+        description: "Vertical space between children. MUST reference a spacing token."
+      align:
+        type: Alignment
+        default: stretch
+        description: "Horizontal alignment of children within the stack."
+      padding:
+        type: "SpacingToken | SpacingEdges"
+        default: 0
+        description: "Inner padding. Single token or per-edge {top, right, bottom, left}."
+      reverse:
+        type: boolean
+        default: false
+        description: "Reverses child order (bottom to top)."
+      fill:
+        type: boolean
+        default: false
+        description: "When true, stack expands to fill available height (flex: 1 / Expanded)."
+
+    responsive:
+      mobile:
+        behavior: "No collapse. Gap and padding may be responsive tokens."
+      tablet:
+        behavior: "Same as mobile."
+      desktop:
+        behavior: "Same as mobile."
+      wide:
+        behavior: "Same as mobile."
+      notes: >-
+        VStack has no breakpoint-specific collapse behavior. Gap and padding
+        MAY be responsive tokens. Alignment does not change across breakpoints.
+
+    nesting:
+      can_contain: [VStack, Row, Grid, Split, Layer, Scroll, component]
+      note: "VStack is the default root container for all pages."
+
+    platform:
+      web:
+        css:
+          display: flex
+          flex-direction: "column (column-reverse when reverse: true)"
+          gap: "var(--gap)"
+          align-items: "var(--align) — start | center | end | stretch"
+          padding: "var(--padding)"
+          flex: "1 (only when fill: true)"
+      flutter:
+        widget: Column
+        implementation: >-
+          Column(
+            mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.{align},
+            children: [with SizedBox(height: gap) between each],
+          )
+          When fill: true, wraps in Expanded within parent.
+          When reverse: true, children list is reversed.
+
+  # =========================================================================
+  # Row
+  # =========================================================================
+  Row:
+    purpose: "Arranges children horizontally, left to right."
+    props:
+      gap:
+        type: "SpacingToken | ResponsiveValue<SpacingToken>"
+        default: 0
+        description: "Horizontal space between children. MUST reference a spacing token."
+      align:
+        type: RowAlignment
+        default: center
+        description: "Vertical alignment of children within the row."
+      justify:
+        type: Justification
+        default: start
+        description: "Horizontal distribution of children."
+      wrap:
+        type: boolean
+        default: false
+        description: "Whether children wrap to the next line when they exceed row width."
+      padding:
+        type: "SpacingToken | SpacingEdges"
+        default: 0
+        description: "Inner padding."
+      reverse:
+        type: boolean
+        default: false
+        description: "Reverses child order (right to left)."
+      collapse:
+        type: "Breakpoint | null"
+        default: null
+        description: >-
+          Breakpoint at or below which the Row becomes a VStack.
+          No default — does not collapse unless specified.
+
+    responsive:
+      mobile:
+        behavior: "If collapse is set and current breakpoint <= collapse, renders as VStack."
+      tablet:
+        behavior: "Same collapse logic as mobile."
+      desktop:
+        behavior: "Same collapse logic as mobile."
+      wide:
+        behavior: "Standard horizontal layout."
+      collapse_details: >-
+        When collapse is set, at or below the named breakpoint the Row renders
+        as a VStack. All other props (gap, align, justify) remain unchanged
+        after collapse. Wrap behavior is ignored after collapse (VStack does not wrap).
+      default_collapse: null
+
+    nesting:
+      can_contain: [VStack, Row, Grid, Split, Layer, Scroll, component]
+      notes:
+        - "Row inside Row is valid but discouraged in favor of a single Row with nested items."
+        - "Row inside Grid is valid."
+        - "Row inside Split is valid."
+
+    platform:
+      web:
+        css:
+          display: flex
+          flex-direction: "row (row-reverse when reverse: true)"
+          gap: "var(--gap)"
+          align-items: "var(--align)"
+          justify-content: "var(--justify)"
+          flex-wrap: "wrap (when wrap: true)"
+          padding: "var(--padding)"
+        collapse_css: >-
+          @media (max-width: var(--collapse-breakpoint)) {
+            flex-direction: column;
+          }
+      flutter:
+        widget_no_wrap: Row
+        widget_wrap: Wrap
+        implementation: >-
+          wrap == false:
+            Row(
+              mainAxisAlignment: MainAxisAlignment.{justify},
+              crossAxisAlignment: CrossAxisAlignment.{align},
+              children: [with SizedBox(width: gap) between each],
+            )
+          wrap == true:
+            Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              alignment: WrapAlignment.{justify},
+              crossAxisAlignment: WrapCrossAlignment.{align},
+              children: [...],
+            )
+          When collapse is set, uses LayoutBuilder to switch between
+          Row and Column at the collapse breakpoint.
+
+  # =========================================================================
+  # Grid
+  # =========================================================================
+  Grid:
+    purpose: "Arranges children in an N-column grid with responsive column counts."
+    props:
+      columns:
+        type: "number | ResponsiveValue<number>"
+        default:
+          mobile: 1
+          tablet: 2
+          desktop: 3
+          wide: 4
+        description: "Number of equal-width columns at each breakpoint."
+      gap:
+        type: "SpacingToken | ResponsiveValue<SpacingToken>"
+        default: 16
+        description: "Gap between grid items (both column and row gap)."
+      rowGap:
+        type: "SpacingToken | null"
+        default: null
+        description: "Vertical gap between rows. When null, uses gap for both axes."
+      padding:
+        type: "SpacingToken | SpacingEdges"
+        default: 0
+        description: "Inner padding of the grid container."
+      minChildWidth:
+        type: "number | null"
+        default: null
+        description: >-
+          Minimum width (px) per child. When set, columns are auto-calculated
+          to fit. Overrides columns.
+
+    responsive:
+      mobile:
+        columns: 1
+        behavior: "Single-column Grid is functionally a VStack with gap."
+      tablet:
+        columns: 2
+        behavior: "Two-column layout."
+      desktop:
+        columns: 3
+        behavior: "Three-column layout."
+      wide:
+        columns: 4
+        behavior: "Four-column layout."
+      notes: >-
+        No collapse behavior. Column count reduces per breakpoint via the
+        responsive columns prop. Grid children reflow automatically.
+
+    child_span:
+      description: >-
+        Grid children that need to span multiple columns use a wrapper with
+        a span prop.
+      props:
+        span:
+          type: "number | ResponsiveValue<number>"
+          default: 1
+          description: "Number of columns this child spans."
+      web_css: "grid-column: span var(--span);"
+      flutter: "Implemented via StaggeredGrid or manual column calculation in the Grid parent."
+
+    nesting:
+      can_contain: [VStack, Row, Grid, Layer, Scroll, component]
+      cannot_contain: [Split]
+      notes:
+        - "Grid inside Grid is not allowed (nested grids are undefined)."
+        - "Grid children fill one grid cell each."
+
+    platform:
+      web:
+        css:
+          display: grid
+          grid-template-columns: "repeat(var(--columns), 1fr)"
+          gap: "var(--gap)"
+          row-gap: "var(--row-gap, var(--gap))"
+          padding: "var(--padding)"
+        minChildWidth_css: >-
+          grid-template-columns: repeat(auto-fill, minmax(var(--min-child-width), 1fr));
+      flutter:
+        widget: GridView.count
+        implementation: >-
+          GridView.count(
+            crossAxisCount: columns (resolved per breakpoint via LayoutBuilder),
+            mainAxisSpacing: rowGap ?? gap,
+            crossAxisSpacing: gap,
+            padding: EdgeInsets.all(padding),
+            children: [...],
+          )
+          When minChildWidth is set, uses LayoutBuilder to calculate
+          crossAxisCount = max(1, floor(availableWidth / minChildWidth)).
+
+  # =========================================================================
+  # Split
+  # =========================================================================
+  Split:
+    purpose: >-
+      Two-panel layout with a resizable divider. Used for master-detail,
+      sidebar-content, and editor-preview patterns.
+    props:
+      ratio:
+        type: "string | ResponsiveValue<string>"
+        default: "1:2"
+        description: >-
+          Ratio of left panel to right panel. Format: "N:M".
+          "0:1" hides left panel. "1:0" hides right panel.
+      minWidth:
+        type: object
+        default:
+          left: 200
+          right: 300
+        description: "Minimum width in px for each panel."
+        properties:
+          left: { type: number, default: 200 }
+          right: { type: number, default: 300 }
+      collapse:
+        type: Breakpoint
+        default: tablet
+        description: "Breakpoint at or below which the Split collapses to a single panel."
+      collapseTarget:
+        type: "string"
+        enum: [left, right]
+        default: right
+        description: >-
+          Which panel is shown when collapsed. The other panel becomes
+          an overlay drawer.
+      resizable:
+        type: boolean
+        default: true
+        description: "Whether the user can drag the divider to resize panels."
+      gap:
+        type: SpacingToken
+        default: 0
+        description: "Gap between panels (visual gap only; divider sits in the middle)."
+      dividerWidth:
+        type: number
+        default: 1
+        description: "Width of the divider in px."
+
+    responsive:
+      mobile:
+        behavior: >-
+          Always collapsed. Shows collapseTarget panel full-width.
+          Hidden panel accessible as slide-over drawer.
+        default_collapse: tablet
+      tablet:
+        behavior: >-
+          At default collapse breakpoint (tablet), collapses to single panel.
+          Hidden panel becomes slide-over drawer with toggle button.
+      desktop:
+        behavior: "Two-panel layout with configured ratio."
+      wide:
+        behavior: "Two-panel layout with configured ratio."
+      notes: >-
+        Split uses the ratio prop per breakpoint to adjust panel proportions.
+        At the collapse breakpoint, the split degrades to a single panel
+        with the hidden panel accessible as a slide-over drawer.
+
+    nesting:
+      must_have: "Exactly two children: left and right."
+      can_contain: [VStack, Row, Grid, Layer, Scroll, component]
+      cannot_contain: [Split]
+      notes:
+        - "Each child (left, right) MAY contain any layout primitive or component."
+        - "Splits MAY nest (Split inside a Split creates a three-panel layout) — but direct Split child of Split is discouraged; use intermediate VStack."
+
+    platform:
+      web:
+        css:
+          display: flex
+          flex-direction: row
+        left_panel:
+          flex: "N (from ratio N:M)"
+          min-width: "var(--min-width-left)"
+          overflow: auto
+        right_panel:
+          flex: "M (from ratio N:M)"
+          min-width: "var(--min-width-right)"
+          overflow: auto
+        divider:
+          width: "var(--divider-width)"
+          cursor: "col-resize (when resizable: true)"
+          background: "var(--color-border-subtle)"
+        collapse_css: >-
+          @media (max-width: var(--collapse-breakpoint)) {
+            .split-left { display: none; }  /* or .split-right, per collapseTarget */
+            .split-visible { flex: 1; }
+          }
+      flutter:
+        widget: "Row + Expanded (LayoutBuilder for collapse)"
+        implementation: >-
+          LayoutBuilder:
+            if (constraints.maxWidth > collapseBreakpoint):
+              Row(children: [
+                Expanded(flex: N, child: leftPanel),
+                if (resizable) VerticalDivider + GestureDetector,
+                Expanded(flex: M, child: rightPanel),
+              ])
+            else:
+              Show collapseTarget panel full-width; other panel via Drawer/SlideOver.
+
+  # =========================================================================
+  # Layer
+  # =========================================================================
+  Layer:
+    purpose: >-
+      Z-axis stacking for overlays, modals, popovers, and toasts. Layer does
+      not participate in flow layout; children are positioned absolutely or
+      fixed relative to a reference.
+    props:
+      tier:
+        type: LayerTier
+        default: page
+        description: "Z-index tier. Determines stacking order among layers."
+      anchor:
+        type: LayerAnchor
+        default: viewport
+        description: "Positioning reference for the layer content."
+      position:
+        type: LayerPosition
+        default: center
+        description: >-
+          Where the content appears relative to the anchor. Uses logical
+          properties: start/end resolve based on text direction (LTR/RTL).
+      backdrop:
+        type: boolean
+        default: false
+        description: "Whether a semi-transparent backdrop is shown behind the layer content."
+      backdropDismiss:
+        type: boolean
+        default: true
+        description: "Whether clicking the backdrop dismisses the layer."
+      trapFocus:
+        type: boolean
+        default: false
+        description: >-
+          Whether keyboard focus is trapped within the layer content.
+          MUST be true for modals.
+      animation:
+        type: LayerAnimation
+        default: fade
+        description: "Enter/exit animation type."
+
+    z_index_tiers:
+      page:
+        z_index: 0
+        description: "Normal flow content."
+      popover:
+        z_index: 100
+        description: "Dropdown menus, popovers, tooltips within page context."
+      modal:
+        z_index: 200
+        description: "Modal dialogs, slide-overs, command palette."
+      toast:
+        z_index: 300
+        description: "Toast notifications, snackbars."
+      tooltip:
+        z_index: 400
+        description: "Tooltips (always on top)."
+
+    responsive:
+      mobile:
+        behavior: >-
+          No breakpoint-specific collapse. Modal layers SHOULD use
+          position: bottom with slide-up animation for reachability.
+      tablet:
+        behavior: "No change from default behavior."
+      desktop:
+        behavior: "No change from default behavior."
+      wide:
+        behavior: "No change from default behavior."
+      notes: >-
+        Layer has no breakpoint-specific behavior. Mobile modal adaptation
+        (bottom-sheet position) is configured per-component, not per-primitive.
+
+    nesting:
+      can_contain: [VStack, Row, Grid, Split, Scroll, component]
+      cannot_contain: [Layer]
+      notes:
+        - "Layers MUST NOT be nested directly (Layer inside Layer is undefined)."
+        - "Multiple layers at the same tier stack in document order (last-opened on top)."
+
+    platform:
+      web:
+        css:
+          layer:
+            position: "fixed (or absolute when anchor: parent)"
+            z-index: "var(--tier-z-index)"
+            inset: "0 (when anchor: viewport)"
+          backdrop:
+            position: fixed
+            inset: 0
+            background: "rgba(0, 0, 0, 0.5)"
+            z-index: "var(--tier-z-index)"
+          content:
+            position: relative
+            z-index: "calc(var(--tier-z-index) + 1)"
+      flutter:
+        page: "Normal widget tree, no overlay."
+        popover: "OverlayEntry with Positioned widget."
+        tooltip: "OverlayEntry with Positioned widget."
+        modal: "showDialog() or showModalBottomSheet()."
+        toast: "OverlayEntry positioned at top/bottom with auto-dismiss timer."
+
+  # =========================================================================
+  # Scroll
+  # =========================================================================
+  Scroll:
+    purpose: >-
+      Scrollable container. Provides overflow handling and optional
+      virtualization for large content.
+    props:
+      direction:
+        type: ScrollDirection
+        default: vertical
+        description: "Scroll axis."
+      virtualize:
+        type: "boolean | number"
+        default: false
+        description: >-
+          When true, virtualizes when child count > 50.
+          When a number, virtualizes when child count exceeds that number.
+      overscan:
+        type: number
+        default: 5
+        description: "Number of items rendered outside the visible area (buffer for smooth scrolling)."
+      itemHeight:
+        type: "number | 'auto'"
+        default: auto
+        description: >-
+          Fixed item height in px. When auto, variable item heights are
+          measured dynamically. Fixed heights are more performant.
+      padding:
+        type: "SpacingToken | SpacingEdges"
+        default: 0
+        description: "Inner padding of the scroll container."
+      snapTo:
+        type: SnapAlignment
+        default: none
+        description: "Scroll snap behavior for child items."
+      indicator:
+        type: boolean
+        default: true
+        description: "Whether to show scroll indicator (scrollbar on web, indicator on mobile)."
+
+    responsive:
+      mobile:
+        behavior: >-
+          No breakpoint-specific collapse. SHOULD support pull-to-refresh when
+          used as page-level scroll (configured by containing template).
+      tablet:
+        behavior: "No change from default."
+      desktop:
+        behavior: "No change from default."
+      wide:
+        behavior: "No change from default."
+      notes: >-
+        Scroll has no breakpoint-specific collapse behavior. The virtualize
+        threshold is constant across breakpoints.
+
+    nesting:
+      can_contain: [VStack, Row, Grid, Split, Layer, component]
+      cannot_contain_same_direction: true
+      notes:
+        - "Scroll inside Scroll with the same direction is explicitly forbidden."
+        - "Scroll(vertical) inside Scroll(horizontal) is valid."
+        - "Scroll cannot contain Layer."
+
+    platform:
+      web:
+        css:
+          overflow-y: "auto (vertical), overflow-x: auto (horizontal), overflow: auto (both)"
+          padding: "var(--padding)"
+          scroll-snap-type: "y mandatory (when snapTo is set)"
+          -webkit-overflow-scrolling: "touch (smooth momentum on iOS)"
+        child_css:
+          scroll-snap-align: "var(--snap-to)"
+        virtualization: "@tanstack/virtual"
+      flutter:
+        non_virtual: >-
+          SingleChildScrollView(
+            scrollDirection: Axis.{direction},
+            padding: EdgeInsets.all(padding),
+            child: Column/Row(children: [...]),
+          )
+        virtual: >-
+          ListView.builder(
+            scrollDirection: Axis.{direction},
+            padding: EdgeInsets.all(padding),
+            itemCount: itemCount,
+            itemExtent: itemHeight != auto ? itemHeight : null,
+            itemBuilder: (context, index) => buildItem(index),
+          )
+        both_directions: "InteractiveViewer or nested ScrollView"
+
+  # =========================================================================
+  # Custom (escape hatch)
+  # =========================================================================
+  Custom:
+    purpose: >-
+      Escape hatch that accepts raw CSS or Flutter layout code when the six
+      grammar primitives do not fit. Use sparingly — every Custom usage is a
+      signal that the grammar may need extending.
+    props:
+      web:
+        type: "string | null"
+        default: null
+        description: >-
+          Raw CSS class name or inline styles to apply. The component receives
+          a className prop with this value on web.
+      flutter:
+        type: "string | null"
+        default: null
+        description: >-
+          Raw Flutter widget tree snippet (as a builder function reference).
+          The component receives a builder that returns the custom widget.
+      fallback:
+        type: "string"
+        enum: [VStack, Row, Grid]
+        default: VStack
+        description: >-
+          Which grammar primitive to fall back to if the custom code cannot
+          be resolved. Ensures graceful degradation.
+    constraints:
+      - "Custom layouts MUST be documented with a rationale explaining why grammar primitives are insufficient."
+      - "Custom layouts MUST still consume spacing tokens for any gap/padding values."
+      - "Custom layouts SHOULD be candidates for promotion to a new grammar primitive if reused 3+ times."
+    platform:
+      web:
+        css: "Caller provides raw CSS; framework wraps in a container div with the provided className."
+      flutter:
+        widget: "Caller provides a builder function; framework calls it within the widget tree."
+
+# ---------------------------------------------------------------------------
+# Nesting compatibility matrix
+# ---------------------------------------------------------------------------
+nesting_matrix:
+  description: >-
+    Defines which primitives may be nested inside which. "yes" = valid,
+    "no" = produces undefined behavior or usability issues,
+    "discouraged" = valid but indicates a likely design smell.
+  matrix:
+    #              VStack  Row         Grid  Split  Layer  Scroll
+    VStack:
+      VStack: yes
+      Row: yes
+      Grid: yes
+      Split: yes
+      Layer: yes
+      Scroll: yes
+    Row:
+      VStack: yes
+      Row: discouraged
+      Grid: yes
+      Split: no
+      Layer: yes
+      Scroll: yes
+    Grid:
+      VStack: yes
+      Row: yes
+      Grid: no
+      Split: no
+      Layer: yes
+      Scroll: yes
+    Split:
+      VStack: yes
+      Row: yes
+      Grid: yes
+      Split: no
+      Layer: yes
+      Scroll: yes
+    Layer:
+      VStack: yes
+      Row: yes
+      Grid: yes
+      Split: yes
+      Layer: no
+      Scroll: yes
+    Scroll:
+      VStack: yes
+      Row: yes
+      Grid: yes
+      Split: yes
+      Layer: no
+      Scroll: "no (same direction)"
+
+# ---------------------------------------------------------------------------
+# Collapse behavior summary
+# ---------------------------------------------------------------------------
+collapse_behavior:
+  Row:
+    behavior: "Row becomes VStack (vertical). Children maintain order unless reverse is set."
+    default_collapse: null
+    note: "Defined per-instance via collapse prop. Does not collapse unless specified."
+  Split:
+    behavior: "Two panels collapse to one. Hidden panel becomes a slide-over drawer accessible via a toggle button."
+    default_collapse: tablet
+    note: "At mobile, always collapsed."
+  Grid:
+    behavior: "Column count reduces per breakpoint. Single-column Grid is functionally a VStack."
+    default_collapse: null
+    note: "No collapse; column count is explicitly responsive."
+  VStack:
+    behavior: "No collapse. VStacks are already vertical."
+    default_collapse: null
+  Layer:
+    behavior: "No collapse. Layers are viewport-relative. On mobile, modals SHOULD use bottom-sheet position."
+    default_collapse: null
+  Scroll:
+    behavior: "No collapse. Scrolling is native on all sizes."
+    default_collapse: null
+
+# ---------------------------------------------------------------------------
+# RTL / Directionality
+# ---------------------------------------------------------------------------
+directionality:
+  mechanism:
+    web: "dir=\"rtl\" on <html>. CSS logical properties (inline-start/inline-end) replace left/right."
+    flutter: "Directionality(textDirection: TextDirection.rtl) or MaterialApp(locale: ...) with RTL locale."
+  primitive_adaptation:
+    VStack: "No change (vertical axis is direction-independent)."
+    Row: "Children flow right-to-left. justify: start aligns to right edge."
+    Grid: "Columns fill right-to-left."
+    Split: "First child on right, second on left. collapseTarget semantics invert."
+    Layer: "position: start = right edge (logical via CSS inset-inline-start)."
+    Scroll: "Horizontal scroll starts at right."
+  icon_mirroring:
+    mirror: "Icons with directional meaning (arrow-left, arrow-right, chevron-left, chevron-right, reply, forward)."
+    no_mirror: "Icons without directional meaning (search, settings, user, home, trash, check)."
+    prop: "mirrorInRtl: boolean (default: false). Directional icons set this to true."
+
+# ---------------------------------------------------------------------------
+# Zone composition system
+# ---------------------------------------------------------------------------
+zones:
+  description: >-
+    A zone is a named content area within a page template. Zones are the
+    composition points where engines and organisms are placed.
+
+  schema:
+    name:
+      type: string
+      required: true
+      description: "Unique zone identifier within the template. Kebab-case."
+    content:
+      type: ContentType
+      required: true
+      description: "Content type constraint. Agent MUST NOT place organisms that do not match."
+    layout:
+      type: "LayoutPrimitive"
+      required: false
+      default: "VStack with default props"
+      description: "How content within the zone is arranged."
+    responsive:
+      type: "ResponsiveVisibility"
+      required: false
+      default: "visible at all breakpoints"
+      description: "Per-breakpoint visibility."
+      properties:
+        mobile: { type: VisibilityRule, default: visible }
+        tablet: { type: VisibilityRule, default: visible }
+        desktop: { type: VisibilityRule, default: visible }
+        wide: { type: VisibilityRule, default: visible }
+    minHeight:
+      type: "number | null"
+      required: false
+      default: null
+      description: "Minimum height constraint in px."
+    maxHeight:
+      type: "number | null"
+      required: false
+      default: null
+      description: "Maximum height constraint in px."
+    minWidth:
+      type: "number | null"
+      required: false
+      default: null
+      description: "Minimum width constraint in px."
+    maxWidth:
+      type: "number | null"
+      required: false
+      default: null
+      description: "Maximum width constraint in px."
+    order:
+      type: "ResponsiveValue<number>"
+      required: false
+      default: null
+      description: "Ordering priority. Lower numbers appear first."
+    sticky:
+      type: boolean
+      required: false
+      default: false
+      description: "Whether the zone sticks to the top of the viewport on scroll."
+    scrollable:
+      type: boolean
+      required: false
+      default: false
+      description: "Whether the zone content independently scrolls."
+
+  ordering:
+    description: >-
+      Zones can reorder on different breakpoints using the order prop.
+      Lower numbers appear first in the layout flow.
+    rules:
+      - "Order values are integers. Negative values are valid."
+      - "Zones with equal order values maintain their document order (stable sort)."
+      - "Order changes MUST NOT cause layout jumps (no animation on reorder)."
+    web_css: "order: var(--order);"
+    flutter: "Rebuild children list sorted by resolved order value at current breakpoint."
+
+  population:
+    description: >-
+      Zones are populated by the agent during page composition.
+    steps:
+      - "Select a page template (see Spec 06)."
+      - "Read the template's zone definitions."
+      - "For each zone, select organisms or engines whose output matches the zone's content type."
+      - "Configure the selected organism/engine with data bindings and props."
+      - "Place the configured organism into the zone."
+    validation:
+      - "Every zone defined in the template MUST be populated. Empty zones are forbidden."
+      - "The organism/engine placed in a zone MUST match the zone's content type."
+      - "A zone with responsive.{breakpoint}: hidden is still populated; content is visually hidden."
+
+# ---------------------------------------------------------------------------
+# Responsive rule examples
+# ---------------------------------------------------------------------------
+responsive_examples:
+
+  sidebar_content:
+    description: >-
+      Classic sidebar-content pattern. Sidebar collapses to a drawer on mobile
+      and tablet, visible as a panel on desktop and wide.
+    layout:
+      primitive: Split
+      props:
+        ratio:
+          mobile: "0:1"
+          tablet: "0:1"
+          desktop: "1:3"
+          wide: "1:4"
+        collapse: tablet
+        collapseTarget: right
+        minWidth:
+          left: 240
+          right: 320
+    zones:
+      sidebar:
+        content: navigation
+        responsive:
+          mobile: drawer
+          tablet: drawer
+          desktop: visible
+          wide: visible
+      content:
+        content: any
+        responsive:
+          mobile: visible
+          tablet: visible
+          desktop: visible
+          wide: visible
+
+  stats_grid:
+    description: >-
+      Stats card grid that reflows from 1 column on mobile to 4 on wide.
+      Uses responsive columns prop.
+    layout:
+      primitive: Grid
+      props:
+        columns:
+          mobile: 1
+          tablet: 2
+          desktop: 3
+          wide: 4
+        gap:
+          mobile: 12
+          desktop: 16
+    zones:
+      stats:
+        content: stats
+        responsive:
+          mobile: visible
+          tablet: visible
+          desktop: visible
+          wide: visible
+
+  action_bar:
+    description: >-
+      Toolbar action bar that collapses from horizontal to vertical on mobile.
+      Uses Row collapse prop.
+    layout:
+      primitive: Row
+      props:
+        justify: between
+        align: center
+        gap: 8
+        collapse: mobile
+        padding: { top: 8, right: 16, bottom: 8, left: 16 }
+    zones:
+      title:
+        content: any
+      actions:
+        content: actions
+        responsive:
+          mobile: visible
+          tablet: visible
+          desktop: visible
+          wide: visible
+
+  dashboard_reorder:
+    description: >-
+      Dashboard where stats appear above activity feed on desktop but below
+      it on mobile, using zone ordering.
+    layout:
+      primitive: VStack
+      props:
+        gap:
+          mobile: 16
+          desktop: 24
+    zones:
+      stats:
+        content: stats
+        order:
+          mobile: 2
+          desktop: 1
+      activity:
+        content: data
+        order:
+          mobile: 1
+          desktop: 2
+
+  editor_preview:
+    description: >-
+      Side-by-side editor and preview with equal split on desktop,
+      collapsing to editor-only with preview in a modal on mobile.
+    layout:
+      primitive: Split
+      props:
+        ratio:
+          desktop: "1:1"
+          wide: "1:1"
+        collapse: tablet
+        collapseTarget: left
+        resizable: true
+        dividerWidth: 2
+    zones:
+      editor:
+        content: form
+        responsive:
+          mobile: visible
+          tablet: visible
+          desktop: visible
+          wide: visible
+      preview:
+        content: any
+        responsive:
+          mobile: modal
+          tablet: modal
+          desktop: visible
+          wide: visible
+
+# ---------------------------------------------------------------------------
+# Page template zone composition
+# ---------------------------------------------------------------------------
+page_template_zones:
+  description: >-
+    Standard zone compositions for page templates. Each template defines
+    a set of zones with their content types, layouts, and responsive rules.
+    See Spec 06 for full page template definitions.
+
+  templates:
+    DashboardLayout:
+      root_layout: VStack
+      zones:
+        page-header:
+          content: actions
+          sticky: true
+        stats-bar:
+          content: stats
+          layout:
+            primitive: Grid
+            props:
+              columns: { mobile: 1, tablet: 2, desktop: 4 }
+              gap: 16
+        main-content:
+          content: data
+          layout:
+            primitive: Split
+            props:
+              ratio: { desktop: "2:1", wide: "3:1" }
+              collapse: tablet
+        activity-feed:
+          content: data
+          scrollable: true
+
+    ListLayout:
+      root_layout: VStack
+      zones:
+        page-header:
+          content: actions
+          sticky: true
+        filter-bar:
+          content: actions
+        content:
+          content: data
+          scrollable: true
+          layout:
+            primitive: Scroll
+            props:
+              virtualize: 50
+        footer:
+          content: actions
+          sticky: true
+
+    DetailLayout:
+      root_layout: VStack
+      zones:
+        page-header:
+          content: actions
+          sticky: true
+        hero:
+          content: any
+          maxHeight: 400
+        body:
+          content: any
+          layout:
+            primitive: Split
+            props:
+              ratio: { desktop: "2:1" }
+              collapse: tablet
+              collapseTarget: left
+        related:
+          content: data
+          layout:
+            primitive: Grid
+            props:
+              columns: { mobile: 1, tablet: 2, desktop: 3 }
+
+    FormLayout:
+      root_layout: VStack
+      zones:
+        page-header:
+          content: actions
+          sticky: true
+        form-body:
+          content: form
+          layout:
+            primitive: VStack
+            props:
+              gap: 24
+              padding: { mobile: 16, desktop: 24 }
+          maxWidth: 720
+        form-actions:
+          content: actions
+          sticky: true
+
+    SettingsLayout:
+      root_layout: Split
+      props:
+        ratio: { desktop: "1:3", wide: "1:4" }
+        collapse: tablet
+      zones:
+        settings-nav:
+          content: navigation
+          responsive:
+            mobile: drawer
+            tablet: drawer
+            desktop: visible
+        settings-body:
+          content: form
+          scrollable: true
+          layout:
+            primitive: VStack
+            props:
+              gap: 32

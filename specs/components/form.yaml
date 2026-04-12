@@ -1,0 +1,145 @@
+# Kailash Prism — Form Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.4
+# Data entry form with validation, submission handling, and error reporting.
+
+version: "0.1.0"
+
+name: Form
+category: organism
+description: "Data entry form with validation, submission handling, and error reporting."
+
+composed_of:
+  atoms:
+    - Button          # Submit and reset buttons
+  molecules:
+    - FormField       # Repeated form fields (label + input + error)
+    - DialogActions   # Submit/cancel button group
+
+props:
+  - name: onSubmit
+    type: "(values: Record<string, any>) => void"
+    required: true
+    default: null
+    description: "Callback fired with form values when validation passes and form submits"
+  - name: onReset
+    type: "() => void"
+    required: false
+    default: null
+    description: "Callback fired when the form is reset to initial values"
+  - name: initialValues
+    type: "Record<string, any>"
+    required: false
+    default: "{}"
+    description: "Initial field values when the form first renders"
+  - name: validation
+    type: "ValidationSchema | undefined"
+    required: false
+    default: null
+    description: "Validation schema applied on submit or on blur per field"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "FormField elements composing the body of the form"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: pristine
+  states:
+    - name: pristine
+      description: "No changes have been made to any field"
+    - name: dirty
+      description: "One or more field values differ from initial values"
+    - name: validating
+      description: "Validation is running (on submit)"
+    - name: submitting
+      description: "Async submission in progress"
+    - name: submitted
+      description: "Form submitted successfully"
+    - name: error
+      description: "Validation failed or server returned an error"
+  transitions:
+    - from: pristine
+      to: dirty
+      trigger: "User changes any field value"
+      visual_change: "Submit button may become enabled"
+    - from: dirty
+      to: validating
+      trigger: "User clicks submit"
+      visual_change: "Validation runs; field errors may appear"
+    - from: validating
+      to: error
+      trigger: "Validation fails"
+      visual_change: "Error messages appear below invalid fields; focus moves to first error"
+    - from: validating
+      to: submitting
+      trigger: "Validation passes"
+      visual_change: "Submit button shows loading spinner; form fields disabled"
+    - from: submitting
+      to: submitted
+      trigger: "Server responds with success"
+      visual_change: "Success feedback shown; form may reset or close"
+    - from: submitting
+      to: error
+      trigger: "Server responds with error"
+      visual_change: "Server error message displayed; form fields re-enabled"
+    - from: error
+      to: dirty
+      trigger: "User modifies a field"
+      visual_change: "Field-level error clears for the changed field"
+    - from: dirty
+      to: pristine
+      trigger: "User clicks reset or form is programmatically reset"
+      visual_change: "All fields revert to initial values; errors cleared"
+
+composition_slots:
+  - name: children
+    description: "FormField elements defining the form layout"
+  - name: actions
+    description: "Custom submit/cancel button group replacing default DialogActions"
+
+accessibility:
+  role: form
+  aria_attributes:
+    - attribute: aria-label
+      source: "Provided by consumer describing the form purpose"
+      required: true
+    - attribute: aria-live
+      source: "Polite region for validation error announcements"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between form fields sequentially"
+    - key: Enter
+      action: "Submit the form (when focus is on submit button or single-field form)"
+    - key: Escape
+      action: "Reset or cancel (if applicable)"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the form element"
+    announcements:
+      - "Form submitted successfully"
+      - "[N] validation errors found — focus moved to first error"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Single-column layout; full-width fields"
+  - breakpoint: tablet
+    behavior: "Single-column layout with wider fields"
+  - breakpoint: desktop
+    behavior: "Multi-column layout possible (2 columns for short fields)"
+  - breakpoint: wide
+    behavior: "Same as desktop with max-width constraint"
+
+tokens:
+  consumes:
+    - form.default.padding
+    - form.default.gap
+  inherits_from: null

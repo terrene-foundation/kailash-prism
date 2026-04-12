@@ -1,0 +1,63 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.22
+version: 0.1.0
+
+name: VisuallyHidden
+category: atom
+description: "Content hidden visually but accessible to screen readers."
+
+props:
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Content for screen readers"
+
+states:
+  initial: hidden
+  states:
+    - name: hidden
+      description: "Visually hidden but present in accessibility tree"
+  transitions: []
+
+variants: []
+
+accessibility:
+  role: "none"
+  aria_attributes: []
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "Children content"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Always hidden visually"
+  - breakpoint: desktop
+    behavior: "Always hidden visually"
+
+tokens:
+  consumes: []
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Apply the standard visually-hidden CSS pattern: position: absolute,
+    width: 1px, height: 1px, padding: 0, margin: -1px, overflow: hidden,
+    clip: rect(0 0 0 0), white-space: nowrap, border: 0. Do NOT use
+    display: none or visibility: hidden as those remove the element from
+    the accessibility tree entirely. If the hidden content contains a
+    focusable element, consider showing it on focus (the "skip to content"
+    pattern).
+  flutter: >
+    Use Semantics widget to provide screen reader content without rendering
+    a visible widget. Wrap the child in an Offstage(offstage: true) or a
+    SizedBox.shrink() combined with Semantics to keep the content in the
+    semantics tree while hiding it visually. Alternatively, use
+    ExcludeSemantics on the visual content and provide a separate Semantics
+    node with the desired label. Do NOT use Visibility(visible: false) as
+    it removes the widget from the semantics tree.

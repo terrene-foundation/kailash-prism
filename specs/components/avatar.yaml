@@ -1,0 +1,119 @@
+# Avatar Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.11
+
+name: Avatar
+category: atom
+description: "User or entity visual identifier showing image, initials, or fallback icon."
+
+props:
+  - name: src
+    type: string | undefined
+    required: false
+    default: null
+    description: "Image URL"
+  - name: alt
+    type: string
+    required: true
+    default: null
+    description: "Alt text (always required for accessibility)"
+  - name: name
+    type: string | undefined
+    required: false
+    default: null
+    description: "Name for generating initials fallback"
+  - name: size
+    type: '"sm" | "md" | "lg" | "xl"'
+    required: false
+    default: "md"
+    description: "sm=24px, md=32px, lg=40px, xl=48px"
+  - name: status
+    type: '"online" | "offline" | "busy" | "away" | undefined'
+    required: false
+    default: null
+    description: "Status dot overlay"
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: "Image loading, shows skeleton or initials"
+    - name: image
+      description: "Image loaded successfully"
+    - name: initials
+      description: "No image, shows 1-2 character initials"
+    - name: fallback
+      description: "No image, no name, shows generic icon"
+  transitions:
+    - from: loading
+      to: image
+      trigger: "Image loads successfully"
+      visual_change: "Image fades in"
+    - from: loading
+      to: initials
+      trigger: "Image fails, name provided"
+      visual_change: "Initials displayed on colored background"
+    - from: loading
+      to: fallback
+      trigger: "Image fails, no name"
+      visual_change: "Generic user icon on neutral background"
+
+variants:
+  - name: image
+    description: "Circular clipped image"
+  - name: initials
+    description: "interactive.primary bg, text.on-primary initials"
+  - name: fallback
+    description: "surface.page bg, generic user icon in text.secondary"
+
+accessibility:
+  role: "img"
+  aria_attributes:
+    - attribute: "alt"
+      source: "alt prop (REQUIRED)"
+      required: true
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "alt prop"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Same across breakpoints"
+  - breakpoint: tablet
+    behavior: "Same across breakpoints"
+  - breakpoint: desktop
+    behavior: "Same across breakpoints"
+  - breakpoint: wide
+    behavior: "Same across breakpoints"
+
+tokens:
+  consumes:
+    - "avatar.image.radius"
+    - "avatar.initials.bg"
+    - "avatar.initials.text"
+    - "avatar.fallback.bg"
+    - "avatar.fallback.icon_color"
+    - "avatar.{size}.dimension"
+    - "avatar.{size}.font_size"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Uses <img> element inside a circular container when image is loaded"
+    - "Image loading detected via onLoad/onError event handlers"
+    - "Initials extracted from name prop: first letter of first and last word"
+    - "Status dot positioned absolutely at bottom-right of the avatar circle"
+    - "Skeleton loading state uses CSS animation (pulse or shimmer)"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KAvatar"
+    - "Uses CircleAvatar as base or ClipOval with Container"
+    - "Image loading uses Image.network with errorBuilder for fallback"
+    - "Initials extracted from name prop in the same manner as web"
+    - "Status dot positioned via Stack with Positioned widget"
+    - "Loading state uses Shimmer or AnimatedOpacity"

@@ -1,0 +1,200 @@
+# TextInput Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.3
+
+name: TextInput
+category: atom
+description: "Single-line text input field for user data entry."
+
+props:
+  - name: value
+    type: string
+    required: false
+    default: ""
+    description: "Controlled input value"
+  - name: placeholder
+    type: string
+    required: false
+    default: ""
+    description: "Placeholder text when empty"
+  - name: type
+    type: '"text" | "email" | "password" | "tel" | "url" | "search" | "number"'
+    required: false
+    default: "text"
+    description: "HTML input type"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Non-interactive state"
+  - name: readOnly
+    type: boolean
+    required: false
+    default: false
+    description: "Visible but not editable"
+  - name: error
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the input is in error state"
+  - name: maxLength
+    type: number | undefined
+    required: false
+    default: null
+    description: "Maximum character count"
+  - name: iconLeft
+    type: IconName | undefined
+    required: false
+    default: null
+    description: "Icon at the start of the input"
+  - name: iconRight
+    type: IconName | undefined
+    required: false
+    default: null
+    description: "Icon at the end of the input (or clear button)"
+  - name: onChange
+    type: "(value: string) => void"
+    required: false
+    default: null
+    description: "Value change handler"
+  - name: onFocus
+    type: "() => void"
+    required: false
+    default: null
+    description: "Focus handler"
+  - name: onBlur
+    type: "() => void"
+    required: false
+    default: null
+    description: "Blur handler"
+
+states:
+  initial: empty
+  states:
+    - name: empty
+      description: "No value, placeholder visible"
+    - name: filled
+      description: "Has value, placeholder hidden"
+    - name: focus
+      description: "Active input cursor"
+    - name: error
+      description: "Validation failure indicated"
+    - name: disabled
+      description: "Non-interactive, dimmed"
+    - name: readonly
+      description: "Visible content, no editing"
+  transitions:
+    - from: empty
+      to: focus
+      trigger: "Click or tab into field"
+      visual_change: "Border color changes to interactive.primary, focus ring appears"
+    - from: focus
+      to: filled
+      trigger: "User types and blurs"
+      visual_change: "Border returns to default, value displayed"
+    - from: focus
+      to: empty
+      trigger: "User clears and blurs"
+      visual_change: "Placeholder reappears"
+    - from:
+        - empty
+        - filled
+      to: error
+      trigger: "error prop set to true"
+      visual_change: "Border changes to status.error"
+    - from: error
+      to:
+        - empty
+        - filled
+      trigger: "error prop set to false"
+      visual_change: "Border returns to default"
+    - from: "*"
+      to: disabled
+      trigger: "disabled=true"
+      visual_change: "Background dimmed, cursor not-allowed"
+    - from: "*"
+      to: readonly
+      trigger: "readOnly=true"
+      visual_change: "No cursor change, no border highlight on focus"
+
+variants:
+  - name: default
+    description: "Standard input with border.default border on surface.card background"
+  - name: error
+    description: "status.error border, error helper text"
+  - name: disabled
+    description: "Dimmed surface.page background, border.subtle border, text.disabled text"
+
+accessibility:
+  role: "textbox"
+  aria_attributes:
+    - attribute: "aria-invalid"
+      source: "error prop"
+      required: true
+    - attribute: "aria-disabled"
+      source: "disabled prop"
+      required: true
+    - attribute: "aria-readonly"
+      source: "readOnly prop"
+      required: true
+    - attribute: "aria-describedby"
+      source: "ID of associated help text or error message"
+      required: false
+    - attribute: "aria-label"
+      source: "Explicit label or associated Label component"
+      required: false
+  keyboard:
+    - key: "Tab"
+      action: "Move focus to/from input"
+    - key: "Escape"
+      action: "Clear input if search type, otherwise no action"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "Associated Label component via htmlFor/id, or aria-label"
+    announcements:
+      - "When error: announces error message via aria-describedby"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full width, height=44px for touch target compliance"
+  - breakpoint: tablet
+    behavior: "Full width, same as mobile"
+  - breakpoint: desktop
+    behavior: "Width determined by container, height from size prop"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "input.default.bg"
+    - "input.default.text"
+    - "input.default.placeholder"
+    - "input.default.border"
+    - "input.default.radius"
+    - "input.default.height"
+    - "input.default.padding_x"
+    - "input.default.font_size"
+    - "input.focus.border"
+    - "input.focus.ring_color"
+    - "input.focus.ring_width"
+    - "input.error.border"
+    - "input.error.ring_color"
+    - "input.disabled.bg"
+    - "input.disabled.text"
+    - "input.disabled.border"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Uses native <input> element for built-in browser behaviors (autofill, validation)"
+    - "type prop maps directly to HTML input type attribute"
+    - "Escape key clears input only when type='search'"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KTextInput"
+    - "Uses TextField widget with InputDecoration"
+    - "readOnly maps to TextField readOnly property"
+    - "type prop influences TextInputType (e.g., email -> TextInputType.emailAddress)"

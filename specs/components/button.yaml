@@ -1,0 +1,198 @@
+# Button Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.1
+
+name: Button
+category: atom
+description: "Triggers an action when clicked. The primary interactive element."
+
+props:
+  - name: variant
+    type: '"primary" | "secondary" | "tertiary" | "destructive" | "ghost"'
+    required: false
+    default: "primary"
+    description: "Visual style variant"
+  - name: size
+    type: '"sm" | "md" | "lg"'
+    required: false
+    default: "md"
+    description: "Height: sm=32px, md=40px, lg=44px"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Button label content"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the button is non-interactive"
+  - name: loading
+    type: boolean
+    required: false
+    default: false
+    description: "Shows spinner and disables interaction"
+  - name: iconLeft
+    type: IconName | undefined
+    required: false
+    default: null
+    description: "Icon displayed before the label"
+  - name: iconRight
+    type: IconName | undefined
+    required: false
+    default: null
+    description: "Icon displayed after the label"
+  - name: fullWidth
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the button expands to fill its container width"
+  - name: type
+    type: '"button" | "submit" | "reset"'
+    required: false
+    default: "button"
+    description: "HTML button type attribute"
+  - name: onClick
+    type: "() => void"
+    required: false
+    default: null
+    description: "Click handler"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Idle state, ready for interaction"
+    - name: hover
+      description: "Cursor is over the button"
+    - name: active
+      description: "Button is being pressed"
+    - name: focus
+      description: "Button has keyboard focus"
+    - name: disabled
+      description: "Button is non-interactive"
+    - name: loading
+      description: "Action is in progress, shows spinner"
+  transitions:
+    - from: default
+      to: hover
+      trigger: "Mouse enters"
+      visual_change: "Background shifts to hover color"
+    - from: hover
+      to: default
+      trigger: "Mouse leaves"
+      visual_change: "Background returns to default"
+    - from:
+        - default
+        - hover
+      to: active
+      trigger: "Mouse down or Enter/Space key down"
+      visual_change: "Scale to 0.98, background shifts to active color"
+    - from: active
+      to:
+        - default
+        - hover
+      trigger: "Mouse up or key up"
+      visual_change: "Scale returns to 1.0"
+    - from: "*"
+      to: focus
+      trigger: "Tab key focuses button"
+      visual_change: "Focus ring appears (2px, ring_color, 2px offset)"
+    - from: focus
+      to: default
+      trigger: "Tab key moves focus away"
+      visual_change: "Focus ring removed"
+    - from: "*"
+      to: disabled
+      trigger: "disabled prop set to true"
+      visual_change: "Opacity 0.6, cursor not-allowed"
+    - from: "*"
+      to: loading
+      trigger: "loading prop set to true"
+      visual_change: "Label replaced by Spinner, interaction disabled"
+    - from:
+        - disabled
+        - loading
+      to: default
+      trigger: "disabled/loading prop set to false"
+      visual_change: "Returns to default appearance"
+
+variants:
+  - name: primary
+    description: "Filled bg=interactive.primary, text=text.on-primary. For primary page actions."
+  - name: secondary
+    description: "Outlined border=border.default, text=text.primary. For secondary actions."
+  - name: tertiary
+    description: "No border or bg, text=interactive.primary. For low-emphasis inline actions."
+  - name: destructive
+    description: "Filled bg=interactive.destructive, text=text.on-destructive. For delete/remove."
+  - name: ghost
+    description: "Transparent bg, text=text.secondary. For toolbar and icon-only buttons."
+
+accessibility:
+  role: "button"
+  aria_attributes:
+    - attribute: "aria-disabled"
+      source: "disabled prop"
+      required: true
+    - attribute: "aria-busy"
+      source: "loading prop"
+      required: true
+    - attribute: "aria-label"
+      source: "Computed from children text content, or explicit aria-label prop"
+      required: false
+  keyboard:
+    - key: "Enter"
+      action: "Triggers onClick"
+    - key: "Space"
+      action: "Triggers onClick (with preventDefault to avoid scroll)"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "Text content of children, or aria-label prop"
+    announcements:
+      - "When loading: announces 'Loading' via aria-busy"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full width when fullWidth=true. Touch target minimum 44px height."
+  - breakpoint: tablet
+    behavior: "Same as mobile"
+  - breakpoint: desktop
+    behavior: "Inline width by default. Hover states active."
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "button.{variant}.bg"
+    - "button.{variant}.text"
+    - "button.{variant}.border"
+    - "button.{variant}.radius"
+    - "button.{variant}.height"
+    - "button.{variant}.padding_x"
+    - "button.{variant}.font_size"
+    - "button.{variant}.font_weight"
+    - "button.{variant}.hover.bg"
+    - "button.{variant}.active.bg"
+    - "button.{variant}.focus.ring_color"
+    - "button.{variant}.focus.ring_width"
+    - "button.{variant}.focus.ring_offset"
+    - "button.{variant}.disabled.bg"
+    - "button.{variant}.disabled.text"
+    - "button.{variant}.disabled.opacity"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Uses native <button> element for semantic HTML"
+    - "type prop maps directly to HTML button type attribute"
+    - "Spinner replaces children content during loading state"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KButton"
+    - "Uses GestureDetector or InkWell for tap handling"
+    - "loading state renders CircularProgressIndicator sized to match text"
+    - "fullWidth achieved via SizedBox with double.infinity width"

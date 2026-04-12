@@ -1,0 +1,106 @@
+# Kailash Prism — CitationPanel AI Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.20
+# Expandable panel listing source citations with confidence levels and preview text.
+
+version: "0.1.0"
+
+name: CitationPanel
+category: ai-organism
+description: "Expandable panel listing source citations with confidence levels and preview text."
+
+composed_of:
+  atoms:
+    - Badge           # Confidence level indicator (high, medium, low)
+    - IconButton      # Expand/collapse toggle
+    - Link            # Source URL link
+  molecules: []
+
+props:
+  - name: citations
+    type: "{ id: string; source: string; text: string; confidence: \"high\" | \"medium\" | \"low\"; url?: string }[]"
+    required: true
+    default: null
+    description: "Citation objects with source name, preview text, confidence, and optional URL"
+  - name: expanded
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the citation list is expanded (controlled mode)"
+  - name: onToggle
+    type: "() => void"
+    required: false
+    default: null
+    description: "Callback fired when the expand/collapse toggle is clicked"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: collapsed
+  states:
+    - name: collapsed
+      description: "Only the header with citation count is visible"
+    - name: expanded
+      description: "Full citation list is visible with source details"
+  transitions:
+    - from: collapsed
+      to: expanded
+      trigger: "User clicks the expand toggle"
+      visual_change: "Citation list slides down; toggle icon rotates"
+    - from: expanded
+      to: collapsed
+      trigger: "User clicks the collapse toggle"
+      visual_change: "Citation list slides up; toggle icon rotates back"
+
+composition_slots:
+  - name: citations
+    description: "Citation items with custom renderers per citation type"
+  - name: header
+    description: "Custom header content (e.g., citation count, filter options)"
+
+accessibility:
+  role: region
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Citations'"
+      required: true
+    - attribute: aria-expanded
+      source: "Toggle button reflects expanded/collapsed state"
+      required: true
+  keyboard:
+    - key: Enter
+      action: "Toggle citation panel expanded/collapsed"
+    - key: Tab
+      action: "Move focus between citations and their source links"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the region"
+    announcements:
+      - "Citations expanded: [N] sources"
+      - "Citations collapsed"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width panel"
+  - breakpoint: tablet
+    behavior: "Full-width panel"
+  - breakpoint: desktop
+    behavior: "Full-width panel within its container"
+  - breakpoint: wide
+    behavior: "Full-width panel within its container"
+
+tokens:
+  consumes:
+    - citation-panel.default.bg
+    - citation-panel.default.border
+    - citation-panel.default.radius
+    - citation-panel.default.padding
+    - citation-panel.citation.bg
+    - citation-panel.citation.border_left
+    - citation-panel.citation.padding
+  inherits_from: null

@@ -1,0 +1,68 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.25
+version: 0.1.0
+
+name: Separator
+category: atom
+description: "Semantic separator between groups of content (named variant of Divider with semantic meaning)."
+
+props:
+  - name: orientation
+    type: '"horizontal" | "vertical"'
+    required: false
+    default: "horizontal"
+    description: "Direction"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Static line"
+  transitions: []
+
+variants:
+  - name: default
+    description: "border.subtle, 1px thickness"
+
+accessibility:
+  role: "separator"
+  aria_attributes:
+    - attribute: "aria-orientation"
+      source: "orientation prop"
+      required: true
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "Implicit separator"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Same across breakpoints"
+  - breakpoint: desktop
+    behavior: "Same across breakpoints"
+
+tokens:
+  consumes:
+    - "separator.default.color"
+    - "separator.default.thickness"
+  inherits_from: "Divider"
+
+platform_notes:
+  web: >
+    Render as an <hr> element for horizontal or a <div role="separator">
+    for vertical. Unlike Divider, Separator carries semantic meaning and
+    should always use the separator ARIA role. It does not support a label
+    prop (use Divider with-label variant for that). Inherits Divider tokens
+    as a base and overrides only the consumed tokens. Useful inside toolbars,
+    menus, and grouped lists to indicate logical section boundaries.
+  flutter: >
+    Use the built-in Divider widget for horizontal and VerticalDivider for
+    vertical. Wrap in Semantics(label: 'Separator') to ensure the
+    accessibility tree conveys the semantic boundary. Separator is a
+    simplified Divider without label support — use it for toolbar and
+    menu group boundaries. Inherits Divider token values; override only
+    separator-specific tokens if the theme requires visual distinction.

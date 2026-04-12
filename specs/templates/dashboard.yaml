@@ -1,0 +1,200 @@
+# Kailash Prism — Dashboard Page Template
+# Overview page with metrics, charts, and activity streams.
+# See docs/specs/06-page-templates.md section 6.2.1 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Dashboard
+  description: >
+    Overview page with metrics, charts, and activity streams
+    for monitoring business state.
+  use_cases:
+    - Admin home
+    - Analytics overview
+    - Sales dashboard
+    - Project status
+    - System health
+
+  navigation:
+    renders_inside: navigation-engine
+    breadcrumb: "Home > {page_title}"
+    header_position: below-breadcrumb
+
+  layout:
+    root: Stack
+    direction: vertical
+
+  zones:
+    page-header:
+      description: Page title, date filters, action buttons.
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      min_height: 48px
+      default_organism: Toolbar
+      default_props:
+        title: "{page_title}"
+        actions:
+          - type: date-range
+            field: period
+            default: last-30-days
+          - label: Export
+            variant: ghost
+            icon: download
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    stats-row:
+      description: 3-6 MetricCards showing key performance indicators.
+      content_type: stats
+      layout:
+        primitive: Grid
+        props:
+          columns:
+            mobile: 1
+            tablet: 2
+            desktop: 4
+            wide: 4
+      default_organism: StatsRow
+      default_props:
+        metrics:
+          - label: "{metric_1_label}"
+            value: "bind:metrics.metric1"
+            format: number
+          - label: "{metric_2_label}"
+            value: "bind:metrics.metric2"
+            format: number
+          - label: "{metric_3_label}"
+            value: "bind:metrics.metric3"
+            format: number
+          - label: "{metric_4_label}"
+            value: "bind:metrics.metric4"
+            format: number
+      responsive:
+        wide:
+          columns: 4
+        desktop:
+          columns: 4
+        tablet:
+          columns: 2
+        mobile:
+          columns: 1
+          scroll: horizontal-carousel
+
+    primary-chart:
+      description: Main visualization (line chart, bar chart, area chart).
+      content_type: any
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      min_height: 300px
+      default_organism: null
+      default_note: >
+        Consumer provides a custom chart component.
+        Not a Prism primitive.
+      responsive:
+        wide:
+          placement: split-left
+          split_ratio: "2:1"
+        desktop:
+          placement: split-left
+          split_ratio: "2:1"
+        tablet:
+          placement: stacked
+          order: 1
+        mobile:
+          placement: stacked
+          order: 1
+
+    secondary-content:
+      description: Activity feed, recent items list, or secondary chart.
+      content_type: data
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      min_height: 300px
+      default_organism: ListView
+      default_props:
+        data: "api:/activity/recent"
+        item_renderer: ActivityItem
+        max_items: 10
+      responsive:
+        wide:
+          placement: split-right
+          split_ratio: "2:1"
+        desktop:
+          placement: split-right
+          split_ratio: "2:1"
+        tablet:
+          placement: stacked
+          order: 2
+        mobile:
+          placement: stacked
+          order: 2
+
+    detail-grid:
+      description: Additional cards, tables, or widgets.
+      content_type: any
+      layout:
+        primitive: Grid
+        props:
+          columns:
+            mobile: 1
+            tablet: 2
+            desktop: 3
+            wide: 3
+      default_organism: CardGrid
+      default_props:
+        items:
+          - title: "{card_1_title}"
+            content: "{card_1_component}"
+          - title: "{card_2_title}"
+            content: "{card_2_component}"
+          - title: "{card_3_title}"
+            content: "{card_3_component}"
+      responsive:
+        wide:
+          columns: 3
+        desktop:
+          columns: 2
+        tablet:
+          columns: 2
+        mobile:
+          columns: 1
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Full layout. primary-chart and secondary-content in Split(ratio: 2:1).
+        detail-grid 3 columns.
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Same as wide but detail-grid 2 columns.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        primary-chart and secondary-content stack vertically (Split collapses).
+        stats-row 2 columns. detail-grid 2 columns.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        All zones stack vertically. stats-row 1 column (horizontal scroll
+        carousel). detail-grid 1 column.

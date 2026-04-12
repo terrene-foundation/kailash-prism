@@ -1,0 +1,110 @@
+name: AlertBanner
+category: molecule
+version: 0.1.0
+description: Full-width banner for displaying informational, success, warning, or error messages with optional action and dismiss
+
+composed_of:
+  - Icon
+  - Typography
+  - Button
+  - IconButton
+
+props:
+  - name: variant
+    type: '"info" | "success" | "warning" | "error"'
+    required: true
+    default: null
+    description: Visual style variant that determines icon, background color, and ARIA role
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: Message content displayed in the banner
+  - name: action
+    type: "{ label: string; onClick: () => void }"
+    required: false
+    default: null
+    description: Optional action button with label and click handler
+  - name: dismissible
+    type: boolean
+    required: false
+    default: false
+    description: Whether a close button is shown to dismiss the banner
+  - name: onDismiss
+    type: "() => void"
+    required: false
+    default: null
+    description: Callback invoked when the banner is dismissed
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: visible
+  states:
+    - name: visible
+      description: Banner is displayed with its message and optional action
+    - name: dismissed
+      description: Banner has been dismissed and is hidden
+  transitions:
+    - from: visible
+      to: dismissed
+      trigger: User clicks the dismiss button or onDismiss is called
+      visual_change: Banner fades out and is removed from layout
+
+variants:
+  - name: info
+    description: Information icon with info-tinted background for general messages
+  - name: success
+    description: Success icon with success-tinted background for positive confirmations
+  - name: warning
+    description: Warning icon with warning-tinted background for cautionary messages
+  - name: error
+    description: Error icon with error-tinted background for critical issues
+
+accessibility:
+  role: alert
+  aria_attributes:
+    - attribute: role
+      source: alert for error/warning variants, status for info/success variants
+      required: true
+    - attribute: aria-live
+      source: Set to "polite" for screen reader announcement
+      required: true
+  keyboard:
+    - key: Tab
+      action: Moves focus to action button or dismiss button within the banner
+    - key: Enter
+      action: Activates the focused button
+    - key: Escape
+      action: Dismisses the banner if dismissible
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: Banner content provides the accessible label
+    announcements:
+      - Banner message announced automatically via aria-live when it appears
+
+responsive:
+  - breakpoint: mobile
+    behavior: Full width, action button stacks below message text
+  - breakpoint: tablet
+    behavior: Full width, action button inline with message
+  - breakpoint: desktop
+    behavior: Full width, action button inline with message
+  - breakpoint: wide
+    behavior: Full width, action button inline with message
+
+tokens:
+  consumes:
+    - "alert-banner.{variant}.bg"
+    - "alert-banner.{variant}.border"
+    - "alert-banner.{variant}.text"
+    - "alert-banner.{variant}.icon_color"
+    - alert-banner.default.padding
+    - alert-banner.default.radius
+  inherits_from: null

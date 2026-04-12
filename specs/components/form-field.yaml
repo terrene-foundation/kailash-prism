@@ -1,0 +1,119 @@
+name: FormField
+category: molecule
+version: 0.1.0
+description: Wraps an input element with label, help text, and error message for consistent form layout
+
+composed_of:
+  - Label
+  - TextInput
+  - Select
+  - TextArea
+  - Typography
+
+props:
+  - name: label
+    type: string
+    required: true
+    default: null
+    description: Text label displayed above the input element
+  - name: helpText
+    type: string
+    required: false
+    default: null
+    description: Assistive text displayed below the input, providing guidance
+  - name: errorMessage
+    type: string
+    required: false
+    default: null
+    description: Error message displayed below the input when validation fails
+  - name: required
+    type: boolean
+    required: false
+    default: false
+    description: Whether the field is required, adds visual indicator to label
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: The input element to wrap (TextInput, Select, TextArea, etc.)
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: Whether the entire field is disabled
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Normal state with optional help text visible
+    - name: error
+      description: Error state with error message visible and error styling applied
+    - name: disabled
+      description: All child elements rendered in disabled state
+  transitions:
+    - from: default
+      to: error
+      trigger: errorMessage prop becomes non-empty
+      visual_change: Error message appears, input border changes to error color, help text hidden
+    - from: error
+      to: default
+      trigger: errorMessage prop cleared
+      visual_change: Error message removed, input border returns to default, help text restored
+    - from: "*"
+      to: disabled
+      trigger: disabled prop set to true
+      visual_change: All elements become non-interactive with reduced opacity
+
+variants:
+  - name: default
+    description: Standard form field with label above input
+  - name: error
+    description: Error state with error-colored border and error message
+  - name: disabled
+    description: Non-interactive state with reduced opacity
+
+accessibility:
+  role: group
+  aria_attributes:
+    - attribute: aria-describedby
+      source: ID of helpText or errorMessage element, whichever is visible
+      required: true
+    - attribute: aria-invalid
+      source: Set to true when errorMessage is present
+      required: false
+    - attribute: aria-required
+      source: Set to true when required prop is true
+      required: false
+  keyboard:
+    - key: Tab
+      action: Moves focus to the child input element
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: label prop provides accessible name for the group
+    announcements:
+      - Error message announced via aria-live="polite" when errorMessage changes
+
+responsive:
+  - breakpoint: mobile
+    behavior: Stack layout with label above input, full width
+  - breakpoint: tablet
+    behavior: Stack layout with label above input, full width
+  - breakpoint: desktop
+    behavior: Stack layout with label above input, full width
+  - breakpoint: wide
+    behavior: Stack layout with label above input, full width
+
+tokens:
+  consumes:
+    - form-field.default.gap
+    - form-field.default.margin_bottom
+  inherits_from: null

@@ -1,0 +1,139 @@
+name: ListItem
+category: molecule
+version: 0.1.0
+description: Flexible list row with leading element, content area, and trailing element for use in lists and menus
+
+composed_of:
+  - Icon
+  - Avatar
+  - Checkbox
+  - Typography
+  - Badge
+  - StatusDot
+  - Button
+
+props:
+  - name: leading
+    type: ReactNode
+    required: false
+    default: null
+    description: Element displayed at the start of the row (Icon, Avatar, or Checkbox)
+  - name: title
+    type: string
+    required: true
+    default: null
+    description: Primary text content of the list item
+  - name: subtitle
+    type: string
+    required: false
+    default: null
+    description: Secondary text displayed below the title
+  - name: trailing
+    type: ReactNode
+    required: false
+    default: null
+    description: Element displayed at the end of the row (Badge, StatusDot, or action buttons)
+  - name: selected
+    type: boolean
+    required: false
+    default: false
+    description: Whether the item is in a selected state
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: Whether the item is disabled and non-interactive
+  - name: onClick
+    type: "() => void"
+    required: false
+    default: null
+    description: Click handler that makes the item interactive
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Normal display state
+    - name: hover
+      description: User is hovering over the item
+    - name: selected
+      description: Item is in a selected state with highlight
+    - name: disabled
+      description: Item is non-interactive with reduced opacity
+  transitions:
+    - from: default
+      to: hover
+      trigger: Mouse enters the item area
+      visual_change: Background changes to hover color
+    - from: hover
+      to: default
+      trigger: Mouse leaves the item area
+      visual_change: Background returns to default
+    - from: default
+      to: selected
+      trigger: Item is selected (selected prop becomes true)
+      visual_change: Background changes to selected color
+    - from: selected
+      to: default
+      trigger: Item is deselected (selected prop becomes false)
+      visual_change: Background returns to default
+    - from: "*"
+      to: disabled
+      trigger: disabled prop set to true
+      visual_change: Item becomes non-interactive with reduced opacity
+
+variants:
+  - name: default
+    description: Standard list item with optional leading and trailing elements
+  - name: selectable
+    description: Item supports selection state with visual selection indicator
+  - name: with-actions
+    description: Action buttons visible on hover
+
+accessibility:
+  role: listitem
+  aria_attributes:
+    - attribute: aria-selected
+      source: Set to true when selected prop is true (for selectable variant)
+      required: false
+    - attribute: aria-disabled
+      source: Set to true when disabled prop is true
+      required: false
+  keyboard:
+    - key: Enter
+      action: Activates the item's onClick handler
+    - key: Space
+      action: Toggles selection if selectable variant
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: title prop provides the accessible name
+    announcements:
+      - Selection state announced when changed
+
+responsive:
+  - breakpoint: mobile
+    behavior: Swipe actions revealed on horizontal swipe gesture
+  - breakpoint: tablet
+    behavior: Actions visible on hover or long press
+  - breakpoint: desktop
+    behavior: Actions revealed on hover
+  - breakpoint: wide
+    behavior: Actions revealed on hover
+
+tokens:
+  consumes:
+    - list-item.default.bg
+    - list-item.hover.bg
+    - list-item.selected.bg
+    - list-item.default.padding
+    - list-item.default.border_bottom
+    - list-item.default.min_height
+  inherits_from: null

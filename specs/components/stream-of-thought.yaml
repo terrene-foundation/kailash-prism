@@ -1,0 +1,113 @@
+# Kailash Prism — StreamOfThought AI Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.18
+# Real-time step list showing AI reasoning progress with status icons and durations.
+
+version: "0.1.0"
+
+name: StreamOfThought
+category: ai-organism
+description: "Real-time step list showing AI reasoning progress with status icons and durations."
+
+composed_of:
+  atoms:
+    - Icon            # Status icons (queued, running spinner, done check, error cross)
+    - Badge           # Duration display
+  molecules: []
+
+props:
+  - name: steps
+    type: "{ id: string; label: string; status: \"queued\" | \"running\" | \"done\" | \"error\"; duration?: number }[]"
+    required: true
+    default: null
+    description: "Reasoning steps with their current execution status and optional duration"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: active
+  states:
+    - name: active
+      description: "At least one step is in queued or running status"
+    - name: complete
+      description: "All steps are in done or error status"
+  transitions:
+    - from: active
+      to: complete
+      trigger: "Last step transitions to done or error"
+      visual_change: "Running spinner stops; final status icons settled"
+
+# Per-step internal states (each step independently transitions)
+step_states:
+  initial: queued
+  states:
+    - name: queued
+      description: "Step is waiting to execute"
+    - name: running
+      description: "Step is currently executing (spinner icon)"
+    - name: done
+      description: "Step completed successfully (checkmark icon)"
+    - name: error
+      description: "Step failed (error icon)"
+  transitions:
+    - from: queued
+      to: running
+      trigger: "Previous step completes or step execution begins"
+      visual_change: "Icon changes from gray circle to animated spinner"
+    - from: running
+      to: done
+      trigger: "Step execution completes successfully"
+      visual_change: "Spinner becomes green checkmark; duration appears"
+    - from: running
+      to: error
+      trigger: "Step execution fails"
+      visual_change: "Spinner becomes red error icon; error styling applied"
+
+composition_slots:
+  - name: steps
+    description: "Step definitions with custom labels and status rendering"
+
+accessibility:
+  role: list
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'AI reasoning steps'"
+      required: true
+    - attribute: aria-live
+      source: "Polite: announces status changes as steps progress"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between step items"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the list element"
+    announcements:
+      - "[Step label] started"
+      - "[Step label] completed in [duration]"
+      - "[Step label] failed"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width vertical step list"
+  - breakpoint: tablet
+    behavior: "Full-width vertical step list"
+  - breakpoint: desktop
+    behavior: "Full-width vertical step list"
+  - breakpoint: wide
+    behavior: "Full-width vertical step list"
+
+tokens:
+  consumes:
+    - stream-of-thought.default.gap
+    - stream-of-thought.step.icon_size
+    - stream-of-thought.queued.color
+    - stream-of-thought.running.color
+    - stream-of-thought.done.color
+    - stream-of-thought.error.color
+  inherits_from: null

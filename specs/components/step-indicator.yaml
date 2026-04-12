@@ -1,0 +1,111 @@
+name: StepIndicator
+category: molecule
+version: 0.1.0
+description: Multi-step progress indicator showing completed, current, and upcoming steps with connecting lines
+
+composed_of:
+  - Icon
+  - Typography
+
+props:
+  - name: steps
+    type: "{ label: string; description?: string }[]"
+    required: true
+    default: null
+    description: Array of step definitions with labels and optional descriptions
+  - name: currentStep
+    type: number
+    required: true
+    default: null
+    description: Index of the current active step (0-based)
+  - name: orientation
+    type: '"horizontal" | "vertical"'
+    required: false
+    default: "horizontal"
+    description: Layout orientation of the step indicator
+  - name: clickable
+    type: boolean
+    required: false
+    default: false
+    description: Whether completed steps can be clicked to navigate back
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: current
+  states:
+    - name: completed
+      description: Step has been completed, shown with checkmark icon
+    - name: current
+      description: Step is the active step, visually highlighted
+    - name: upcoming
+      description: Step has not yet been reached, shown dimmed
+  transitions:
+    - from: upcoming
+      to: current
+      trigger: currentStep advances to this step's index
+      visual_change: Step circle highlights with current styling, connector from previous step fills
+    - from: current
+      to: completed
+      trigger: currentStep advances past this step's index
+      visual_change: Step circle shows checkmark icon, connector to next step fills
+    - from: completed
+      to: current
+      trigger: currentStep moves back to this step's index (if clickable)
+      visual_change: Step circle returns to current styling, subsequent connectors unfill
+
+variants:
+  - name: default
+    description: Numbered step circles with connecting lines
+  - name: icon
+    description: Checkmark icons for completed steps instead of numbers
+
+accessibility:
+  role: list
+  aria_attributes:
+    - attribute: role
+      source: list on the container, listitem on each step
+      required: true
+    - attribute: aria-current
+      source: Set to "step" on the current step
+      required: true
+  keyboard:
+    - key: Tab
+      action: Moves focus between clickable completed steps (when clickable is true)
+    - key: Enter
+      action: Navigates to the focused completed step (when clickable is true)
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: Step label provides the accessible name for each step
+    announcements:
+      - Current step position announced (e.g., "Step 2 of 5")
+
+responsive:
+  - breakpoint: mobile
+    behavior: Vertical orientation
+  - breakpoint: tablet
+    behavior: Horizontal or vertical based on available width
+  - breakpoint: desktop
+    behavior: Horizontal or vertical based on orientation prop
+  - breakpoint: wide
+    behavior: Horizontal or vertical based on orientation prop
+
+tokens:
+  consumes:
+    - step-indicator.completed.bg
+    - step-indicator.completed.text
+    - step-indicator.current.bg
+    - step-indicator.current.text
+    - step-indicator.current.border
+    - step-indicator.upcoming.bg
+    - step-indicator.upcoming.text
+    - step-indicator.connector.color
+    - step-indicator.connector.width
+    - step-indicator.step.dimension
+  inherits_from: null

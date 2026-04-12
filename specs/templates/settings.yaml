@@ -1,0 +1,130 @@
+# Kailash Prism — Settings Page Template
+# Application or entity settings with categorized sections and sidebar navigation.
+# See docs/specs/06-page-templates.md section 6.2.5 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Settings
+  description: >
+    Application or entity settings with categorized sections
+    and a settings navigation sidebar.
+  use_cases:
+    - App settings
+    - Account settings
+    - Organization settings
+    - Integration configuration
+
+  navigation:
+    renders_inside: navigation-engine
+    breadcrumb: "Home > Settings > {category}"
+    note: >
+      settings-nav is internal to the template
+      (not the global navigation sidebar).
+
+  layout:
+    root: Stack
+    direction: vertical
+
+  zones:
+    settings-header:
+      description: Page title. Optionally includes save indicator.
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          align: center
+      default_organism: Toolbar
+      default_props:
+        title: Settings
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    settings-nav:
+      description: Settings category navigation.
+      content_type: navigation
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+          gap: 4
+      default_organism: SettingsNav
+      default_props:
+        categories: []
+      responsive:
+        wide:
+          display: sidebar
+          width: 220px
+          position: fixed-left
+          description: >
+            Split layout: settings-nav (220px fixed) + settings-content.
+        desktop:
+          display: sidebar
+          width: 200px
+          position: fixed-left
+          description: >
+            Same as wide: settings-nav (200px) + settings-content.
+        tablet:
+          display: tab-bar
+          position: top
+          scroll: horizontal
+          description: >
+            Collapses to horizontal tab bar above settings-content.
+            Scrollable tabs if many categories.
+        mobile:
+          display: dropdown
+          position: top
+          description: >
+            Becomes a Select dropdown at the top. Selected category
+            shows its content below.
+
+    settings-content:
+      description: Settings sections with form fields and toggles.
+      content_type: form
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+          gap: section.gap
+      default_organism: SettingsSections
+      default_props:
+        sections: []
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Split layout: settings-nav (220px fixed) + settings-content.
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Same as wide: settings-nav (200px) + settings-content.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        settings-nav collapses to horizontal tab bar above settings-content.
+        Scrollable tabs if many categories.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        settings-nav becomes a Select dropdown at the top. Selected category
+        shows its content below.

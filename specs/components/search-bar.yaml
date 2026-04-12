@@ -1,0 +1,131 @@
+name: SearchBar
+category: molecule
+version: 0.1.0
+description: Search input with icon, clear button, and optional suggestions dropdown
+
+composed_of:
+  - TextInput
+  - IconButton
+  - Icon
+
+props:
+  - name: value
+    type: string
+    required: true
+    default: null
+    description: Current search query value
+  - name: placeholder
+    type: string
+    required: false
+    default: null
+    description: Placeholder text shown when input is empty
+  - name: onSearch
+    type: "(query: string) => void"
+    required: true
+    default: null
+    description: Callback invoked when search is triggered after debounce
+  - name: debounce
+    type: number
+    required: false
+    default: 300
+    description: Debounce delay in milliseconds before triggering onSearch
+  - name: suggestions
+    type: "string[]"
+    required: false
+    default: null
+    description: List of suggestion strings shown as the user types
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: empty
+  states:
+    - name: empty
+      description: No input text, search icon visible, clear button hidden
+    - name: typing
+      description: User is entering text, debounce timer active
+    - name: searching
+      description: Debounce has fired, search callback invoked
+    - name: results
+      description: Suggestions dropdown is visible with matching results
+  transitions:
+    - from: empty
+      to: typing
+      trigger: User begins entering text (onChange)
+      visual_change: Clear button appears, input gains active styling
+    - from: typing
+      to: searching
+      trigger: Debounce timer completes
+      visual_change: Loading indicator may appear briefly
+    - from: searching
+      to: results
+      trigger: Suggestions prop updates with matches
+      visual_change: Suggestions dropdown appears below input
+    - from: results
+      to: empty
+      trigger: User clicks clear button or presses Escape
+      visual_change: Input cleared, suggestions dismissed, clear button hidden
+    - from: typing
+      to: empty
+      trigger: User clicks clear button or deletes all text
+      visual_change: Input cleared, clear button hidden
+
+variants:
+  - name: default
+    description: Standard search bar at configured width
+  - name: expanded
+    description: Expands to full width on focus
+
+accessibility:
+  role: search
+  aria_attributes:
+    - attribute: aria-label
+      source: Describes the search field purpose
+      required: true
+    - attribute: aria-expanded
+      source: Set to true when suggestions dropdown is visible
+      required: false
+    - attribute: aria-controls
+      source: ID of the suggestions listbox
+      required: false
+    - attribute: aria-activedescendant
+      source: ID of the currently highlighted suggestion
+      required: false
+  keyboard:
+    - key: Escape
+      action: Clears input and closes suggestions dropdown
+    - key: ArrowDown
+      action: Moves focus into suggestions list
+    - key: Enter
+      action: Triggers search with current value or selects highlighted suggestion
+    - key: ArrowUp
+      action: Moves to previous suggestion in the list
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: aria-label on the search landmark
+    announcements:
+      - Number of suggestions announced when list updates
+
+responsive:
+  - breakpoint: mobile
+    behavior: Full width, suggestions overlay content below
+  - breakpoint: tablet
+    behavior: Full width or constrained by container
+  - breakpoint: desktop
+    behavior: Configurable width, may expand on focus
+  - breakpoint: wide
+    behavior: Configurable width, suggestions as floating dropdown
+
+tokens:
+  consumes:
+    - search-bar.default.bg
+    - search-bar.default.border
+    - search-bar.default.radius
+    - search-bar.default.height
+  inherits_from: null

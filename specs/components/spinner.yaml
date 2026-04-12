@@ -1,0 +1,82 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.15
+version: 0.1.0
+
+name: Spinner
+category: atom
+description: "Loading indicator for indeterminate wait states."
+
+props:
+  - name: size
+    type: '"sm" | "md" | "lg"'
+    required: false
+    default: "md"
+    description: "sm=16px, md=24px, lg=32px"
+  - name: label
+    type: string
+    required: false
+    default: "Loading"
+    description: "Accessible label"
+  - name: color
+    type: '"primary" | "inherit"'
+    required: false
+    default: "primary"
+    description: "Spinner color"
+
+states:
+  initial: spinning
+  states:
+    - name: spinning
+      description: "Continuously rotating"
+  transitions: []
+
+variants:
+  - name: default
+    description: "interactive.primary colored circular track with rotating segment"
+
+accessibility:
+  role: "progressbar"
+  aria_attributes:
+    - attribute: "aria-valuetext"
+      source: "label prop"
+      required: true
+    - attribute: "aria-busy"
+      source: "Always true"
+      required: true
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "label prop"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Same across breakpoints"
+  - breakpoint: desktop
+    behavior: "Same across breakpoints"
+
+tokens:
+  consumes:
+    - "spinner.default.color"
+    - "spinner.default.track_color"
+    - "spinner.sm.dimension"
+    - "spinner.md.dimension"
+    - "spinner.lg.dimension"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Use CSS animation (rotate 360deg infinite linear) on a border-based circle
+    or an SVG circle with stroke-dashoffset animation. Prefer transform-based
+    animation for GPU compositing — avoid animating width/height. Use
+    prefers-reduced-motion media query to switch to a pulsing opacity animation
+    instead of rotation for users who have motion sensitivity.
+  flutter: >
+    Use CircularProgressIndicator with no value for indeterminate state.
+    Map size prop to SizedBox constraints. For color="inherit", pass
+    valueColor using the current DefaultTextStyle color. Respect
+    MediaQuery.disableAnimations to reduce motion when accessibility
+    settings request it.

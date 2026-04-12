@@ -1,0 +1,188 @@
+# Select Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.5
+
+name: Select
+category: atom
+description: "Dropdown selector for choosing from a list of options."
+
+props:
+  - name: value
+    type: "string | string[]"
+    required: false
+    default: null
+    description: "Selected value(s)"
+  - name: options
+    type: "{ value: string; label: string; disabled?: boolean; group?: string }[]"
+    required: true
+    default: null
+    description: "Available options"
+  - name: placeholder
+    type: string
+    required: false
+    default: "Select..."
+    description: "Placeholder when no selection"
+  - name: multiple
+    type: boolean
+    required: false
+    default: false
+    description: "Allow multiple selections"
+  - name: searchable
+    type: boolean
+    required: false
+    default: false
+    description: "Allow typing to filter options"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Non-interactive"
+  - name: error
+    type: boolean
+    required: false
+    default: false
+    description: "Error state"
+  - name: onChange
+    type: "(value: string | string[]) => void"
+    required: false
+    default: null
+    description: "Selection change handler"
+
+states:
+  initial: closed
+  states:
+    - name: closed
+      description: "Dropdown is collapsed"
+    - name: open
+      description: "Dropdown is expanded, options visible"
+    - name: filtered
+      description: "Open with search filter applied (searchable=true)"
+    - name: empty
+      description: "Open but no options match filter"
+    - name: error
+      description: "Validation error"
+    - name: disabled
+      description: "Non-interactive"
+  transitions:
+    - from: closed
+      to: open
+      trigger: "Click, Enter, Space, or ArrowDown"
+      visual_change: "Options list appears below with shadow.dropdown"
+    - from: open
+      to: closed
+      trigger: "Selection made, Escape, click outside, or Tab"
+      visual_change: "Options list disappears"
+    - from: open
+      to: filtered
+      trigger: "User types in search field (searchable=true)"
+      visual_change: "Options filtered to matches"
+    - from: filtered
+      to: empty
+      trigger: "Search yields no matches"
+      visual_change: "Empty state message shown"
+
+variants:
+  - name: default
+    description: "Same border treatment as TextInput"
+  - name: error
+    description: "Error border and message"
+  - name: disabled
+    description: "Dimmed, non-interactive"
+
+accessibility:
+  role: "combobox"
+  aria_attributes:
+    - attribute: "aria-expanded"
+      source: "Whether dropdown is open"
+      required: true
+    - attribute: "aria-haspopup"
+      source: "Always 'listbox'"
+      required: true
+    - attribute: "aria-activedescendant"
+      source: "ID of currently highlighted option"
+      required: true
+    - attribute: "aria-invalid"
+      source: "error prop"
+      required: true
+  keyboard:
+    - key: "ArrowDown"
+      action: "Open dropdown or move highlight to next option"
+    - key: "ArrowUp"
+      action: "Move highlight to previous option"
+    - key: "Enter"
+      action: "Select highlighted option"
+    - key: "Space"
+      action: "Select highlighted option (when not searchable)"
+    - key: "Escape"
+      action: "Close dropdown"
+    - key: "Home"
+      action: "Highlight first option"
+    - key: "End"
+      action: "Highlight last option"
+    - key: "Any letter"
+      action: "If searchable, filters. If not, jumps to first option starting with that letter"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "Associated Label component"
+    announcements:
+      - "When opened: announces number of options"
+      - "When option highlighted: announces option label"
+      - "When selected: announces 'Selected {label}'"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full width. Options may use native picker or bottom sheet."
+  - breakpoint: tablet
+    behavior: "Full width, same as mobile"
+  - breakpoint: desktop
+    behavior: "Floating options list positioned below trigger"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "input.default.bg"
+    - "input.default.text"
+    - "input.default.placeholder"
+    - "input.default.border"
+    - "input.default.radius"
+    - "input.default.height"
+    - "input.default.padding_x"
+    - "input.default.font_size"
+    - "input.focus.border"
+    - "input.focus.ring_color"
+    - "input.focus.ring_width"
+    - "input.error.border"
+    - "input.error.ring_color"
+    - "input.disabled.bg"
+    - "input.disabled.text"
+    - "input.disabled.border"
+    - "dropdown-menu.bg"
+    - "dropdown-menu.border"
+    - "dropdown-menu.shadow"
+    - "dropdown-menu.radius"
+    - "dropdown-menu.item.height"
+    - "dropdown-menu.item.padding_x"
+    - "dropdown-menu.item.hover.bg"
+    - "dropdown-menu.item.selected.bg"
+    - "dropdown-menu.item.selected.text"
+    - "dropdown-menu.item.disabled.text"
+  inherits_from: TextInput
+
+platform_notes:
+  web:
+    - "Custom dropdown implementation (not native <select>) for consistent styling"
+    - "Options list uses portal rendering to escape overflow containers"
+    - "Positioned via floating-ui or equivalent for viewport-aware placement"
+    - "searchable mode renders an <input> inside the trigger area"
+    - "Click outside detection via document click listener"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KSelect"
+    - "Uses OverlayEntry or showMenu for dropdown positioning"
+    - "On mobile, may use BottomSheet for option selection"
+    - "searchable mode renders a TextField within the overlay"
+    - "group prop renders grouped options with section headers"

@@ -1,0 +1,152 @@
+name: NavItem
+category: molecule
+version: 0.1.0
+description: Navigation link with icon, label, optional badge count, and support for nested children
+
+composed_of:
+  - Icon
+  - Typography
+  - Badge
+
+props:
+  - name: icon
+    type: IconName
+    required: false
+    default: null
+    description: Icon displayed before the label
+  - name: label
+    type: string
+    required: true
+    default: null
+    description: Navigation item text label
+  - name: href
+    type: string
+    required: true
+    default: null
+    description: Navigation target URL
+  - name: active
+    type: boolean
+    required: false
+    default: false
+    description: Whether this item represents the current route
+  - name: badge
+    type: number
+    required: false
+    default: null
+    description: Badge count displayed after the label
+  - name: collapsed
+    type: boolean
+    required: false
+    default: false
+    description: Whether to show icon only without label text
+  - name: children
+    type: "NavItem[]"
+    required: false
+    default: null
+    description: Nested navigation items for hierarchical menus
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: Whether the navigation item is disabled
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Normal state, not hovered or active
+    - name: hover
+      description: User is hovering over the item
+    - name: active
+      description: Item represents the current route
+    - name: disabled
+      description: Item is non-interactive
+  transitions:
+    - from: default
+      to: hover
+      trigger: Mouse enters the item area
+      visual_change: Background changes to hover color
+    - from: hover
+      to: default
+      trigger: Mouse leaves the item area
+      visual_change: Background returns to default
+    - from: default
+      to: active
+      trigger: Route matches this item's href
+      visual_change: Background changes to active color, text becomes active color, left border appears
+    - from: active
+      to: default
+      trigger: Route changes away from this item's href
+      visual_change: Active styling removed
+    - from: "*"
+      to: disabled
+      trigger: disabled prop set to true
+      visual_change: Item becomes non-interactive with reduced opacity
+
+variants:
+  - name: default
+    description: Standard navigation item with icon and label
+  - name: active
+    description: Highlighted state indicating current route
+  - name: collapsed
+    description: Icon-only mode when sidebar is collapsed
+  - name: nested
+    description: Indented child items within a parent navigation item
+
+accessibility:
+  role: link
+  aria_attributes:
+    - attribute: aria-current
+      source: Set to "page" when active prop is true
+      required: false
+    - attribute: aria-expanded
+      source: Set when item has children, indicates if submenu is open
+      required: false
+  keyboard:
+    - key: Enter
+      action: Navigates to the href target
+    - key: Space
+      action: Navigates to the href target
+    - key: ArrowDown
+      action: Moves focus to next sibling or first child if expanded
+    - key: ArrowUp
+      action: Moves focus to previous sibling or parent
+    - key: ArrowRight
+      action: Expands nested children if present
+    - key: ArrowLeft
+      action: Collapses nested children or moves to parent
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: label prop plus badge count if present
+    announcements:
+      - Badge count announced as part of the item label
+
+responsive:
+  - breakpoint: mobile
+    behavior: Full label visible in mobile navigation drawer
+  - breakpoint: tablet
+    behavior: Full label visible in sidebar
+  - breakpoint: desktop
+    behavior: Full label when sidebar expanded, icon-only when collapsed
+  - breakpoint: wide
+    behavior: Full label when sidebar expanded, icon-only when collapsed
+
+tokens:
+  consumes:
+    - nav-item.default.text
+    - nav-item.default.bg
+    - nav-item.hover.bg
+    - nav-item.active.bg
+    - nav-item.active.text
+    - nav-item.active.border_left
+    - nav-item.default.padding
+    - nav-item.default.gap
+  inherits_from: null

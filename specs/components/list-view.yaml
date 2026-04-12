@@ -1,0 +1,120 @@
+# Kailash Prism — ListView Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.10
+# Vertical list of items with custom renderers, optional selection, and virtual scrolling.
+
+version: "0.1.0"
+
+name: ListView
+category: organism
+description: "Vertical list of items with custom renderers, optional selection, and virtual scrolling."
+
+composed_of:
+  atoms: []
+  molecules:
+    - ListItem        # Repeated list items
+    - Pagination      # Optional pagination
+    - EmptyState      # Shown when no items are available
+
+props:
+  - name: items
+    type: "T[]"
+    required: true
+    default: null
+    description: "Array of data items to render in the list"
+  - name: renderItem
+    type: "(item: T) => ReactNode"
+    required: true
+    default: null
+    description: "Render function that produces a list item element for each data item"
+  - name: loading
+    type: boolean
+    required: false
+    default: false
+    description: "Whether to display skeleton loading items"
+  - name: selectable
+    type: boolean
+    required: false
+    default: false
+    description: "Whether items can be selected"
+  - name: virtualScroll
+    type: boolean
+    required: false
+    default: false
+    description: "Whether to use virtual scrolling for large lists (1000+ items)"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: "Skeleton list items displayed while data is being fetched"
+    - name: loaded
+      description: "List items are displayed"
+    - name: empty
+      description: "No items available; empty state content is shown"
+    - name: error
+      description: "Data fetch failed; error message is shown"
+  transitions:
+    - from: loading
+      to: loaded
+      trigger: "Data fetch completes with results"
+      visual_change: "Skeleton items replaced by rendered list items"
+    - from: loading
+      to: empty
+      trigger: "Data fetch completes with zero results"
+      visual_change: "Skeleton items replaced by empty state content"
+    - from: loading
+      to: error
+      trigger: "Data fetch fails"
+      visual_change: "Skeleton items replaced by error message with retry option"
+
+composition_slots:
+  - name: renderItem
+    description: "Custom render function for each list item"
+  - name: emptyState
+    description: "Custom content for the zero-items state"
+
+accessibility:
+  role: list
+  aria_attributes:
+    - attribute: aria-label
+      source: "Provided by consumer describing the list content"
+      required: false
+  keyboard:
+    - key: Tab
+      action: "Move focus between list items"
+    - key: ArrowDown
+      action: "Move focus to the next item"
+    - key: ArrowUp
+      action: "Move focus to the previous item"
+    - key: Enter
+      action: "Activate the focused item"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the list container"
+    announcements:
+      - "Loading list"
+      - "No items found (empty state)"
+      - "Error loading items"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width items"
+  - breakpoint: tablet
+    behavior: "Full-width items"
+  - breakpoint: desktop
+    behavior: "Full-width items with consistent max-width"
+  - breakpoint: wide
+    behavior: "Full-width items with consistent max-width"
+
+tokens:
+  consumes:
+    - list-view.default.gap
+  inherits_from: null

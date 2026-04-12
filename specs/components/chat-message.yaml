@@ -1,0 +1,139 @@
+# Kailash Prism — ChatMessage AI Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.16
+# Single message bubble in a conversation with avatar, citations, actions, and streaming support.
+
+version: "0.1.0"
+
+name: ChatMessage
+category: ai-organism
+description: "Single message bubble in a conversation with avatar, citations, actions, and streaming support."
+
+composed_of:
+  atoms:
+    - Avatar          # Sender avatar (user or assistant)
+    - IconButton      # Action buttons (copy, edit, regenerate)
+    - Badge           # Branch indicator
+  molecules:
+    - Citation        # Expandable citation references
+
+props:
+  - name: role
+    type: '"user" | "assistant"'
+    required: true
+    default: null
+    description: "Whether the message is from the user or the AI assistant"
+  - name: content
+    type: ReactNode
+    required: true
+    default: null
+    description: "Message body content (text, markdown, or rich content)"
+  - name: citations
+    type: "Citation[]"
+    required: false
+    default: "[]"
+    description: "Source citations referenced in the message"
+  - name: actions
+    type: "Action[]"
+    required: false
+    default: "[]"
+    description: "Action buttons shown on hover or below the message (copy, edit, regenerate)"
+  - name: timestamp
+    type: "Date | undefined"
+    required: false
+    default: null
+    description: "When the message was sent"
+  - name: streaming
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the message content is still being streamed (word by word)"
+  - name: branchId
+    type: string
+    required: false
+    default: null
+    description: "Conversation branch identifier for branching thread support"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: streaming
+  states:
+    - name: streaming
+      description: "Content is appearing progressively (word by word or chunk by chunk)"
+    - name: complete
+      description: "Full message content is displayed"
+    - name: expanded-citations
+      description: "Citation list is expanded showing sources and confidence levels"
+  transitions:
+    - from: streaming
+      to: complete
+      trigger: "Stream ends (all content received)"
+      visual_change: "Typing indicator removed; action buttons become visible"
+    - from: complete
+      to: expanded-citations
+      trigger: "User clicks the citations toggle"
+      visual_change: "Citation list expands below the message bubble"
+    - from: expanded-citations
+      to: complete
+      trigger: "User clicks the citations toggle again"
+      visual_change: "Citation list collapses"
+
+composition_slots:
+  - name: content
+    description: "Message body (plain text, markdown, code blocks, or custom renderers)"
+  - name: actions
+    description: "Action buttons (copy, edit, regenerate, bookmark)"
+  - name: citations
+    description: "Citation elements with source, confidence, and preview"
+
+accessibility:
+  role: article
+  aria_attributes:
+    - attribute: aria-label
+      source: "Combines role and timestamp: '[role] message at [time]'"
+      required: true
+    - attribute: aria-expanded
+      source: "Citations toggle button reflects expanded/collapsed state"
+      required: false
+  keyboard:
+    - key: Tab
+      action: "Move focus to action buttons and citation toggle"
+    - key: Enter
+      action: "Activate focused action button or toggle citations"
+    - key: Escape
+      action: "Collapse expanded citations"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label combining role and timestamp"
+    announcements:
+      - "New assistant message"
+      - "Message streaming complete"
+      - "Citations expanded: [N] sources"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width messages with max-width 80% of container"
+  - breakpoint: tablet
+    behavior: "Same as mobile"
+  - breakpoint: desktop
+    behavior: "Max-width 80% of container; aligned left (assistant) or right (user)"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - chat-message.user.bg
+    - chat-message.user.text
+    - chat-message.user.radius
+    - chat-message.assistant.bg
+    - chat-message.assistant.text
+    - chat-message.assistant.radius
+    - chat-message.default.padding
+    - chat-message.default.max_width
+  inherits_from: null

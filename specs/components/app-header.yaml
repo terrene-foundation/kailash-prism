@@ -1,0 +1,126 @@
+# Kailash Prism — AppHeader Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.1
+# Site-wide header bar with logo, navigation, search, and user menu.
+
+version: "0.1.0"
+
+name: AppHeader
+category: organism
+description: "Site-wide header bar with logo, navigation, search, and user menu."
+
+composed_of:
+  atoms:
+    - Image           # Logo display
+    - Avatar          # User avatar
+    - IconButton      # Hamburger menu toggle, search toggle
+  molecules:
+    - SearchBar       # Inline search
+    - DropdownMenu    # User menu
+    - NavItem         # Horizontal navigation items
+
+props:
+  - name: logo
+    type: ReactNode
+    required: true
+    default: null
+    description: "Logo element displayed at the leading edge of the header"
+  - name: navItems
+    type: "NavItem[]"
+    required: false
+    default: "[]"
+    description: "Horizontal navigation links displayed in the header bar"
+  - name: searchEnabled
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the search bar is displayed in the header"
+  - name: user
+    type: "{ name: string; avatar?: string } | undefined"
+    required: false
+    default: null
+    description: "Logged-in user info for the avatar and user menu"
+  - name: actions
+    type: ReactNode
+    required: false
+    default: null
+    description: "Additional action elements displayed in the header trailing area"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Normal display with navigation visible (desktop) or hamburger (mobile)"
+    - name: search-expanded
+      description: "Mobile search overlay is open, replacing the nav bar content"
+    - name: menu-open
+      description: "User dropdown menu is open"
+  transitions:
+    - from: default
+      to: search-expanded
+      trigger: "User taps the search icon on mobile"
+      visual_change: "Search input slides in from the right, covering nav items"
+    - from: search-expanded
+      to: default
+      trigger: "User dismisses search (Escape or close button)"
+      visual_change: "Search input slides out, nav items reappear"
+    - from: default
+      to: menu-open
+      trigger: "User clicks the avatar"
+      visual_change: "Dropdown menu appears below the avatar"
+    - from: menu-open
+      to: default
+      trigger: "User clicks outside the menu or selects an item"
+      visual_change: "Dropdown menu closes"
+
+composition_slots:
+  - name: logo
+    description: "Custom logo element (image, SVG, or text)"
+  - name: actions
+    description: "Right-aligned action buttons (e.g., notification bell, theme toggle)"
+  - name: navItems
+    description: "Navigation link definitions for the horizontal nav bar"
+
+accessibility:
+  role: banner
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Site header'"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between header elements (logo, nav items, search, avatar)"
+    - key: Escape
+      action: "Close search overlay or user dropdown menu"
+    - key: Enter
+      action: "Activate focused nav item or menu item"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the banner landmark"
+    announcements:
+      - "Menu expanded / collapsed when user dropdown toggles"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Hamburger icon replaces nav items; search opens as full-width overlay"
+  - breakpoint: tablet
+    behavior: "Compact nav with abbreviated labels; search inline"
+  - breakpoint: desktop
+    behavior: "Full nav bar visible with all items, inline search bar, avatar with dropdown"
+  - breakpoint: wide
+    behavior: "Same as desktop with wider max-width container"
+
+tokens:
+  consumes:
+    - app-header.default.bg
+    - app-header.default.shadow
+    - app-header.default.height
+    - app-header.default.padding_x
+  inherits_from: null

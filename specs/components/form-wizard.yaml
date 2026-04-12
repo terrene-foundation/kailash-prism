@@ -1,0 +1,124 @@
+# Kailash Prism — FormWizard Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.13
+# Multi-step form with step indicator, per-step validation, and back/next navigation.
+
+version: "0.1.0"
+
+name: FormWizard
+category: organism
+description: "Multi-step form with step indicator, per-step validation, and back/next navigation."
+
+composed_of:
+  atoms:
+    - Button          # Back, Next, and Submit buttons
+  molecules:
+    - StepIndicator   # Visual step progress (numbered or labeled)
+    - FormField       # Fields within each step's form
+    - DialogActions   # Navigation button group
+
+props:
+  - name: steps
+    type: "WizardStep[]"
+    required: true
+    default: null
+    description: "Step definitions with title, description, validation schema, and content"
+  - name: onSubmit
+    type: "(values: Record<string, any>) => void"
+    required: true
+    default: null
+    description: "Callback fired with aggregated values from all steps on final submission"
+  - name: onStepChange
+    type: "(step: number) => void"
+    required: false
+    default: null
+    description: "Callback fired when the active step changes"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: step-1
+  states:
+    - name: step-N
+      description: "Displaying the Nth step's form fields (N ranges from 1 to total steps)"
+    - name: validating
+      description: "Current step's validation is running (triggered by Next)"
+    - name: submitting
+      description: "Final step submission is in progress"
+    - name: complete
+      description: "Wizard has been submitted successfully"
+  transitions:
+    - from: step-N
+      to: validating
+      trigger: "User clicks Next"
+      visual_change: "Validation runs on current step fields"
+    - from: validating
+      to: step-N
+      trigger: "Validation fails"
+      visual_change: "Error messages appear; focus moves to first error field"
+    - from: validating
+      to: "step-N+1"
+      trigger: "Validation passes and more steps remain"
+      visual_change: "Step indicator advances; next step's fields slide in; focus moves to first field"
+    - from: "step-N+1"
+      to: step-N
+      trigger: "User clicks Back"
+      visual_change: "Step indicator retreats; previous step's fields slide in with preserved values"
+    - from: validating
+      to: submitting
+      trigger: "Validation passes on the final step"
+      visual_change: "Submit button shows loading spinner; all fields disabled"
+    - from: submitting
+      to: complete
+      trigger: "Server responds with success"
+      visual_change: "Completion message or redirect"
+
+composition_slots:
+  - name: steps
+    description: "Step definitions including per-step form content"
+  - name: navigation
+    description: "Custom Back/Next/Submit button group"
+
+accessibility:
+  role: form
+  aria_attributes:
+    - attribute: aria-label
+      source: "Step indicator: 'Step N of M: [step title]'"
+      required: true
+    - attribute: aria-live
+      source: "Polite region for step validation errors"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between current step's fields and navigation buttons"
+    - key: Enter
+      action: "Advance to next step (when focus on Next) or submit (when focus on Submit)"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label combining step number and title"
+    announcements:
+      - "Step [N] of [M]: [step title]"
+      - "Validation error on step [N]: [error details]"
+      - "Form submitted successfully"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Step indicator becomes vertical; full-width form fields"
+  - breakpoint: tablet
+    behavior: "Horizontal step indicator; full-width form"
+  - breakpoint: desktop
+    behavior: "Horizontal step indicator; form with comfortable width"
+  - breakpoint: wide
+    behavior: "Same as desktop with max-width constraint"
+
+tokens:
+  consumes:
+    - form-wizard.default.padding
+    - form-wizard.navigation.gap
+    - form-wizard.step.gap
+  inherits_from: null

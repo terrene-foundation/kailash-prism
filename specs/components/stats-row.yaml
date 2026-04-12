@@ -1,0 +1,86 @@
+# Kailash Prism — StatsRow Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.12
+# Horizontal row of metric cards displaying key statistics with responsive column layout.
+
+version: "0.1.0"
+
+name: StatsRow
+category: organism
+description: "Horizontal row of metric cards displaying key statistics with responsive column layout."
+
+composed_of:
+  atoms: []
+  molecules:
+    - MetricCard      # Repeated metric display cards
+
+props:
+  - name: metrics
+    type: "MetricDef[]"
+    required: true
+    default: null
+    description: "Metric definitions with label, value, change indicator, and optional icon"
+  - name: loading
+    type: boolean
+    required: false
+    default: false
+    description: "Whether to display skeleton loading cards"
+  - name: columns
+    type: "ResponsiveValue<number>"
+    required: false
+    default: "{ mobile: 1, tablet: 2, desktop: 4 }"
+    description: "Number of columns at each breakpoint"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: "Skeleton metric cards displayed while data is being fetched"
+    - name: loaded
+      description: "Metric cards are displayed with real values"
+  transitions:
+    - from: loading
+      to: loaded
+      trigger: "Data fetch completes"
+      visual_change: "Skeleton cards replaced by real metric values"
+
+composition_slots:
+  - name: metrics
+    description: "Metric definitions including custom formatters and trend indicators"
+
+accessibility:
+  role: group
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Key metrics'"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between metric cards"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the group element"
+    announcements:
+      - "Loading metrics"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "1 column, stacked metric cards"
+  - breakpoint: tablet
+    behavior: "2 columns"
+  - breakpoint: desktop
+    behavior: "4 columns (or as configured)"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - stats-row.default.gap
+  inherits_from: null

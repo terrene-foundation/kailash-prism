@@ -1,0 +1,143 @@
+name: Toast
+category: molecule
+version: 0.1.0
+description: Temporary notification message that appears and auto-dismisses, with variant-specific durations and stacking behavior
+
+composed_of:
+  - Icon
+  - Typography
+  - Button
+  - IconButton
+
+props:
+  - name: variant
+    type: '"info" | "success" | "warning" | "error"'
+    required: true
+    default: null
+    description: Visual style variant that determines icon, colors, and default auto-dismiss duration
+  - name: message
+    type: string
+    required: true
+    default: null
+    description: Text message displayed in the toast
+  - name: action
+    type: "{ label: string; onClick: () => void }"
+    required: false
+    default: null
+    description: Optional action button (e.g., Undo) displayed inline with the message
+  - name: duration
+    type: number
+    required: false
+    default: null
+    description: Auto-dismiss duration in milliseconds; 0 disables auto-dismiss. Defaults vary by variant.
+  - name: onDismiss
+    type: "() => void"
+    required: true
+    default: null
+    description: Callback invoked when the toast is dismissed (manually or by auto-dismiss)
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: entering
+  states:
+    - name: entering
+      description: Toast is animating into view (slide in)
+    - name: visible
+      description: Toast is fully visible, auto-dismiss timer running
+    - name: exiting
+      description: Toast is animating out of view (slide out / fade)
+    - name: dismissed
+      description: Toast has been removed from the DOM
+  transitions:
+    - from: entering
+      to: visible
+      trigger: Entry animation completes
+      visual_change: Toast reaches final position, fully opaque
+    - from: visible
+      to: exiting
+      trigger: Auto-dismiss timer fires or user clicks dismiss
+      visual_change: Toast begins exit animation (fade out or slide out)
+    - from: exiting
+      to: dismissed
+      trigger: Exit animation completes
+      visual_change: Toast removed from layout, remaining toasts shift position
+
+variants:
+  - name: info
+    description: Information style with 5000ms default auto-dismiss
+  - name: success
+    description: Success style with 3000ms default auto-dismiss
+  - name: warning
+    description: Warning style with 8000ms default auto-dismiss
+  - name: error
+    description: Error style with no auto-dismiss (must be manually dismissed)
+
+stacking:
+  max_visible: 3
+  order: LIFO
+  overflow_behavior: Oldest toast immediately dismissed when a 4th arrives
+  position:
+    mobile: bottom-center
+    tablet: bottom-center
+    desktop: bottom-right
+    wide: bottom-right
+  z_index: 300
+  animation:
+    enter: Slide in from bottom
+    exit: Fade out
+    reposition: Remaining toasts shift with motion.interaction.content duration
+  spacing: "spacing.component.gap-tight (8px)"
+
+accessibility:
+  role: alert
+  aria_attributes:
+    - attribute: role
+      source: Set to "alert"
+      required: true
+    - attribute: aria-live
+      source: assertive for error variant, polite for info/success/warning
+      required: true
+    - attribute: aria-atomic
+      source: Set to "true" so entire toast is announced
+      required: true
+  keyboard:
+    - key: Tab
+      action: Moves focus to action button or dismiss button within the toast
+    - key: Enter
+      action: Activates the focused action or dismiss button
+    - key: Escape
+      action: Dismisses the toast
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: message prop provides the accessible label
+    announcements:
+      - Toast message announced automatically via aria-live when it appears
+      - Auto-dismiss toasts include undo action for accessibility
+
+responsive:
+  - breakpoint: mobile
+    behavior: Full width, positioned at bottom-center of screen
+  - breakpoint: tablet
+    behavior: Full width, positioned at bottom-center of screen
+  - breakpoint: desktop
+    behavior: Fixed position at bottom-right, max-width constrained
+  - breakpoint: wide
+    behavior: Fixed position at bottom-right, max-width constrained
+
+tokens:
+  consumes:
+    - "toast.{variant}.bg"
+    - "toast.{variant}.border"
+    - "toast.{variant}.text"
+    - "toast.{variant}.shadow"
+    - toast.default.radius
+    - toast.default.padding
+    - toast.default.max_width
+  inherits_from: null

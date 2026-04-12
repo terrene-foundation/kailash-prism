@@ -1,0 +1,168 @@
+# TextArea Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.4
+
+name: TextArea
+category: atom
+description: "Multi-line text input with optional auto-grow behavior."
+
+props:
+  - name: value
+    type: string
+    required: false
+    default: ""
+    description: "Controlled value"
+  - name: placeholder
+    type: string
+    required: false
+    default: ""
+    description: "Placeholder when empty"
+  - name: rows
+    type: number
+    required: false
+    default: 3
+    description: "Initial visible rows"
+  - name: maxRows
+    type: number | undefined
+    required: false
+    default: null
+    description: "Maximum rows before scrolling (if autoGrow=true)"
+  - name: autoGrow
+    type: boolean
+    required: false
+    default: false
+    description: "Whether height expands with content"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Non-interactive"
+  - name: readOnly
+    type: boolean
+    required: false
+    default: false
+    description: "Visible but not editable"
+  - name: error
+    type: boolean
+    required: false
+    default: false
+    description: "Error state"
+  - name: maxLength
+    type: number | undefined
+    required: false
+    default: null
+    description: "Maximum character count"
+  - name: resize
+    type: '"none" | "vertical" | "horizontal" | "both"'
+    required: false
+    default: "vertical"
+    description: "Resize handle behavior (web only)"
+  - name: onChange
+    type: "(value: string) => void"
+    required: false
+    default: null
+    description: "Value change handler"
+
+states:
+  initial: empty
+  states:
+    - name: empty
+      description: "No value"
+    - name: filled
+      description: "Has value"
+    - name: focus
+      description: "Active editing"
+    - name: error
+      description: "Validation failure"
+    - name: disabled
+      description: "Non-interactive"
+    - name: readonly
+      description: "Read-only"
+  transitions:
+    - from: empty
+      to: focus
+      trigger: "Click or tab"
+      visual_change: "Border changes to interactive.primary"
+    - from:
+        - empty
+        - filled
+      to: error
+      trigger: "error=true"
+      visual_change: "Border changes to status.error"
+    - from: "*"
+      to: disabled
+      trigger: "disabled=true"
+      visual_change: "Dimmed appearance"
+
+variants:
+  - name: default
+    description: "Same visual treatment as TextInput default"
+  - name: error
+    description: "Same as TextInput error"
+  - name: disabled
+    description: "Same as TextInput disabled"
+
+accessibility:
+  role: "textbox"
+  aria_attributes:
+    - attribute: "aria-multiline"
+      source: "Always true"
+      required: true
+    - attribute: "aria-invalid"
+      source: "error prop"
+      required: true
+  keyboard:
+    - key: "Tab"
+      action: "Move focus (does NOT insert tab character)"
+    - key: "Enter"
+      action: "Inserts newline"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "Associated Label component"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full width, autoGrow recommended for mobile"
+  - breakpoint: tablet
+    behavior: "Full width, same as mobile"
+  - breakpoint: desktop
+    behavior: "Width from container, resize handle visible"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "input.default.bg"
+    - "input.default.text"
+    - "input.default.placeholder"
+    - "input.default.border"
+    - "input.default.radius"
+    - "input.default.height"
+    - "input.default.padding_x"
+    - "input.default.font_size"
+    - "input.focus.border"
+    - "input.focus.ring_color"
+    - "input.focus.ring_width"
+    - "input.error.border"
+    - "input.error.ring_color"
+    - "input.disabled.bg"
+    - "input.disabled.text"
+    - "input.disabled.border"
+  inherits_from: TextInput
+
+platform_notes:
+  web:
+    - "Uses native <textarea> element"
+    - "resize prop maps to CSS resize property"
+    - "autoGrow implemented via hidden shadow element measuring scrollHeight"
+    - "Tab key moves focus out of textarea, does not insert tab character"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KTextArea"
+    - "Uses TextField with maxLines set from rows prop"
+    - "autoGrow achieved via maxLines=null with maxRows constraint"
+    - "resize prop is not applicable in Flutter (no resize handles)"

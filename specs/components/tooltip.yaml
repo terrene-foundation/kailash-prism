@@ -1,0 +1,104 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.14
+version: 0.1.0
+
+name: Tooltip
+category: atom
+description: "Contextual hint displayed on hover or focus."
+
+props:
+  - name: content
+    type: ReactNode
+    required: true
+    default: null
+    description: "Tooltip content"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Trigger element"
+  - name: position
+    type: '"top" | "bottom" | "left" | "right"'
+    required: false
+    default: "top"
+    description: "Preferred position (auto-flips if overflows viewport)"
+  - name: delay
+    type: number
+    required: false
+    default: 500
+    description: "Delay in ms before showing"
+  - name: maxWidth
+    type: number
+    required: false
+    default: 256
+    description: "Maximum width in pixels"
+
+states:
+  initial: hidden
+  states:
+    - name: hidden
+      description: "Not visible"
+    - name: visible
+      description: "Shown near trigger element"
+  transitions:
+    - from: hidden
+      to: visible
+      trigger: "Mouse hover after delay, or focus on trigger"
+      visual_change: "Tooltip fades in at specified position"
+    - from: visible
+      to: hidden
+      trigger: "Mouse leave, focus lost, Escape key, or scroll"
+      visual_change: "Tooltip fades out"
+
+variants:
+  - name: default
+    description: "Dark bg (gray-900 in light mode, gray-100 in dark mode), contrasting text, radius.sm, shadow.tooltip"
+
+accessibility:
+  role: "tooltip"
+  aria_attributes:
+    - attribute: "aria-describedby"
+      source: "ID of tooltip content element, set on trigger"
+      required: true
+  keyboard:
+    - key: "Escape"
+      action: "Dismiss tooltip"
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "Content text"
+    announcements:
+      - "Tooltip content announced when trigger receives focus"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Hidden by default (no hover on touch). Consider long-press trigger."
+  - breakpoint: desktop
+    behavior: "Shows on hover after delay"
+
+tokens:
+  consumes:
+    - "tooltip.default.bg"
+    - "tooltip.default.text"
+    - "tooltip.default.radius"
+    - "tooltip.default.padding"
+    - "tooltip.default.shadow"
+    - "tooltip.default.font_size"
+    - "tooltip.default.max_width"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Use a portal to render tooltip outside the DOM hierarchy to avoid overflow
+    clipping. Use Floating UI or Popper for auto-positioning and viewport
+    collision detection. Apply CSS transition for fade-in/fade-out (opacity +
+    transform). Touch devices: consider a long-press gesture via
+    onTouchStart/onTouchEnd with the configured delay.
+  flutter: >
+    Wrap with Tooltip widget or build a custom OverlayEntry for richer content.
+    Use CompositedTransformFollower for positioning relative to the trigger.
+    On mobile, long-press is the default trigger via GestureDetector. Ensure
+    the overlay is dismissed on scroll via a NotificationListener or
+    ScrollController listener.

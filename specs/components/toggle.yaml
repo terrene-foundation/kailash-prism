@@ -1,0 +1,108 @@
+# Toggle Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.8
+
+name: Toggle
+category: atom
+description: "Binary on/off switch for settings."
+
+props:
+  - name: checked
+    type: boolean
+    required: false
+    default: false
+    description: "On/off state"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Non-interactive"
+  - name: label
+    type: string
+    required: true
+    default: null
+    description: "Accessible label"
+  - name: onChange
+    type: "(checked: boolean) => void"
+    required: false
+    default: null
+    description: "Toggle handler"
+
+states:
+  initial: "off"
+  states:
+    - name: "off"
+      description: "Track is inactive color, thumb on left"
+    - name: "on"
+      description: "Track is interactive.primary, thumb on right"
+    - name: disabled
+      description: "Dimmed, non-interactive"
+  transitions:
+    - from: "off"
+      to: "on"
+      trigger: "Click or Space key"
+      visual_change: "Thumb slides right, track color transitions to primary"
+    - from: "on"
+      to: "off"
+      trigger: "Click or Space key"
+      visual_change: "Thumb slides left, track color transitions to inactive"
+
+variants:
+  - name: "off"
+    description: "Inactive track bg=border.default, white thumb"
+  - name: "on"
+    description: "Active track bg=interactive.primary, white thumb"
+
+accessibility:
+  role: "switch"
+  aria_attributes:
+    - attribute: "aria-checked"
+      source: "checked prop"
+      required: true
+  keyboard:
+    - key: "Space"
+      action: "Toggle state"
+    - key: "Enter"
+      action: "Toggle state"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "label prop"
+    announcements:
+      - "Announces 'on' or 'off'"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "44px touch target, track width 44px"
+  - breakpoint: tablet
+    behavior: "Same as mobile"
+  - breakpoint: desktop
+    behavior: "Track width 36px"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "toggle.off.track_bg"
+    - "toggle.off.thumb_bg"
+    - "toggle.on.track_bg"
+    - "toggle.on.thumb_bg"
+    - "toggle.disabled.opacity"
+    - "toggle.focus.ring_color"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Uses button element with role='switch' (not a checkbox)"
+    - "Thumb animation uses CSS transition on transform: translateX"
+    - "Track and thumb are div elements styled with border-radius for pill shape"
+    - "Both Space and Enter trigger toggle (unlike checkbox which is Space only)"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KToggle"
+    - "Uses AnimatedAlign or AnimatedPositioned for thumb slide"
+    - "Track rendered as Container with StadiumBorder"
+    - "Thumb rendered as Container with circular shape"
+    - "AnimatedContainer handles track color transition"

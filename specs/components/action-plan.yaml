@@ -1,0 +1,140 @@
+# Kailash Prism — ActionPlan AI Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.19
+# Numbered step list with per-step approve/modify/reject actions for human-in-the-loop control.
+
+version: "0.1.0"
+
+name: ActionPlan
+category: ai-organism
+description: "Numbered step list with per-step approve/modify/reject actions for human-in-the-loop control."
+
+composed_of:
+  atoms:
+    - Button          # Approve, modify, reject buttons per step; approve-all button
+    - Badge           # Step status indicators
+    - Icon            # Step number icons
+  molecules: []
+
+props:
+  - name: steps
+    type: "{ id: string; description: string; status: \"pending\" | \"approved\" | \"modified\" | \"rejected\" }[]"
+    required: true
+    default: null
+    description: "Plan steps with their current approval status"
+  - name: onApprove
+    type: "(id: string) => void"
+    required: true
+    default: null
+    description: "Callback fired when a step is approved"
+  - name: onModify
+    type: "(id: string) => void"
+    required: true
+    default: null
+    description: "Callback fired when a step is marked for modification"
+  - name: onReject
+    type: "(id: string) => void"
+    required: true
+    default: null
+    description: "Callback fired when a step is rejected"
+  - name: onApproveAll
+    type: "() => void"
+    required: false
+    default: null
+    description: "Callback fired when the user approves all pending steps at once"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: reviewing
+  states:
+    - name: reviewing
+      description: "At least one step is in pending status"
+    - name: decided
+      description: "All steps have been approved, modified, or rejected"
+  transitions:
+    - from: reviewing
+      to: decided
+      trigger: "Last pending step receives a decision"
+      visual_change: "Approve All button disappears; summary of decisions shown"
+
+# Per-step internal states
+step_states:
+  initial: pending
+  states:
+    - name: pending
+      description: "Step awaiting user decision"
+    - name: approved
+      description: "Step approved by the user"
+    - name: modified
+      description: "Step marked for modification by the user"
+    - name: rejected
+      description: "Step rejected by the user"
+  transitions:
+    - from: pending
+      to: approved
+      trigger: "User clicks Approve"
+      visual_change: "Step background changes to approved color; approve icon appears"
+    - from: pending
+      to: modified
+      trigger: "User clicks Modify"
+      visual_change: "Step background changes to modified color; edit icon appears"
+    - from: pending
+      to: rejected
+      trigger: "User clicks Reject"
+      visual_change: "Step background changes to rejected color; strikethrough on description"
+
+composition_slots:
+  - name: steps
+    description: "Step definitions with custom description renderers"
+  - name: header
+    description: "Custom header with plan title and approve-all action"
+
+accessibility:
+  role: list
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Action plan'"
+      required: true
+    - attribute: aria-live
+      source: "Polite: announces step status changes"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between steps and their action buttons"
+    - key: Enter
+      action: "Activate the focused action button (approve, modify, or reject)"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the list element"
+    announcements:
+      - "Step [N] approved"
+      - "Step [N] marked for modification"
+      - "Step [N] rejected"
+      - "All steps approved"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width; action buttons stack vertically below step description"
+  - breakpoint: tablet
+    behavior: "Full-width; action buttons inline beside description"
+  - breakpoint: desktop
+    behavior: "Full-width; action buttons inline beside description"
+  - breakpoint: wide
+    behavior: "Full-width; action buttons inline beside description"
+
+tokens:
+  consumes:
+    - action-plan.default.padding
+    - action-plan.default.border
+    - action-plan.default.radius
+    - action-plan.step.padding
+    - action-plan.pending.bg
+    - action-plan.approved.bg
+    - action-plan.rejected.bg
+  inherits_from: null

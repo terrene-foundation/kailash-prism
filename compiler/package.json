@@ -5,9 +5,16 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "prism-compile": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc",
-    "test": "vitest"
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "compile:web": "node dist/cli.js --theme enterprise --target web",
+    "compile:flutter": "node dist/cli.js --theme enterprise --target flutter"
   },
   "keywords": [
     "kailash",
@@ -21,5 +28,13 @@
     "type": "git",
     "url": "https://github.com/terrene-foundation/kailash-prism.git",
     "directory": "compiler"
+  },
+  "dependencies": {
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0",
+    "@types/node": "^22.15.0"
   }
 }

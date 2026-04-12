@@ -1,0 +1,165 @@
+# Kailash Prism — Auth Page Template
+# Authentication pages with centered card and branding.
+# See docs/specs/06-page-templates.md section 6.2.6 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Auth
+  description: >
+    Authentication pages (login, register, forgot password)
+    with centered card and branding.
+  use_cases:
+    - Login
+    - Sign up
+    - Forgot password
+    - Reset password
+    - Verify email
+    - Two-factor authentication
+
+  variants:
+    - login
+    - register
+    - forgot-password
+    - reset-password
+    - verify-email
+    - two-factor
+
+  navigation:
+    renders_inside: standalone
+    note: >
+      Auth pages do NOT render inside the Navigation Engine.
+      They are standalone: no sidebar, no header, no breadcrumbs.
+
+  layout:
+    root: Stack
+    direction: vertical
+    align: center
+    justify: center
+    full_height: true
+
+  zones:
+    branding:
+      description: Logo image + app name. Centered above card.
+      content_type: media
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+          align: center
+      max_width: null
+      default_organism: Branding
+      default_props:
+        logo: "/assets/logo.svg"
+        app_name: "{app_name}"
+      responsive:
+        wide:
+          visible: true
+          split_layout: true
+          split_description: >
+            Optional: split layout with branding illustration on left (50%)
+            and card on right (50%).
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+          logo_hidden: true
+          description: >
+            May hide logo (show only app name) to save vertical space.
+
+    auth-card:
+      description: The form card with title, fields, submit, links.
+      content_type: form
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+          gap: component.gap
+          padding: component.padding
+      max_width: 400px
+      default_engine: Form
+      default_props:
+        title: "Sign in"
+        subtitle: "Enter your credentials to continue"
+        fields:
+          - name: email
+            type: email
+            label: Email
+            required: true
+            placeholder: "you@company.com"
+          - name: password
+            type: password
+            label: Password
+            required: true
+        on_submit: "api:POST /auth/login"
+        submit_label: "Sign In"
+        links:
+          - label: "Forgot password?"
+            path: /auth/forgot-password
+            position: below-submit
+      responsive:
+        wide:
+          max_width: 400px
+          centered: true
+        desktop:
+          max_width: 400px
+          centered: true
+        tablet:
+          max_width: 400px
+          centered: true
+        mobile:
+          max_width: null
+          centered: false
+          description: >
+            Card fills viewport width (minus page margins).
+            No max-width constraint.
+
+    auth-footer:
+      description: Alternative action link (switch between login/register).
+      content_type: any
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+          align: center
+      default_organism: AuthFooter
+      default_props:
+        text: "Don't have an account?"
+        link:
+          label: Sign up
+          path: /auth/register
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Card centered on page. Optional: split layout with branding
+        illustration on left (50%) and card on right (50%).
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Card centered. Max width 400px.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        Card centered. Max width 400px.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        Card fills viewport width (minus page margins). No max-width
+        constraint. Branding may hide logo (show only app name) to save
+        vertical space.

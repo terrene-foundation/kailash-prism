@@ -1,0 +1,91 @@
+# Kailash Prism — Toolbar Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.11
+# Horizontal bar of action buttons, selects, dividers, and view toggles.
+
+version: "0.1.0"
+
+name: Toolbar
+category: organism
+description: "Horizontal bar of action buttons, selects, dividers, and view toggles."
+
+composed_of:
+  atoms:
+    - Button          # Action buttons
+    - Divider         # Vertical dividers between groups
+    - IconButton      # View toggle icons
+  molecules:
+    - Select          # Dropdown selects for options
+    - DropdownMenu    # Overflow menu on mobile
+
+props:
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Toolbar content: buttons, selects, dividers, and other controls"
+  - name: sticky
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the toolbar sticks to the top of the viewport on scroll"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Toolbar displayed with all items visible"
+  transitions: []
+
+composition_slots:
+  - name: children
+    description: "Any combination of buttons, selects, dividers, and custom controls"
+
+accessibility:
+  role: toolbar
+  aria_attributes:
+    - attribute: aria-label
+      source: "Provided by consumer describing the toolbar purpose"
+      required: false
+    - attribute: aria-orientation
+      source: "Static: horizontal"
+      required: true
+  keyboard:
+    - key: ArrowLeft
+      action: "Move focus to the previous toolbar item"
+    - key: ArrowRight
+      action: "Move focus to the next toolbar item"
+    - key: Home
+      action: "Move focus to the first toolbar item"
+    - key: End
+      action: "Move focus to the last toolbar item"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the toolbar element"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Overflow items collapse into a dropdown menu (more button)"
+  - breakpoint: tablet
+    behavior: "Most items visible; least-used overflow into menu"
+  - breakpoint: desktop
+    behavior: "Full toolbar with all items visible"
+  - breakpoint: wide
+    behavior: "Full toolbar with all items visible"
+
+tokens:
+  consumes:
+    - toolbar.default.bg
+    - toolbar.default.border_bottom
+    - toolbar.default.padding
+    - toolbar.default.gap
+    - toolbar.default.height
+  inherits_from: null

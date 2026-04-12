@@ -1,0 +1,117 @@
+# Kailash Prism — NotificationCenter Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.14
+# Notification feed with mark-read, mark-all-read, dismiss, and live updates.
+
+version: "0.1.0"
+
+name: NotificationCenter
+category: organism
+description: "Notification feed with mark-read, mark-all-read, dismiss, and live updates."
+
+composed_of:
+  atoms:
+    - Button          # Mark all read action
+    - IconButton      # Dismiss button per notification
+    - Badge           # Unread count indicator
+  molecules:
+    - ListItem        # Individual notification items
+
+props:
+  - name: notifications
+    type: "Notification[]"
+    required: true
+    default: null
+    description: "Notification objects with id, title, message, timestamp, read status, and type"
+  - name: onMarkRead
+    type: "(id: string) => void"
+    required: true
+    default: null
+    description: "Callback fired when a single notification is marked as read"
+  - name: onMarkAllRead
+    type: "() => void"
+    required: true
+    default: null
+    description: "Callback fired when the user marks all notifications as read"
+  - name: onDismiss
+    type: "(id: string) => void"
+    required: true
+    default: null
+    description: "Callback fired when a notification is dismissed"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: "Skeleton notification items displayed while fetching"
+    - name: loaded
+      description: "Notification items are displayed"
+    - name: empty
+      description: "No notifications; empty state with illustration"
+  transitions:
+    - from: loading
+      to: loaded
+      trigger: "Data fetch completes with notifications"
+      visual_change: "Skeleton items replaced by notification content"
+    - from: loading
+      to: empty
+      trigger: "Data fetch completes with zero notifications"
+      visual_change: "Skeleton items replaced by empty state message"
+
+composition_slots:
+  - name: notifications
+    description: "Notification item definitions with custom renderers per notification type"
+  - name: header
+    description: "Custom header area with title and mark-all-read action"
+
+accessibility:
+  role: feed
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Notifications'"
+      required: true
+    - attribute: aria-live
+      source: "Polite: announces new notifications as they arrive"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between notification items and action buttons"
+    - key: Enter
+      action: "Mark focused notification as read or activate its action"
+    - key: Delete
+      action: "Dismiss the focused notification"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the feed element"
+    announcements:
+      - "New notification: [title]"
+      - "All notifications marked as read"
+      - "Notification dismissed"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-screen notification panel"
+  - breakpoint: tablet
+    behavior: "Dropdown panel from notification bell icon, max-width 480px"
+  - breakpoint: desktop
+    behavior: "Dropdown panel from notification bell icon, max-width 480px"
+  - breakpoint: wide
+    behavior: "Dropdown panel from notification bell icon, max-width 480px"
+
+tokens:
+  consumes:
+    - notification-center.default.bg
+    - notification-center.default.border
+    - notification-center.default.radius
+    - notification-center.default.shadow
+    - notification-center.default.max_height
+    - notification-center.item.padding
+    - notification-center.item.border_bottom
+  inherits_from: null
