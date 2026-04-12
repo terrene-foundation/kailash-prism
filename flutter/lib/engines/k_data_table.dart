@@ -475,7 +475,7 @@ class _Pagination extends StatelessWidget {
       padding: const EdgeInsets.only(top: 12),
       child: Row(
         children: [
-          Text('Rows per page: ', style: TextStyle(color: PrismColors.textSecondary, fontSize: 13)),
+          const Text('Rows per page: ', style: TextStyle(color: PrismColors.textSecondary, fontSize: 13)),
           DropdownButton<int>(
             value: pageSize,
             underline: const SizedBox.shrink(),
@@ -533,7 +533,7 @@ class _ErrorState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Color(0xFFFEF2F2),
+        color: const Color(0xFFFEF2F2),
         border: Border.all(color: PrismColors.statusError),
         borderRadius: BorderRadius.circular(8),
       ),
