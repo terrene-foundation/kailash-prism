@@ -75,7 +75,7 @@ Red team agents read `workspaces/<project>/03-user-flows/` and validate every de
 See `rules/testing.md` § Audit Mode Rules.
 
 1. Do NOT read `.test-results` to verify test counts. The file is written by `/implement` and may report old-code coverage while new spec modules have zero tests.
-2. Run `pytest --collect-only -q` (or your project's equivalent test enumeration command) on the test directories.
+2. Run `npx vitest --list` (web) or `flutter test --reporter json` (flutter) on the test directories.
 3. For each new module the spec created, grep the test directory for an import of that module. Zero importing tests = HIGH finding regardless of "tests pass".
 4. Run any NEW tests that red team writes (E2E, regression tests for findings).
 5. If a test is suspected wrong, re-run THAT test specifically.
@@ -98,9 +98,10 @@ If parity with an existing system is required:
 Per `observability.md` MUST Rule 5. Scan recent build/test output and `*.log` files for WARN+ entries and state disposition for each unique entry.
 
 ```bash
-pytest --tb=short 2>&1 | grep -iE 'warn|error|deprecat|fail' | sort -u
+npx vitest run 2>&1 | grep -iE 'warn|error|deprecat|fail' | sort -u
+flutter test 2>&1 | grep -iE 'warn|error|deprecat|fail' | sort -u
 find . -name "*.log" -mmin -120 -exec grep -HnE 'WARN|ERROR|FAIL' {} +
-pip check 2>&1
+npm ls --all 2>&1 | grep -iE 'missing|warn|err'
 ```
 
 Group identical entries (same source + same message pattern). For each unique entry, state one of:
@@ -117,7 +118,7 @@ Any unacknowledged WARN+ entries BLOCK convergence. The `log-triage-gate.js` Sto
 **Core red team (always):**
 
 - **analyst** — Step 1 owner. Reads `skills/spec-compliance/SKILL.md`, derives assertion tables from each plan, runs AST/grep verification, produces `.spec-coverage-v2.md`.
-- **testing-specialist** — Step 4 owner. Re-derives test coverage via `pytest --collect-only` (or the project's equivalent). Verifies new modules have new tests.
+- **testing-specialist** — Step 4 owner. Re-derives test coverage via `npx vitest --list` (web) / `flutter test --reporter json` (flutter). Verifies new modules have new tests.
 - **value-auditor** — Skeptical buyer perspective on every page/flow
 - **security-reviewer** — Full security audit; verifies every spec § Security Threats subsection has tests
 
@@ -139,7 +140,7 @@ ALL must be true:
 2. **0 HIGH findings** across all agents
 3. **2 consecutive clean rounds** (no new findings)
 4. **Spec compliance: 100% AST/grep verified** — every spec section has an assertion table where every row shows a literal verification command (`grep …`, `ast.parse(…)`, `wc -l …`) and its actual output. Rows saying "exists: yes" are BLOCKED.
-5. **New code has new tests** — `pytest --collect-only` shows ≥1 test importing each new module. Zero new tests for a new module = HIGH, regardless of suite-level "tests pass".
+5. **New code has new tests** — `npx vitest --list` / `flutter test --reporter json` shows ≥1 test importing each new module. Zero new tests for a new module = HIGH, regardless of suite-level "tests pass".
 6. **Frontend integration: 0 mock data** — no `MOCK_*/FAKE_*/DUMMY_*` constants, no `mock*()` / `generate*Data()` functions, no hardcoded display arrays.
 
 Criteria 1-3 are necessary but NOT sufficient. Without 4-6, convergence certifies code quality on incomplete software.

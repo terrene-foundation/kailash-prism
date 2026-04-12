@@ -62,11 +62,11 @@ Always involve tdd-implementer, testing-specialists, value auditor, ai ui ux spe
 
 Follow the **test-once protocol** from `rules/testing.md`:
 
-1. **Baseline**: Run `pytest tests/ -x --tb=short -q` ONCE before implementing. Record pass/fail counts.
+1. **Baseline**: Run `npx vitest run` (web) or `flutter test` (flutter) ONCE before implementing. Record pass/fail counts.
 2. **TDD cycle**: tdd-implementer runs affected tests during red-green-refactor (the ONE authoritative run).
 3. **Regression check**: Run full suite ONCE when todo is complete. Compare against baseline -- any new failures = regression, STOP and fix.
 4. **Write `.test-results`** to `workspaces/<project>/.test-results` (commit hash, pass/fail counts, regression count).
-5. **Bug fixes** MUST include regression test in `tests/regression/` marked `@pytest.mark.regression`.
+5. **Bug fixes** MUST include regression test in `web/src/__tests__/regression/` (web) or `flutter/test/regression/` (flutter).
 
 Do NOT run the full suite multiple times per todo. Do NOT re-run tests that tdd-implementer already ran.
 

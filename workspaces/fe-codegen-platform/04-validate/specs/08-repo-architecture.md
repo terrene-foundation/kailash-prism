@@ -222,7 +222,7 @@ kailash-prism/
 ├── flutter/                                # Flutter engine
 │   ├── lib/
 │   │   ├── atoms/
-│   │   │   ├── k_button.dart               # KButton (elevated, filled, outlined, text, icon)
+│   │   │   ├── k_button.dart               # KButton (primary, secondary, tertiary, destructive, ghost)
 │   │   │   ├── k_input.dart                # KInput (text, number, email, password, search)
 │   │   │   ├── k_textarea.dart             # KTextArea (multi-line, auto-resize)
 │   │   │   ├── k_select.dart               # KSelect (dropdown, searchable)

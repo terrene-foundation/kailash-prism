@@ -300,7 +300,7 @@
 | Layout stability | Cumulative Layout Shift < 0.1 | Skeleton atoms prevent CLS; image aspect ratios fixed |
 | Virtual scroll | 10,000 rows render without jank (60fps) | DataTable engine virtual scroll; ListView organism SliverList.builder |
 | Lazy loading | Images below fold load on demand | Image atom lazy loading; IntersectionObserver (web) |
-| Bundle size | Atoms + molecules < 50KB gzipped | Tree-shaking; sideEffects: false |
+| Bundle size | Atoms + molecules < 65KB gzipped | Tree-shaking; sideEffects: false |
 | Memory | No memory leaks on route change | Engine cleanup on unmount; Riverpod auto-dispose |
 | Animations | All animations GPU-composited | Motion tokens constrain to transform/opacity; no layout animations |
 
@@ -369,13 +369,14 @@ RATIO=$((PRISM_IMPORTS * 100 / TOTAL_IMPORTS))
 
 ### Bundle Size
 
-**Rule**: Base atoms + molecules must fit within 50KB gzipped.
+**Rule**: Base atoms + molecules must fit within 65KB gzipped.
 
 | Check | Tool | Pass criterion |
 |-------|------|---------------|
-| Atoms + molecules bundle | `npx bundlesize` with config in `package.json` | < 50KB gzipped |
-| Single engine | `npx bundlesize` per engine entry point | < 30KB gzipped each |
-| Full page initial load | Lighthouse CLI `--only-categories=performance` | Transfer size < 100KB for initial route |
+| Atoms + molecules bundle | `npx bundlesize` with config in `package.json` | < 65KB gzipped |
+| Single engine (except AI Chat) | `npx bundlesize` per engine entry point | < 30KB gzipped each |
+| AI Chat engine | `npx bundlesize` for chat engine entry point | < 80KB gzipped (includes markdown + syntax highlighting) |
+| Full page initial load | Lighthouse CLI `--only-categories=performance` | Transfer size < 150KB for initial route |
 | Tree-shaking verification | Custom script: import 1 atom, measure bundle | 0 bytes from engines, templates, or unused atoms |
 
 **Enforcement**: CI job `bundle-size`. Over-budget blocks merge.

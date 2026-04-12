@@ -1,6 +1,6 @@
 # Foundation Independence Rules
 
-Kailash Python SDK is owned by the Terrene Foundation (Singapore CLG). It is an independent open-source product with NO structural relationship to any commercial entity.
+Kailash Prism is owned by the Terrene Foundation (Singapore CLG). It is an independent open-source product with NO structural relationship to any commercial entity.
 
 ## No Commercial References
 
@@ -9,14 +9,14 @@ MUST NOT reference, compare with, or design against any commercial or proprietar
 - No proprietary product names, SDKs, runtimes, or frameworks
 - No commercial entities, partnerships, or market positioning
 - No "unlike X", "the open-source version of Y", or "differentiates from Z"
-- No "Python port of", "community edition of", or derivative language
+- No "port of", "community edition of", or derivative language
 
 **Why:** Commercial references position Kailash as derivative, undermining its independent identity and potentially creating trademark or legal entanglement.
 
 **Describe Kailash on its own terms.** The existence of any other product is irrelevant.
 
-**Correct**: "Kailash Python SDK is the Terrene Foundation's open-source workflow orchestration platform."
-**Incorrect**: "Kailash Python SDK is the Python version of [product name]."
+**Correct**: "Kailash Prism is the Terrene Foundation's open-source frontend composable engine framework."
+**Incorrect**: "Kailash Prism is the frontend version of [product name]."
 
 ## No Proprietary Awareness
 
@@ -29,7 +29,7 @@ MUST NOT reference, compare with, or design against any commercial or proprietar
 
 ## Foundation-Only Dependencies
 
-- Standard open-source libraries (PyPI, OSI-approved licenses)
+- Standard open-source libraries (npm, pub.dev, crates.io — OSI-approved licenses)
 - Open standards (CARE, EATP, CO — CC BY 4.0) where applicable
 - MUST NOT depend on, import from, or interface with any proprietary SDK
 
@@ -37,8 +37,8 @@ MUST NOT reference, compare with, or design against any commercial or proprietar
 
 ## Design for SDK Users
 
-All decisions driven by: what SDK users need, what Python developers expect, what the community contributes. Never by what any other product does or plans to do.
+All decisions driven by: what Prism users need, what TypeScript/Dart/Rust developers expect, what the community contributes. Never by what any other product does or plans to do.
 
-**Why:** Designing for a specific commercial consumer rather than SDK users at large biases the API surface, making it awkward for the broader community while optimizing for one party.
+**Why:** Designing for a specific commercial consumer rather than Prism users at large biases the API surface, making it awkward for the broader community while optimizing for one party.
 
 Third parties may build commercial products on Kailash. The SDK has zero knowledge of, zero dependency on, and zero design consideration for any such product.

@@ -25,7 +25,7 @@ The Foundation is **Terrene Foundation** (Singapore CLG).
 The Foundation is a fully independent entity. There is NO structural relationship between the Foundation and any commercial entity.
 
 1. **All open-source IP was fully and irrevocably transferred to the Foundation**
-2. **Kailash Python SDK is Foundation-owned** (Apache 2.0) — not "contributed by" or "licensed from" any entity
+2. **Kailash Prism is a Terrene Foundation project** (Apache 2.0) — not "contributed by" or "licensed from" any entity
 3. **The constitution prevents open-washing, rent-seeking, and self-interest** by ANY contributor
 4. **Anyone can build commercial products on Foundation standards** — that is the intended model
 5. **No contributor has exclusive rights, special access, or structural advantage**

@@ -8,14 +8,23 @@ All sensitive data MUST use environment variables.
 
 **Why:** Hardcoded secrets end up in git history, CI logs, and error traces, making them permanently extractable even after deletion.
 
-```
-❌ api_key = "sk-..."
-❌ password = "admin123"
-❌ DATABASE_URL = "postgres://user:pass@..."
+```typescript
+// TypeScript
+❌ const apiKey = "sk-...";
+❌ const password = "admin123";
+❌ const databaseUrl = "postgres://user:pass@...";
 
-✅ api_key = os.environ.get("API_KEY")
-✅ password = os.environ["DB_PASSWORD"]
-✅ from dotenv import load_dotenv; load_dotenv()
+✅ const apiKey = process.env.API_KEY;
+✅ const password = process.env.DB_PASSWORD!;
+✅ import 'dotenv/config';
+```
+
+```dart
+// Dart
+❌ final apiKey = 'sk-...';
+
+✅ final apiKey = Platform.environment['API_KEY'];
+✅ final apiKey = const String.fromEnvironment('API_KEY');
 ```
 
 ## Parameterized Queries
@@ -24,13 +33,14 @@ All database queries MUST use parameterized queries or ORM.
 
 **Why:** Without parameterized queries, user input becomes executable SQL, enabling data theft, deletion, or privilege escalation.
 
-```
-❌ f"SELECT * FROM users WHERE id = {user_id}"
-❌ "DELETE FROM users WHERE name = '" + name + "'"
+```typescript
+// TypeScript (Prisma / Drizzle ORM)
+❌ db.query(`SELECT * FROM users WHERE id = ${userId}`)
+❌ `DELETE FROM users WHERE name = '${name}'`
 
-✅ "SELECT * FROM users WHERE id = %s", (user_id,)
-✅ cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-✅ User.query.filter_by(id=user_id)  # ORM
+✅ db.user.findUnique({ where: { id: userId } })  // Prisma
+✅ db.select().from(users).where(eq(users.id, userId))  // Drizzle
+✅ db.query("SELECT * FROM users WHERE id = $1", [userId])  // parameterized
 ```
 
 ## Input Validation
@@ -55,9 +65,9 @@ All user-generated content MUST be encoded before display in HTML templates, JSO
 
 ## MUST NOT
 
-- **No eval() on user input**: `eval()`, `exec()`, `subprocess.call(cmd, shell=True)` — BLOCKED
+- **No eval() on user input**: `eval()`, `new Function(userInput)`, `child_process.exec(userInput)` (TS) / `Process.run(userInput)` (Dart) — BLOCKED
 
-**Why:** `eval()` on user input is arbitrary code execution — the attacker runs whatever they want on the server.
+**Why:** `eval()` on user input is arbitrary code execution — the attacker runs whatever they want on the server/client.
 
 - **No secrets in logs**: MUST NOT log passwords, tokens, or PII
 
@@ -67,11 +77,12 @@ All user-generated content MUST be encoded before display in HTML templates, JSO
 
 **Why:** Once committed, secrets persist in git history even after removal, and are exposed to anyone with repo access.
 
-## Kailash-Specific Security
+## Prism-Specific Security
 
-- **DataFlow**: Access controls on models, validate at model level, never expose internal IDs
-- **Nexus**: Authentication on protected routes, rate limiting, CORS configured
-- **Kaizen**: Prompt injection protection, sensitive data filtering, output validation
+- **Next.js**: Server Actions validate input with Zod, CSRF protection enabled, API routes authenticate
+- **React**: No `dangerouslySetInnerHTML` with user content, sanitize all rendered data
+- **Flutter**: Platform channel communication validated, no sensitive data in SharedPreferences without encryption
+- **Tauri**: IPC commands validate all arguments, allowlist-only filesystem access, CSP headers configured
 
 ## Exceptions
 

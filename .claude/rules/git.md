@@ -29,10 +29,12 @@ All protected repos require PRs to main. Direct push is rejected by GitHub.
 
 | Repository                                 | Branch | Protection          |
 | ------------------------------------------ | ------ | ------------------- |
-| `terrene-foundation/kailash-py`            | `main` | Full (admin bypass) |
-| `terrene-foundation/kailash-coc-claude-py` | `main` | Full (admin bypass) |
-| `terrene-foundation/kailash-coc-claude-rs` | `main` | Full (admin bypass) |
-| `esperie/kailash-rs`                       | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-py`              | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-coc-claude-py`   | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-coc-claude-rs`   | `main` | Full (admin bypass) |
+| `esperie/kailash-rs`                         | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-prism`           | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-coc-claude-prism`| `main` | Full (admin bypass) |
 
 **Owner workflow**: Branch → commit → push → PR → `gh pr merge <N> --admin --merge --delete-branch`
 

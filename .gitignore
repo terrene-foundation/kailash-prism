@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+.dart_tool/
+build/
+target/
+.env
+.env.local
+*.log
+.DS_Store
+coverage/
+.turbo/

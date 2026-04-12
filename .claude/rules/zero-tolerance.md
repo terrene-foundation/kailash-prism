@@ -23,7 +23,7 @@ A warning is not "less broken" than an error. It is an error that the framework 
 1. Diagnose root cause
 2. Implement the fix
 3. Write a regression test
-4. Verify with `pytest` (or the project's test command)
+4. Verify with `npx vitest run` (web) or `flutter test` (flutter)
 5. Include in current or dedicated commit
 
 **BLOCKED responses:**
@@ -91,10 +91,12 @@ This is a BUILD repo. You have the source. Fix bugs directly.
 
 ALL version locations updated atomically:
 
-1. `pyproject.toml` → `version = "X.Y.Z"`
-2. `src/{package}/__init__.py` → `__version__ = "X.Y.Z"`
+1. `web/package.json` → `"version": "X.Y.Z"` (@kailash/prism-web)
+2. `compiler/package.json` → `"version": "X.Y.Z"` (@kailash/prism-compiler)
+3. `flutter/pubspec.yaml` → `version: X.Y.Z` (kailash_prism)
+4. `tauri-rs/Cargo.toml` → `version = "X.Y.Z"` (kailash-prism-tauri)
 
-**Why:** Split version states cause `pip install kailash==X.Y.Z` to install a package whose `__version__` reports a different number, breaking version-gated logic.
+**Why:** Split version states cause `npm install @kailash/prism-web@X.Y.Z` to install a package whose internal version reports a different number, breaking version-gated logic.
 
 ## Rule 6: Implement Fully
 
