@@ -72,14 +72,14 @@ void main() {
   group('KGrid', () {
     testWidgets('renders children in grid', (tester) async {
       await tester.pumpWidget(
-        Directionality(
+        const Directionality(
           textDirection: TextDirection.ltr,
           child: SizedBox(
             width: 1200,
             child: KGrid(
               defaultColumns: 3,
               gap: 16,
-              children: const [Text('1'), Text('2'), Text('3')],
+              children: [Text('1'), Text('2'), Text('3')],
             ),
           ),
         ),
