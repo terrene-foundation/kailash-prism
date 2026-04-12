@@ -9,6 +9,7 @@
 export { parseTheme, resolveReference, flattenTokens } from './parse.js';
 export { compileWeb, emitTailwindConfig, emitCssProperties } from './web.js';
 export { compileFlutter, emitDartConstants, emitThemeData } from './flutter.js';
+export { scaffold, type ScaffoldOptions, type ScaffoldResult } from './scaffold.js';
 export type {
   ThemeTokens,
   CompileTarget,

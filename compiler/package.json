@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "prism-compile": "dist/cli.js"
+    "prism-compile": "dist/cli.js",
+    "prism-scaffold": "dist/scaffold-cli.js"
   },
   "scripts": {
     "build": "tsc",

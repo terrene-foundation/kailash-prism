@@ -5,13 +5,15 @@
  * Flutter ThemeData/constants emission, compile() entry point.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { flattenTokens, resolveReference } from './parse.js';
 import { emitCssProperties, emitTailwindConfig } from './web.js';
 import { emitDartConstants, emitThemeData } from './flutter.js';
 import { compile } from './index.js';
 import { resolve } from 'node:path';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import type { ThemeTokens } from './types.js';
+import { scaffold } from './scaffold.js';
 
 // --- Minimal fixture matching real enterprise.yaml structure ---
 
@@ -420,5 +422,93 @@ describe('compile()', () => {
     expect(() =>
       compile({ theme: 'nonexistent', target: 'web', specsDir, outDir: '' })
     ).toThrow();
+  });
+});
+
+// =============================================================================
+// scaffold()
+// =============================================================================
+
+describe('scaffold()', () => {
+  const tmpDir = resolve(import.meta.dirname, '../../.test-scaffold-output');
+
+  // Clean up after tests
+  afterEach(() => {
+    if (existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('generates all expected files for web dashboard template', () => {
+    const result = scaffold({
+      name: 'Test App',
+      theme: 'enterprise',
+      target: 'web',
+      outDir: tmpDir,
+      template: 'dashboard',
+    });
+    expect(result.errors).toHaveLength(0);
+    expect(result.files.length).toBeGreaterThanOrEqual(7);
+
+    // Verify key files exist
+    expect(existsSync(resolve(tmpDir, 'package.json'))).toBe(true);
+    expect(existsSync(resolve(tmpDir, 'tsconfig.json'))).toBe(true);
+    expect(existsSync(resolve(tmpDir, 'vite.config.ts'))).toBe(true);
+    expect(existsSync(resolve(tmpDir, 'index.html'))).toBe(true);
+    expect(existsSync(resolve(tmpDir, 'src/tokens.css'))).toBe(true);
+    expect(existsSync(resolve(tmpDir, 'src/theme.ts'))).toBe(true);
+    expect(existsSync(resolve(tmpDir, 'src/main.tsx'))).toBe(true);
+    expect(existsSync(resolve(tmpDir, 'src/app.tsx'))).toBe(true);
+  });
+
+  it('generates valid package.json with correct name', () => {
+    scaffold({ name: 'My CRM App', theme: 'enterprise', target: 'web', outDir: tmpDir, template: 'dashboard' });
+    const pkg = JSON.parse(readFileSync(resolve(tmpDir, 'package.json'), 'utf-8'));
+    expect(pkg.name).toBe('my-crm-app');
+    expect(pkg.dependencies['@kailash/prism-web']).toBeDefined();
+    expect(pkg.dependencies.react).toBeDefined();
+  });
+
+  it('generates main.tsx with ThemeProvider and LayoutProvider', () => {
+    scaffold({ name: 'Test', theme: 'enterprise', target: 'web', outDir: tmpDir, template: 'dashboard' });
+    const main = readFileSync(resolve(tmpDir, 'src/main.tsx'), 'utf-8');
+    expect(main).toContain('ThemeProvider');
+    expect(main).toContain('LayoutProvider');
+    expect(main).toContain('App');
+  });
+
+  it('generates dashboard starter page with DashboardTemplate', () => {
+    scaffold({ name: 'Test', theme: 'enterprise', target: 'web', outDir: tmpDir, template: 'dashboard' });
+    const app = readFileSync(resolve(tmpDir, 'src/app.tsx'), 'utf-8');
+    expect(app).toContain('DashboardTemplate');
+    expect(app).toContain('StatCard');
+  });
+
+  it('generates list starter page with DataTable', () => {
+    scaffold({ name: 'Test', theme: 'enterprise', target: 'web', outDir: tmpDir, template: 'list' });
+    const app = readFileSync(resolve(tmpDir, 'src/app.tsx'), 'utf-8');
+    expect(app).toContain('ListTemplate');
+    expect(app).toContain('DataTable');
+  });
+
+  it('generates conversation starter page with ChatEngine', () => {
+    scaffold({ name: 'Test', theme: 'enterprise', target: 'web', outDir: tmpDir, template: 'conversation' });
+    const app = readFileSync(resolve(tmpDir, 'src/app.tsx'), 'utf-8');
+    expect(app).toContain('ConversationTemplate');
+    expect(app).toContain('ChatEngine');
+  });
+
+  it('returns error for flutter target', () => {
+    const result = scaffold({ name: 'Test', theme: 'enterprise', target: 'flutter', outDir: tmpDir, template: 'dashboard' });
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0]).toContain('Flutter');
+  });
+
+  it('generates tokens.css with design token custom properties', () => {
+    scaffold({ name: 'Test', theme: 'enterprise', target: 'web', outDir: tmpDir, template: 'dashboard' });
+    const css = readFileSync(resolve(tmpDir, 'src/tokens.css'), 'utf-8');
+    expect(css).toContain('--prism-color-interactive-primary');
+    expect(css).toContain('--prism-color-surface-page');
+    expect(css).toContain(':root');
   });
 });
