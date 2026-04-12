@@ -130,3 +130,33 @@ export {
   type WizardStep,
   type FormWizardConfig,
 } from './engines/form/index.js';
+
+// Templates
+export {
+  DashboardTemplate,
+  ListTemplate,
+  DetailTemplate,
+  FormTemplate,
+  SettingsTemplate,
+  AuthTemplate,
+  ConversationTemplate,
+  SplitTemplate,
+  WizardTemplate,
+  KanbanTemplate,
+  CalendarTemplate,
+  TemplateHeader,
+  type DashboardTemplateProps,
+  type ListTemplateProps,
+  type DetailTemplateProps,
+  type FormTemplateProps,
+  type SettingsTemplateProps,
+  type AuthTemplateProps,
+  type ConversationTemplateProps,
+  type SplitTemplateProps,
+  type WizardTemplateProps,
+  type KanbanTemplateProps,
+  type KanbanColumn,
+  type CalendarTemplateProps,
+  type BaseTemplateProps,
+  type ZoneSlot,
+} from './templates/index.js';
