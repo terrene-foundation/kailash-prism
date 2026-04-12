@@ -25,6 +25,8 @@ export {
   Row,
   Grid,
   Split,
+  Layer,
+  Scroll,
   Zone,
   resolveBreakpoint,
   BREAKPOINTS,
@@ -33,6 +35,10 @@ export {
   type Breakpoint,
   type ZoneContent,
   type ResponsiveValue,
+  type LayerTier,
+  type LayerProps,
+  type ScrollDirection,
+  type ScrollProps,
 } from './engines/layout.js';
 
 export {
@@ -64,6 +70,29 @@ export {
   type ServerFetchResult,
   type SortState,
 } from './engines/data-table/index.js';
+
+export {
+  ChatEngine,
+  ChatMessageBubble,
+  ChatInput,
+  StreamOfThought,
+  ActionPlan,
+  SuggestionChips,
+  type ChatEngineConfig,
+  type ChatMessage,
+  type MessageType,
+  type MessageSender,
+  type Citation,
+  type ToolCallData,
+  type ToolCallStatus,
+  type ToolResultData,
+  type ToolCallStep,
+  type ActionPlanStep,
+  type ActionPlanAction,
+  type SuggestionChip,
+  type SourceOption,
+  type ConversationSummary,
+} from './engines/ai-chat/index.js';
 
 export {
   Form,
