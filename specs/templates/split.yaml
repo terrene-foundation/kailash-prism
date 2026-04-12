@@ -1,0 +1,145 @@
+# Kailash Prism — Split Page Template
+# Master-detail layout with item selection in one panel and detail in the adjacent panel.
+# See docs/specs/06-page-templates.md section 6.2.8 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Split
+  description: >
+    Master-detail layout where selecting an item in one panel
+    shows its detail in the adjacent panel.
+  use_cases:
+    - Email client
+    - CRM contact view
+    - File manager
+    - Chat with detail
+    - Ticket management
+
+  navigation:
+    renders_inside: navigation-engine
+    mobile_note: >
+      On mobile, the detail panel acts as a sub-route
+      (pushes onto navigation stack).
+
+  layout:
+    root: Stack
+    direction: vertical
+    children:
+      - zone: split-header
+      - primitive: Split
+        children:
+          - zone: master-panel
+          - zone: detail-panel
+
+  zones:
+    split-header:
+      description: Page title + global actions.
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+      default_organism: Toolbar
+      default_props:
+        title: "{page_title}"
+        actions: []
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    master-panel:
+      description: Selectable list of items.
+      content_type: data
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      default_organism: ListView
+      default_props:
+        data: "api:/{entity_path}"
+        item_renderer: "{entity_singular}ListItem"
+        selectable: true
+        selected_id: "bind:selected{entity_singular}.id"
+        on_select: "setSelected{entity_singular}"
+      responsive:
+        wide:
+          width: 360px
+          resizable: true
+          visible: true
+        desktop:
+          width: 320px
+          resizable: true
+          visible: true
+        tablet:
+          width: 280px
+          resizable: false
+          visible: true
+        mobile:
+          width: full
+          visible: true
+          mode: stacked-navigation
+          description: >
+            Shows master list full-width. Selecting an item navigates
+            to detail view full-width with back button.
+            No simultaneous view.
+
+    detail-panel:
+      description: Detail view of selected item.
+      content_type: any
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      default_organism: null
+      default_note: >
+        Detail template content (header + tabs/content) or custom organism.
+        Consumer provides the detail view.
+      empty_state:
+        icon: "{entity_icon}"
+        message: "Select an item to view"
+      responsive:
+        wide:
+          width: fill
+          visible: true
+        desktop:
+          width: fill
+          visible: true
+        tablet:
+          width: fill
+          visible: true
+        mobile:
+          width: full
+          visible: false
+          mode: stacked-navigation
+          description: >
+            Detail shown full-width with back button when
+            item is selected. Acts as a sub-route.
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Split: master (360px) + detail (fill). Resizable divider.
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Split: master (320px) + detail (fill). Resizable divider.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        Split: master (280px) + detail (fill). Non-resizable.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        Stacked navigation: Shows master list full-width. Selecting an item
+        navigates to detail view full-width with back button. No simultaneous view.

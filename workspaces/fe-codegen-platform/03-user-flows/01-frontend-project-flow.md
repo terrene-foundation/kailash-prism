@@ -115,10 +115,14 @@ AGENT receives: "Build the contacts list page"
      desktop: full layout as designed
 
 4. STATE MANAGEMENT
-   Agent generates React Query hooks from Nexus types:
-     useContacts(filters, pagination) → GET /api/contacts
-     useDeleteContacts(ids) → DELETE /api/contacts
-     useExportContacts(ids) → POST /api/contacts/export
+   Phase 3 (with Nexus-to-Prism bridge):
+     Agent auto-generates React Query hooks from Nexus API types:
+       useContacts(filters, pagination) → GET /api/contacts
+       useDeleteContacts(ids) → DELETE /api/contacts
+       useExportContacts(ids) → POST /api/contacts/export
+   Phase 1 fallback (without Nexus bridge):
+     Agent hand-writes React Query hooks based on the data model description.
+     Types are defined manually. Same patterns, manual wiring.
 
 5. OUTPUT
    Structurally sound page composed from primitives.

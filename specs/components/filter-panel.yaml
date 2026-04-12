@@ -1,0 +1,114 @@
+# Kailash Prism — FilterPanel Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.8
+# Collapsible panel of filter controls with apply and reset actions.
+
+version: "0.1.0"
+
+name: FilterPanel
+category: organism
+description: "Collapsible panel of filter controls with apply and reset actions."
+
+composed_of:
+  atoms:
+    - Button          # Apply and reset buttons
+  molecules:
+    - FormField       # Various filter input fields (select, date range, checkbox group)
+
+props:
+  - name: filters
+    type: "FilterDef[]"
+    required: true
+    default: null
+    description: "Filter definitions specifying type, label, options, and default values"
+  - name: values
+    type: "Record<string, any>"
+    required: true
+    default: null
+    description: "Current filter values"
+  - name: onApply
+    type: "(values: Record<string, any>) => void"
+    required: true
+    default: null
+    description: "Callback fired when the user applies filters"
+  - name: onReset
+    type: "() => void"
+    required: true
+    default: null
+    description: "Callback fired when the user resets all filters to defaults"
+  - name: collapsible
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the filter panel can be collapsed to save space"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: expanded
+  states:
+    - name: expanded
+      description: "Filter controls are visible and interactive"
+    - name: collapsed
+      description: "Filter panel is collapsed to a header bar (when collapsible=true)"
+  transitions:
+    - from: expanded
+      to: collapsed
+      trigger: "User clicks the collapse toggle (when collapsible=true)"
+      visual_change: "Filter fields animate out; only header with active filter count remains"
+    - from: collapsed
+      to: expanded
+      trigger: "User clicks the expand toggle"
+      visual_change: "Filter fields animate in below the header"
+
+composition_slots:
+  - name: filters
+    description: "Filter field definitions including custom filter renderers"
+  - name: actions
+    description: "Apply/Reset button area"
+
+accessibility:
+  role: form
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Filters'"
+      required: true
+    - attribute: aria-expanded
+      source: "Collapse toggle reflects expanded/collapsed state"
+      required: false
+  keyboard:
+    - key: Tab
+      action: "Move focus between filter fields and action buttons"
+    - key: Enter
+      action: "Apply filters (when focus is on Apply button)"
+    - key: Escape
+      action: "Reset filters (context-dependent)"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the form element"
+    announcements:
+      - "Filters applied: [N] active filters"
+      - "Filters reset"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Opens as a SlideOver or Modal overlay instead of inline"
+  - breakpoint: tablet
+    behavior: "Inline panel above or beside the data content"
+  - breakpoint: desktop
+    behavior: "Inline panel with horizontal or vertical layout"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - filter-panel.default.bg
+    - filter-panel.default.border
+    - filter-panel.default.radius
+    - filter-panel.default.padding
+  inherits_from: null

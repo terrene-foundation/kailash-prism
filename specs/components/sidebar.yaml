@@ -1,0 +1,122 @@
+# Kailash Prism — Sidebar Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.2
+# Vertical navigation panel with collapsible sections and grouped nav items.
+
+version: "0.1.0"
+
+name: Sidebar
+category: organism
+description: "Vertical navigation panel with collapsible sections and grouped nav items."
+
+composed_of:
+  atoms:
+    - IconButton      # Collapse toggle
+    - Icon            # Nav item icons
+  molecules:
+    - NavItem         # Grouped vertical navigation items
+
+props:
+  - name: items
+    type: "NavItemGroup[]"
+    required: true
+    default: null
+    description: "Grouped navigation items displayed vertically"
+  - name: collapsed
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the sidebar is in collapsed (icon-only) state"
+  - name: onCollapse
+    type: "(collapsed: boolean) => void"
+    required: false
+    default: null
+    description: "Callback fired when the collapse state changes"
+  - name: footer
+    type: ReactNode
+    required: false
+    default: null
+    description: "Content rendered at the bottom of the sidebar"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: expanded
+  states:
+    - name: expanded
+      description: "Full-width sidebar (240px) showing icons and labels"
+    - name: collapsed
+      description: "Narrow sidebar (60px) showing icons only with tooltips on hover"
+    - name: mobile-hidden
+      description: "Sidebar is not visible on mobile by default"
+    - name: mobile-overlay
+      description: "Sidebar slides in as an overlay drawer on mobile"
+  transitions:
+    - from: expanded
+      to: collapsed
+      trigger: "User clicks the collapse toggle or viewport narrows to tablet"
+      visual_change: "Sidebar width animates from 240px to 60px, labels fade out"
+    - from: collapsed
+      to: expanded
+      trigger: "User clicks the collapse toggle or viewport widens to desktop"
+      visual_change: "Sidebar width animates from 60px to 240px, labels fade in"
+    - from: mobile-hidden
+      to: mobile-overlay
+      trigger: "User taps the hamburger menu in AppHeader"
+      visual_change: "Sidebar slides in from the left with a backdrop overlay"
+    - from: mobile-overlay
+      to: mobile-hidden
+      trigger: "User taps the backdrop or a navigation item"
+      visual_change: "Sidebar slides out to the left, backdrop fades"
+
+composition_slots:
+  - name: footer
+    description: "Bottom area for user info, version label, or secondary actions"
+  - name: items
+    description: "Navigation item groups with optional section headings"
+
+accessibility:
+  role: navigation
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Main navigation'"
+      required: true
+    - attribute: aria-expanded
+      source: "Collapse toggle button reflects sidebar expanded/collapsed state"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between nav items sequentially"
+    - key: Enter
+      action: "Navigate to the focused item's route"
+    - key: Escape
+      action: "Close mobile overlay"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the nav landmark"
+    announcements:
+      - "Navigation collapsed / Navigation expanded when toggle is activated"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Hidden by default; opens as overlay drawer with backdrop"
+  - breakpoint: tablet
+    behavior: "Collapsed rail (60px) with icon-only navigation"
+  - breakpoint: desktop
+    behavior: "Full expanded sidebar (240px) with icons and labels"
+  - breakpoint: wide
+    behavior: "Full expanded sidebar (280px) with icons and labels"
+
+tokens:
+  consumes:
+    - sidebar.default.bg
+    - sidebar.default.border_right
+    - sidebar.expanded.width
+    - sidebar.collapsed.width
+    - sidebar.default.padding
+  inherits_from: null

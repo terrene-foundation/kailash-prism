@@ -1,0 +1,88 @@
+name: EmptyState
+category: molecule
+version: 0.1.0
+description: Placeholder displayed when a content area has no data, with optional icon, message, and action button
+
+composed_of:
+  - Icon
+  - Typography
+  - Button
+
+props:
+  - name: icon
+    type: IconName
+    required: false
+    default: null
+    description: Icon displayed above the title
+  - name: illustration
+    type: ReactNode
+    required: false
+    default: null
+    description: Custom illustration element displayed instead of or alongside the icon
+  - name: title
+    type: string
+    required: true
+    default: null
+    description: Primary message explaining that there is no content
+  - name: description
+    type: string
+    required: false
+    default: null
+    description: Secondary message with additional context or guidance
+  - name: action
+    type: "{ label: string; onClick: () => void }"
+    required: false
+    default: null
+    description: Optional action button to guide the user toward creating content
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Static display showing icon, title, description, and action
+  transitions: []
+
+variants:
+  - name: default
+    description: Full-size empty state centered in the content area
+  - name: compact
+    description: Smaller inline empty state for use within cards or sub-sections
+
+accessibility:
+  role: null
+  aria_attributes: []
+  keyboard:
+    - key: Tab
+      action: Moves focus to the action button if present
+    - key: Enter
+      action: Activates the action button
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: Title and description text provide accessible content
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: Centered in container, reduced padding
+  - breakpoint: tablet
+    behavior: Centered in container, moderate padding
+  - breakpoint: desktop
+    behavior: Centered in container, full padding
+  - breakpoint: wide
+    behavior: Centered in container, full padding
+
+tokens:
+  consumes:
+    - empty-state.default.padding
+    - empty-state.icon.color
+    - empty-state.icon.size
+    - empty-state.title.font_size
+  inherits_from: null

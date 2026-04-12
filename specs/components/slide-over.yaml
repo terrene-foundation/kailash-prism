@@ -1,0 +1,132 @@
+# Kailash Prism — SlideOver Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.7
+# Side panel that slides in from the left or right with overlay backdrop.
+
+version: "0.1.0"
+
+name: SlideOver
+category: organism
+description: "Side panel that slides in from the left or right with overlay backdrop."
+
+composed_of:
+  atoms:
+    - IconButton      # Close button
+  molecules:
+    - DialogActions   # Optional footer action buttons
+
+props:
+  - name: open
+    type: boolean
+    required: true
+    default: null
+    description: "Whether the slide-over panel is currently open"
+  - name: onClose
+    type: "() => void"
+    required: true
+    default: null
+    description: "Callback fired when the panel should close"
+  - name: title
+    type: string
+    required: true
+    default: null
+    description: "Panel header title text"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Panel body content"
+  - name: side
+    type: '"left" | "right"'
+    required: false
+    default: "right"
+    description: "Which side the panel slides in from"
+  - name: width
+    type: '"sm" | "md" | "lg"'
+    required: false
+    default: "md"
+    description: "Panel width: sm=320px, md=480px, lg=640px"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: closed
+  states:
+    - name: closed
+      description: "Panel is not rendered or visible"
+    - name: opening
+      description: "Slide-in animation is playing"
+    - name: open
+      description: "Panel is fully visible and interactive; focus is trapped inside"
+    - name: closing
+      description: "Slide-out animation is playing"
+  transitions:
+    - from: closed
+      to: opening
+      trigger: "open prop changes from false to true"
+      visual_change: "Backdrop fades in; panel slides in from the specified side"
+    - from: opening
+      to: open
+      trigger: "Entry animation completes"
+      visual_change: "Focus moves to first focusable element inside the panel"
+    - from: open
+      to: closing
+      trigger: "User presses Escape, clicks backdrop, or clicks close button"
+      visual_change: "Panel slides out; backdrop fades"
+    - from: closing
+      to: closed
+      trigger: "Exit animation completes"
+      visual_change: "Panel removed from DOM; focus returns to trigger element"
+
+composition_slots:
+  - name: children
+    description: "Custom panel body content"
+  - name: footer
+    description: "Optional footer with action buttons"
+
+accessibility:
+  role: dialog
+  aria_attributes:
+    - attribute: aria-modal
+      source: "Static: true"
+      required: true
+    - attribute: aria-labelledby
+      source: "ID of the panel title element"
+      required: true
+  keyboard:
+    - key: Escape
+      action: "Close the panel"
+    - key: Tab
+      action: "Cycle focus within the panel (focus trap)"
+    - key: Shift+Tab
+      action: "Cycle focus backwards within the panel (focus trap)"
+  focus:
+    tabindex: "-1"
+    focus_visible: true
+    trap: true
+  screen_reader:
+    label_source: "aria-labelledby pointing to the title element"
+    announcements:
+      - "Panel opened: [title]"
+      - "Panel closed"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width panel regardless of width prop"
+  - breakpoint: tablet
+    behavior: "Panel uses specified width"
+  - breakpoint: desktop
+    behavior: "Panel uses specified width"
+  - breakpoint: wide
+    behavior: "Panel uses specified width"
+
+tokens:
+  consumes:
+    - slide-over.overlay.bg
+    - slide-over.panel.bg
+    - slide-over.panel.shadow
+    - slide-over.panel.width
+    - slide-over.panel.padding
+  inherits_from: null

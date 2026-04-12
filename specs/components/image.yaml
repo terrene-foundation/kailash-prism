@@ -1,0 +1,114 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.21
+version: 0.1.0
+
+name: Image
+category: atom
+description: "Image display with loading, error, and lazy-loading states."
+
+props:
+  - name: src
+    type: string
+    required: true
+    default: null
+    description: "Image URL"
+  - name: alt
+    type: string
+    required: true
+    default: null
+    description: "Alt text (REQUIRED)"
+  - name: width
+    type: "number | string"
+    required: false
+    default: null
+    description: "Width"
+  - name: height
+    type: "number | string"
+    required: false
+    default: null
+    description: "Height"
+  - name: aspectRatio
+    type: "string | undefined"
+    required: false
+    default: null
+    description: "CSS aspect-ratio value (e.g., '16/9')"
+  - name: lazy
+    type: boolean
+    required: false
+    default: true
+    description: "Enable lazy loading"
+  - name: fallback
+    type: "ReactNode | undefined"
+    required: false
+    default: null
+    description: "Fallback content on error"
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: "Skeleton placeholder visible"
+    - name: loaded
+      description: "Image visible"
+    - name: error
+      description: "Failed to load, shows fallback or broken image indicator"
+  transitions:
+    - from: loading
+      to: loaded
+      trigger: "Image onLoad event"
+      visual_change: "Image fades in, skeleton fades out"
+    - from: loading
+      to: error
+      trigger: "Image onError event"
+      visual_change: "Fallback content or error indicator shown"
+
+variants:
+  - name: default
+    description: "Standard image with loading skeleton"
+
+accessibility:
+  role: "img"
+  aria_attributes:
+    - attribute: "alt"
+      source: "alt prop (REQUIRED)"
+      required: true
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "alt prop"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Respects width/height constraints; lazy loading with intersection observer"
+  - breakpoint: desktop
+    behavior: "Same"
+
+tokens:
+  consumes:
+    - "image.loading.bg"
+    - "image.error.bg"
+    - "image.error.icon_color"
+    - "image.default.radius"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Use the native <img> element with loading="lazy" when the lazy prop is
+    true. Use IntersectionObserver for more precise lazy-loading control if
+    needed. Show a Skeleton component during loading state. On error, display
+    the fallback ReactNode or a default broken-image icon inside a colored
+    container. Apply CSS aspect-ratio for the aspectRatio prop. Transition
+    opacity from 0 to 1 on load for the fade-in effect. For Next.js, use
+    next/image with its built-in optimization and lazy loading.
+  flutter: >
+    Use Image.network with loadingBuilder for the loading state (show a
+    Skeleton widget) and errorBuilder for the error state (show fallback
+    or a default Icon). For lazy loading, use the visibility_detector
+    package or a custom ScrollAware wrapper to defer image loading until
+    the widget is near the viewport. Apply BoxFit and aspect ratio via
+    AspectRatio widget. Use FadeInImage for the load transition. Cache
+    images with CachedNetworkImage for production use.

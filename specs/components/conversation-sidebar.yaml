@@ -1,0 +1,140 @@
+# Kailash Prism — ConversationSidebar AI Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.21
+# Side panel listing conversation threads with search, pin, delete, and branch indicators.
+
+version: "0.1.0"
+
+name: ConversationSidebar
+category: ai-organism
+description: "Side panel listing conversation threads with search, pin, delete, and branch indicators."
+
+composed_of:
+  atoms:
+    - IconButton      # Pin, delete action buttons
+    - Badge           # Branch indicator
+    - Icon            # Pin indicator
+  molecules:
+    - SearchBar       # Thread search input
+    - ListItem        # Thread items with title and timestamp
+
+props:
+  - name: threads
+    type: "Thread[]"
+    required: true
+    default: null
+    description: "Conversation thread objects with id, title, timestamp, pinned status, and branch info"
+  - name: activeThreadId
+    type: string
+    required: false
+    default: null
+    description: "ID of the currently active conversation thread"
+  - name: onSelect
+    type: "(id: string) => void"
+    required: true
+    default: null
+    description: "Callback fired when a thread is selected"
+  - name: onSearch
+    type: "(query: string) => void"
+    required: false
+    default: null
+    description: "Callback fired when the user searches threads"
+  - name: onPin
+    type: "(id: string) => void"
+    required: false
+    default: null
+    description: "Callback fired when a thread is pinned or unpinned"
+  - name: onDelete
+    type: "(id: string) => void"
+    required: false
+    default: null
+    description: "Callback fired when a thread is deleted"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: loaded
+  states:
+    - name: loaded
+      description: "Thread list is displayed with all conversations"
+    - name: searching
+      description: "User is typing a search query; list is filtered"
+    - name: empty-search-results
+      description: "Search returned no matching threads"
+  transitions:
+    - from: loaded
+      to: searching
+      trigger: "User starts typing in the search input"
+      visual_change: "Thread list filters to match the query in real-time"
+    - from: searching
+      to: empty-search-results
+      trigger: "Search query matches no threads"
+      visual_change: "Thread list replaced by 'no results' message"
+    - from: searching
+      to: loaded
+      trigger: "User clears the search input"
+      visual_change: "Full thread list restored"
+    - from: empty-search-results
+      to: loaded
+      trigger: "User clears the search input"
+      visual_change: "Full thread list restored"
+
+composition_slots:
+  - name: header
+    description: "Custom header area (e.g., 'New conversation' button)"
+  - name: threads
+    description: "Thread list items with custom renderers"
+
+accessibility:
+  role: navigation
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Conversations'"
+      required: true
+    - attribute: aria-current
+      source: "Set on the active thread item"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between search input and thread items"
+    - key: ArrowDown
+      action: "Move focus to the next thread"
+    - key: ArrowUp
+      action: "Move focus to the previous thread"
+    - key: Enter
+      action: "Select the focused thread"
+    - key: Delete
+      action: "Delete the focused thread (with confirmation)"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the navigation landmark"
+    announcements:
+      - "Conversation selected: [title]"
+      - "Conversation pinned: [title]"
+      - "Conversation deleted: [title]"
+      - "[N] conversations found (search results)"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Overlay drawer that slides in from the left"
+  - breakpoint: tablet
+    behavior: "Overlay drawer or narrow fixed sidebar"
+  - breakpoint: desktop
+    behavior: "Fixed sidebar on the left"
+  - breakpoint: wide
+    behavior: "Fixed sidebar on the left"
+
+tokens:
+  consumes:
+    - conversation-sidebar.default.bg
+    - conversation-sidebar.default.border_right
+    - conversation-sidebar.default.width
+    - conversation-sidebar.thread.padding
+    - conversation-sidebar.thread.hover_bg
+    - conversation-sidebar.thread.active_bg
+  inherits_from: null

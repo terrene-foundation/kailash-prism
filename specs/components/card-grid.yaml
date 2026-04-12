@@ -1,0 +1,99 @@
+# Kailash Prism — CardGrid Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.9
+# Responsive grid of card elements with configurable columns per breakpoint.
+
+version: "0.1.0"
+
+name: CardGrid
+category: organism
+description: "Responsive grid of card elements with configurable columns per breakpoint."
+
+composed_of:
+  atoms: []
+  molecules:
+    - Card            # Repeated card elements
+    - Pagination      # Optional pagination below the grid
+    - EmptyState      # Shown when no items are available
+
+props:
+  - name: children
+    type: "ReactNode[]"
+    required: true
+    default: null
+    description: "Card elements to display in the grid"
+  - name: columns
+    type: "ResponsiveValue<number>"
+    required: false
+    default: "{ mobile: 1, tablet: 2, desktop: 3, wide: 4 }"
+    description: "Number of columns at each breakpoint"
+  - name: gap
+    type: number
+    required: false
+    default: 16
+    description: "Gap between cards in logical pixels"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: "Skeleton card placeholders displayed while data is being fetched"
+    - name: loaded
+      description: "Cards are displayed in the grid"
+    - name: empty
+      description: "No items available; empty state content is shown"
+  transitions:
+    - from: loading
+      to: loaded
+      trigger: "Data fetch completes with results"
+      visual_change: "Skeleton cards replaced by real card content"
+    - from: loading
+      to: empty
+      trigger: "Data fetch completes with zero results"
+      visual_change: "Skeleton cards replaced by empty state illustration and message"
+
+composition_slots:
+  - name: children
+    description: "Card elements of any type (info cards, action cards, media cards)"
+  - name: emptyState
+    description: "Custom content for the zero-items state"
+
+accessibility:
+  role: list
+  aria_attributes:
+    - attribute: aria-label
+      source: "Provided by consumer describing the grid content"
+      required: false
+  keyboard:
+    - key: Tab
+      action: "Move focus between card elements"
+    - key: Enter
+      action: "Activate the focused card's primary action"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the list container"
+    announcements:
+      - "Loading content"
+      - "No items found (empty state)"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "1 column, full-width cards"
+  - breakpoint: tablet
+    behavior: "2 columns"
+  - breakpoint: desktop
+    behavior: "3 columns"
+  - breakpoint: wide
+    behavior: "4 columns"
+
+tokens:
+  consumes:
+    - card-grid.default.gap
+  inherits_from: null

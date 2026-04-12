@@ -1,0 +1,99 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.24
+version: 0.1.0
+
+name: StatusDot
+category: atom
+description: "Small colored dot indicating status."
+
+props:
+  - name: status
+    type: '"success" | "warning" | "error" | "info" | "neutral"'
+    required: true
+    default: null
+    description: "Status variant"
+  - name: pulse
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the dot pulses (for active/live states)"
+  - name: label
+    type: "string | undefined"
+    required: false
+    default: null
+    description: "Accessible label"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Static dot"
+    - name: pulsing
+      description: "Animated pulsing dot"
+  transitions:
+    - from: default
+      to: pulsing
+      trigger: "pulse=true"
+      visual_change: "Dot gains pulsing animation"
+
+variants:
+  - name: success
+    description: "status.success color"
+  - name: warning
+    description: "status.warning color"
+  - name: error
+    description: "status.error color"
+  - name: info
+    description: "status.info color"
+  - name: neutral
+    description: "text.disabled color"
+
+accessibility:
+  role: "status"
+  aria_attributes:
+    - attribute: "aria-label"
+      source: "label prop or status name"
+      required: true
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "label prop"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "8px dot"
+  - breakpoint: desktop
+    behavior: "8px dot"
+
+tokens:
+  consumes:
+    - "status-dot.success.bg"
+    - "status-dot.warning.bg"
+    - "status-dot.error.bg"
+    - "status-dot.info.bg"
+    - "status-dot.neutral.bg"
+    - "status-dot.default.dimension"
+    - "status-dot.pulse.animation_duration"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Render as a <span> with role="status" and a fixed 8px width/height via
+    the dimension token. Use border-radius: 50% for the circle shape. For
+    the pulse animation, use a CSS keyframe that scales the dot (transform:
+    scale) with a fading box-shadow ring effect. Apply prefers-reduced-motion
+    to disable the pulse and show a static dot for motion-sensitive users.
+    When no label is provided, generate an aria-label from the status name
+    (e.g., "Status: success").
+  flutter: >
+    Render as a Container with BoxDecoration(shape: BoxShape.circle) sized
+    to the dimension token. Map the status prop to the appropriate color
+    token. For the pulse animation, use an AnimationController with a
+    repeating scale tween and a fading DecoratedBox shadow. Wrap in
+    Semantics(label: label ?? 'Status: $status') for accessibility.
+    Respect MediaQuery.disableAnimations to disable pulse when reduced
+    motion is requested.

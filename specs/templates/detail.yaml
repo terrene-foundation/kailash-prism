@@ -1,0 +1,206 @@
+# Kailash Prism — Detail Page Template
+# Comprehensive single-record view with tabbed sections.
+# See docs/specs/06-page-templates.md section 6.2.3 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Detail
+  description: >
+    Displays comprehensive information about a single record
+    with tabbed sections.
+  use_cases:
+    - Contact detail
+    - Order detail
+    - Product detail
+    - User profile
+    - Ticket detail
+
+  navigation:
+    renders_inside: navigation-engine
+    breadcrumb: "Home > {section} > {record_name}"
+    back_button: true
+    back_target: parent-list
+
+  layout:
+    root: Stack
+    direction: vertical
+
+  zones:
+    detail-header:
+      description: >
+        Entity identity (avatar + name + status) + action buttons
+        (Edit, Delete, etc.).
+      content_type: any
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      default_organism: Toolbar
+      default_props:
+        back:
+          path: "/{entity_path}"
+        avatar:
+          src: "bind:{entity}.avatar"
+          fallback: "bind:{entity}.initials"
+        title: "bind:{entity}.name"
+        badge:
+          label: "bind:{entity}.status"
+          variant: "bind:{entity}.statusVariant"
+        actions:
+          - label: Edit
+            variant: secondary
+            on_click: "navigate:/{entity_path}/{id}/edit"
+          - label: Delete
+            variant: destructive
+            confirm_message: "Delete this {entity_singular}?"
+      responsive:
+        wide:
+          visible: true
+          actions_display: inline
+        desktop:
+          visible: true
+          actions_display: inline
+        tablet:
+          visible: true
+          actions_display: inline
+        mobile:
+          visible: true
+          actions_display: overflow-menu
+          description: Actions move to overflow menu (IconButton with dropdown).
+
+    tab-bar:
+      description: Tab navigation for content sections.
+      content_type: navigation
+      layout:
+        primitive: Row
+      default_organism: Tab
+      default_props:
+        tabs:
+          - id: overview
+            label: Overview
+          - id: activity
+            label: Activity
+          - id: documents
+            label: Documents
+          - id: settings
+            label: Settings
+      responsive:
+        wide:
+          scroll: false
+        desktop:
+          scroll: false
+        tablet:
+          scroll: false
+        mobile:
+          scroll: horizontal
+          description: Tab bar becomes horizontally scrollable.
+
+    tab-content:
+      description: Content area that changes based on active tab.
+      content_type: any
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      default_engine: conditional
+      default_props:
+        active_tab: "bind:activeTab"
+        panels:
+          overview:
+            engine: Form
+            props:
+              fields: "bind:{entity}.fields"
+              read_only: true
+          activity:
+            organism: ListView
+            props:
+              data: "api:/{entity_path}/{id}/activity"
+              item_renderer: ActivityItem
+          documents:
+            organism: CardGrid
+            props:
+              data: "api:/{entity_path}/{id}/documents"
+              item_renderer: DocumentCard
+          settings:
+            engine: Form
+            props:
+              fields: "bind:{entity}.settingsFields"
+      responsive:
+        wide:
+          placement: split-left
+          split_ratio: "3:1"
+        desktop:
+          placement: split-left
+          split_ratio: "2:1"
+        tablet:
+          placement: stacked
+          order: 1
+        mobile:
+          placement: stacked
+          order: 1
+
+    side-panel:
+      description: >
+        Complementary information (metadata, related records,
+        quick actions).
+      content_type: any
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+          gap: section.gap
+      default_organism: Stack
+      default_props:
+        sections:
+          - title: Details
+            content: MetadataList
+            data: "bind:{entity}.metadata"
+          - title: Related
+            content: RelatedRecords
+            data: "api:/{entity_path}/{id}/related"
+          - title: Quick Actions
+            content: ActionButtons
+            actions: []
+      responsive:
+        wide:
+          placement: split-right
+          split_ratio: "3:1"
+          visible: true
+        desktop:
+          placement: split-right
+          split_ratio: "2:1"
+          visible: true
+        tablet:
+          placement: stacked
+          order: 2
+          description: side-panel collapses below tab-content (Split collapses to Stack).
+        mobile:
+          visible: false
+          accessible_via: more-info-button
+          description: >
+            Hidden, accessible via "More Info" button at bottom of tab-content.
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Full layout. tab-content and side-panel in Split(ratio: 3:1).
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Same as wide. Split ratio 2:1.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        side-panel collapses below tab-content (Split collapses to Stack).
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        detail-header actions move to overflow menu. tab-bar becomes
+        horizontally scrollable. side-panel hidden, accessible via
+        "More Info" button at bottom of tab-content.

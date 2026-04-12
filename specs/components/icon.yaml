@@ -1,0 +1,99 @@
+# Icon Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.12
+
+name: Icon
+category: atom
+description: "SVG icon from the icon set with standardized sizing."
+
+props:
+  - name: name
+    type: IconName
+    required: true
+    default: null
+    description: "Icon identifier from the icon set"
+  - name: size
+    type: '"sm" | "md" | "lg"'
+    required: false
+    default: "md"
+    description: "sm=16px, md=20px, lg=24px"
+  - name: color
+    type: '"default" | "primary" | "secondary" | "disabled" | "inherit"'
+    required: false
+    default: "default"
+    description: "Icon color (inherit uses parent text color)"
+  - name: label
+    type: string | undefined
+    required: false
+    default: null
+    description: "Accessible label (if icon is meaningful, not decorative)"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Standard display"
+  transitions: []
+
+variants:
+  - name: default
+    description: "text.primary color at specified size"
+  - name: primary
+    description: "interactive.primary color"
+  - name: secondary
+    description: "text.secondary color"
+  - name: disabled
+    description: "text.disabled color"
+
+accessibility:
+  role: "img"
+  aria_attributes:
+    - attribute: "aria-hidden"
+      source: "true if label is not provided (decorative icon)"
+      required: true
+    - attribute: "aria-label"
+      source: "label prop"
+      required: false
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "label prop, or hidden if decorative"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Same across breakpoints"
+  - breakpoint: tablet
+    behavior: "Same across breakpoints"
+  - breakpoint: desktop
+    behavior: "Same across breakpoints"
+  - breakpoint: wide
+    behavior: "Same across breakpoints"
+
+tokens:
+  consumes:
+    - "icon.default.color"
+    - "icon.primary.color"
+    - "icon.secondary.color"
+    - "icon.disabled.color"
+    - "icon.sm.dimension"
+    - "icon.md.dimension"
+    - "icon.lg.dimension"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Renders inline SVG element for crisp rendering and color control"
+    - "color='inherit' applies currentColor to SVG fill/stroke"
+    - "Decorative icons (no label) get aria-hidden='true' and are excluded from tab order"
+    - "SVG icons loaded from a sprite sheet or individually inlined based on bundler config"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KIcon"
+    - "Uses Icon widget with custom IconData or SvgPicture from flutter_svg"
+    - "color='inherit' uses IconTheme.of(context).color"
+    - "Decorative icons excluded from semantics via ExcludeSemantics"
+    - "Sizing controlled via SizedBox wrapping the icon"

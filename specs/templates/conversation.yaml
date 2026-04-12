@@ -1,0 +1,193 @@
+# Kailash Prism — Conversation Page Template
+# AI chat interface with conversation history, message stream, and auxiliary panels.
+# See docs/specs/06-page-templates.md section 6.2.7 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Conversation
+  description: >
+    AI chat interface with conversation history, message stream,
+    and auxiliary panels.
+  use_cases:
+    - AI assistant
+    - Support chat
+    - Customer service
+    - Knowledge base Q&A
+    - Code generation assistant
+
+  navigation:
+    renders_inside: navigation-engine
+    note: >
+      Conversation template typically IS the main page. If used within a
+      larger app, it renders inside navigation content area. The conv-sidebar
+      replaces (does not duplicate) the main navigation sidebar for
+      conversation management.
+
+  layout:
+    root: Row
+    direction: horizontal
+
+  zones:
+    conv-sidebar:
+      description: Conversation list + search + new conversation button.
+      content_type: navigation
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      default_engine: Chat
+      default_section: conversationList
+      default_props:
+        source: "api:/conversations"
+        group_by: date
+      responsive:
+        wide:
+          visible: true
+          width: 320px
+          display: panel
+        desktop:
+          visible: true
+          width: 260px
+          display: panel
+        tablet:
+          visible: true
+          width: 60px
+          display: icon-rail
+          description: Sidebar as icon rail (60px).
+        mobile:
+          visible: false
+          display: drawer
+          trigger: hamburger
+          description: Sidebar as drawer (hamburger button).
+
+    chat-header:
+      description: Conversation title + action buttons (search, settings).
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+      default_engine: Chat
+      default_section: header
+      default_props:
+        title: "bind:conversation.title"
+        actions:
+          - search
+          - settings
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    message-area:
+      description: Message list with virtual scrolling.
+      content_type: chat
+      layout:
+        primitive: Scroll
+        props:
+          direction: vertical
+      default_engine: Chat
+      default_section: messages
+      default_props:
+        endpoint: "wss://api.example.com/chat"
+        protocol: websocket
+        features:
+          citations: true
+          tool_calls: true
+          action_plans: true
+          suggestions: true
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    chat-input:
+      description: Input area + suggestion chips.
+      content_type: chat
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      default_engine: Chat
+      default_section: input
+      default_props:
+        placeholder: "Ask anything..."
+        attachments: true
+        sources: []
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+          sticky: true
+          sticky_position: bottom
+          description: chat-input fixed to bottom.
+
+    info-panel:
+      description: Citation panel, tool results, or contextual info.
+      content_type: any
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      default_engine: Chat
+      default_section: citations
+      responsive:
+        wide:
+          visible: true
+          width: 380px
+          display: panel
+        desktop:
+          visible: false
+          width: 280px
+          display: panel-togglable
+          description: >
+            Info-panel togglable (hidden by default, shown on citation click).
+        tablet:
+          visible: false
+          display: slide-over
+          slide_from: right
+          description: Info-panel as slide-over from right.
+        mobile:
+          visible: false
+          display: bottom-sheet
+          description: Info-panel as bottom sheet.
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Three-column: sidebar (320px) + chat + info-panel (380px).
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Three-column: sidebar (260px) + chat + info-panel (280px).
+        Info-panel togglable (hidden by default, shown on citation click).
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        Two-column: sidebar as icon rail (60px) + chat.
+        Info-panel as slide-over from right.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        Single column: chat only. Sidebar as drawer (hamburger).
+        Info-panel as bottom sheet. chat-input fixed to bottom.

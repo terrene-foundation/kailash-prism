@@ -1,0 +1,146 @@
+name: TagInput
+category: molecule
+version: 0.1.0
+description: Text input that creates and manages a collection of tags with autocomplete suggestions
+
+composed_of:
+  - TextInput
+  - Tag
+
+props:
+  - name: value
+    type: "string[]"
+    required: true
+    default: null
+    description: Current array of tag strings
+  - name: onChange
+    type: "(value: string[]) => void"
+    required: true
+    default: null
+    description: Callback invoked when the tag array changes (add or remove)
+  - name: placeholder
+    type: string
+    required: false
+    default: null
+    description: Placeholder text shown in the input when no text is entered
+  - name: maxTags
+    type: number
+    required: false
+    default: null
+    description: Maximum number of tags allowed
+  - name: suggestions
+    type: "string[]"
+    required: false
+    default: null
+    description: List of suggestion strings shown as the user types
+  - name: allowCustom
+    type: boolean
+    required: false
+    default: true
+    description: Whether custom tags (not in suggestions) can be created
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: Whether the tag input is disabled
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Input is empty or has existing tags, ready for input
+    - name: typing
+      description: User is entering text in the input field
+    - name: suggesting
+      description: Suggestions dropdown is visible with matching options
+    - name: tag-added
+      description: A new tag has been added to the collection
+    - name: tag-removed
+      description: A tag has been removed from the collection
+  transitions:
+    - from: default
+      to: typing
+      trigger: User begins entering text
+      visual_change: Input field is active, cursor visible
+    - from: typing
+      to: suggesting
+      trigger: Matching suggestions found for current input
+      visual_change: Suggestions dropdown appears below the input
+    - from: typing
+      to: tag-added
+      trigger: User presses Enter or selects a suggestion
+      visual_change: New tag chip appears inline, input clears
+    - from: tag-added
+      to: default
+      trigger: Tag add animation completes
+      visual_change: Tag is fully displayed, input ready for next entry
+    - from: default
+      to: tag-removed
+      trigger: User presses Backspace on empty input or clicks tag remove button
+      visual_change: Tag is removed from the inline display
+    - from: tag-removed
+      to: default
+      trigger: Tag remove animation completes
+      visual_change: Remaining tags reflow
+
+variants:
+  - name: default
+    description: Standard tag input with inline tags and text input
+  - name: error
+    description: Error state with error-colored border
+  - name: disabled
+    description: Non-interactive state with reduced opacity
+
+accessibility:
+  role: listbox
+  aria_attributes:
+    - attribute: role
+      source: listbox for the tag list container
+      required: true
+    - attribute: aria-label
+      source: Describes the tag input purpose
+      required: true
+  keyboard:
+    - key: Enter
+      action: Creates a new tag from the current input text
+    - key: Backspace
+      action: Removes the last tag when input is empty
+    - key: Delete
+      action: Removes the focused tag
+    - key: ArrowDown
+      action: Navigates to suggestions list
+    - key: Escape
+      action: Closes suggestions dropdown
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: aria-label on the container
+    announcements:
+      - Tag added or removed announced via aria-live="polite"
+      - Number of tags announced
+
+responsive:
+  - breakpoint: mobile
+    behavior: Tags wrap within container, same layout across breakpoints
+  - breakpoint: tablet
+    behavior: Tags wrap within container
+  - breakpoint: desktop
+    behavior: Tags wrap within container
+  - breakpoint: wide
+    behavior: Tags wrap within container
+
+tokens:
+  consumes:
+    - tag-input.default.bg
+    - tag-input.default.border
+    - tag-input.default.radius
+    - tag-input.default.padding
+    - tag-input.default.gap
+  inherits_from: null

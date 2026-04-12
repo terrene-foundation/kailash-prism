@@ -1,0 +1,122 @@
+# Tag Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.13
+
+name: Tag
+category: atom
+description: "Compact label for categorization, filtering, or selection."
+
+props:
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Tag text"
+  - name: variant
+    type: '"default" | "selected" | "removable" | "disabled"'
+    required: false
+    default: "default"
+    description: "Visual and behavior variant"
+  - name: onRemove
+    type: "() => void | undefined"
+    required: false
+    default: null
+    description: "Remove handler (shows X button when present)"
+  - name: onClick
+    type: "() => void | undefined"
+    required: false
+    default: null
+    description: "Click handler for selectable tags"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Standard display"
+    - name: hover
+      description: "Cursor over (if interactive)"
+    - name: selected
+      description: "Active selection"
+    - name: disabled
+      description: "Non-interactive"
+  transitions:
+    - from: default
+      to: hover
+      trigger: "Mouse enter (if onClick or onRemove defined)"
+      visual_change: "Slightly darker background"
+    - from: default
+      to: selected
+      trigger: "Click (if onClick defined)"
+      visual_change: "Background changes to primary tint"
+    - from: selected
+      to: default
+      trigger: "Click again"
+      visual_change: "Background returns to default"
+
+variants:
+  - name: default
+    description: "surface.page bg, text.primary text, radius.pill, border.subtle border"
+  - name: selected
+    description: "interactive.primary tinted bg, interactive.primary text"
+  - name: removable
+    description: "Same as default with X icon button on right"
+  - name: disabled
+    description: "Reduced opacity, no interaction"
+
+accessibility:
+  role: "button (if interactive) or status (if display-only)"
+  aria_attributes:
+    - attribute: "aria-selected"
+      source: "variant === 'selected'"
+      required: false
+    - attribute: "aria-disabled"
+      source: "variant === 'disabled'"
+      required: false
+  keyboard:
+    - key: "Enter / Space"
+      action: "Toggle selection (if interactive)"
+    - key: "Backspace / Delete"
+      action: "Trigger onRemove (if removable)"
+  focus:
+    tabindex: "0 if interactive, -1 if display"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "Children text content"
+    announcements:
+      - "When removed: announces 'Removed {label}'"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "44px touch target for interactive tags"
+  - breakpoint: tablet
+    behavior: "Same as mobile"
+  - breakpoint: desktop
+    behavior: "Inline, compact"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "tag.default.bg"
+    - "tag.default.text"
+    - "tag.default.border"
+    - "tag.default.radius"
+    - "tag.selected.bg"
+    - "tag.selected.text"
+    - "tag.disabled.opacity"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Interactive tags rendered as <button>; display-only tags rendered as <span>"
+    - "Removable variant appends an IconButton (X icon) inside the tag"
+    - "Backspace/Delete key triggers onRemove only when tag has focus"
+    - "Pill shape via border-radius from tag.default.radius token"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KTag"
+    - "Interactive tags use GestureDetector or InkWell"
+    - "Display-only tags use Container without gesture handling"
+    - "Removable variant uses Row with Text and a small KIconButton"
+    - "Pill shape via StadiumBorder or high borderRadius"

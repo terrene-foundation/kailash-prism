@@ -1,0 +1,83 @@
+# Kailash Prism — SettingsSection Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.15
+# Grouped settings area with heading, description, and form controls or toggles.
+
+version: "0.1.0"
+
+name: SettingsSection
+category: organism
+description: "Grouped settings area with heading, description, and form controls or toggles."
+
+composed_of:
+  atoms:
+    - Toggle          # On/off switches for settings
+  molecules:
+    - FormField       # Settings input fields
+    - Typography      # Section heading and description text
+
+props:
+  - name: title
+    type: string
+    required: true
+    default: null
+    description: "Section heading text"
+  - name: description
+    type: string
+    required: false
+    default: null
+    description: "Explanatory text below the heading"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Settings controls: form fields, toggles, or custom content"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Section displayed with heading, description, and controls"
+  transitions: []
+
+composition_slots:
+  - name: children
+    description: "Settings controls (toggles, inputs, select dropdowns, etc.)"
+
+accessibility:
+  role: group
+  aria_attributes:
+    - attribute: aria-labelledby
+      source: "ID of the section heading element"
+      required: true
+  keyboard:
+    - key: Tab
+      action: "Move focus between settings controls within the section"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-labelledby pointing to the heading element"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width; single-column layout"
+  - breakpoint: tablet
+    behavior: "Full-width; single-column layout"
+  - breakpoint: desktop
+    behavior: "Full-width; single-column layout with comfortable max-width"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - settings-section.default.padding
+    - settings-section.default.border_bottom
+    - settings-section.heading.font_size
+  inherits_from: null

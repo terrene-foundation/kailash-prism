@@ -1,0 +1,121 @@
+# Radio Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.7
+
+name: Radio
+category: atom
+description: "Single-selection control within a group."
+
+props:
+  - name: value
+    type: string
+    required: true
+    default: null
+    description: "Value this radio represents"
+  - name: checked
+    type: boolean
+    required: false
+    default: false
+    description: "Whether selected"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Non-interactive"
+  - name: label
+    type: string
+    required: true
+    default: null
+    description: "Visible label"
+  - name: name
+    type: string
+    required: true
+    default: null
+    description: "Radio group name"
+  - name: onChange
+    type: "(value: string) => void"
+    required: false
+    default: null
+    description: "Selection handler"
+
+states:
+  initial: unselected
+  states:
+    - name: unselected
+      description: "Empty circle"
+    - name: selected
+      description: "Circle with filled inner dot"
+    - name: disabled
+      description: "Dimmed"
+  transitions:
+    - from: unselected
+      to: selected
+      trigger: "Click or Space key"
+      visual_change: "Inner dot appears with micro animation"
+    - from: selected
+      to: unselected
+      trigger: "Another radio in group selected"
+      visual_change: "Inner dot removed"
+
+variants:
+  - name: unselected
+    description: "Empty circle, border.default"
+  - name: selected
+    description: "Circle with interactive.primary filled dot"
+
+accessibility:
+  role: "radio"
+  aria_attributes:
+    - attribute: "aria-checked"
+      source: "checked prop"
+      required: true
+  keyboard:
+    - key: "ArrowDown / ArrowRight"
+      action: "Select next radio in group"
+    - key: "ArrowUp / ArrowLeft"
+      action: "Select previous radio in group"
+    - key: "Space"
+      action: "Select current radio"
+  focus:
+    tabindex: "0 for selected or first in group, -1 for others"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "label prop"
+    announcements:
+      - "Announces 'selected' when chosen"
+      - "Announces position: 'N of M' in group"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "44px touch target. Stack vertically."
+  - breakpoint: tablet
+    behavior: "Same as mobile"
+  - breakpoint: desktop
+    behavior: "Can stack vertically or arrange horizontally"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "radio.unselected.bg"
+    - "radio.unselected.border"
+    - "radio.selected.bg"
+    - "radio.selected.dot_color"
+    - "radio.disabled.opacity"
+    - "radio.focus.ring_color"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Custom radio (hidden native input + styled span) for consistent cross-browser styling"
+    - "name prop groups radios together for native form behavior"
+    - "Arrow keys move selection within the radio group (roving tabindex pattern)"
+    - "Only the selected (or first) radio in a group has tabindex=0"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KRadio"
+    - "Uses custom paint for the circle and inner dot animation"
+    - "name prop is handled by a KRadioGroup parent widget managing group state"
+    - "Arrow key navigation requires FocusTraversalGroup or custom focus logic"
+    - "Label rendered as Text widget in a Row with the radio circle"

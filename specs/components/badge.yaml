@@ -1,0 +1,103 @@
+# Badge Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.10
+
+name: Badge
+category: atom
+description: "Small status indicator or count display."
+
+props:
+  - name: variant
+    type: '"neutral" | "success" | "warning" | "error" | "info"'
+    required: false
+    default: "neutral"
+    description: "Color variant"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Badge content (text or number)"
+  - name: size
+    type: '"sm" | "md"'
+    required: false
+    default: "md"
+    description: "sm=20px height, md=24px height"
+  - name: dot
+    type: boolean
+    required: false
+    default: false
+    description: "Dot-only mode (no text, 8px circle)"
+  - name: maxCount
+    type: number | undefined
+    required: false
+    default: null
+    description: "Maximum number to display (shows {max}+ when exceeded)"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Displays content"
+  transitions: []
+
+variants:
+  - name: neutral
+    description: "surface.page bg, text.secondary text"
+  - name: success
+    description: "Tinted status.success bg, status.success text"
+  - name: warning
+    description: "Tinted status.warning bg, status.warning text"
+  - name: error
+    description: "Tinted status.error bg, status.error text"
+  - name: info
+    description: "Tinted status.info bg, status.info text"
+
+accessibility:
+  role: "status"
+  aria_attributes:
+    - attribute: "aria-label"
+      source: "Computed from variant + content (e.g., 'Error: 5')"
+      required: false
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "Text content"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Same across all breakpoints"
+  - breakpoint: tablet
+    behavior: "Same across all breakpoints"
+  - breakpoint: desktop
+    behavior: "Same across all breakpoints"
+  - breakpoint: wide
+    behavior: "Same across all breakpoints"
+
+tokens:
+  consumes:
+    - "badge.{variant}.bg"
+    - "badge.{variant}.text"
+    - "badge.{variant}.border"
+    - "badge.{variant}.radius"
+    - "badge.{variant}.padding_x"
+    - "badge.{variant}.font_size"
+    - "badge.{variant}.height"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Rendered as inline <span> element"
+    - "dot mode renders an 8px circle with no text content"
+    - "maxCount logic: if children is a number > maxCount, displays '{maxCount}+'"
+    - "Pill shape via border-radius from token (typically radius.pill)"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KBadge"
+    - "Rendered as Container with BoxDecoration for background and border"
+    - "dot mode uses a fixed-size Container with circular shape"
+    - "maxCount logic handled in build method before rendering Text"
+    - "Compact sizing uses intrinsic width with minimum constraints"

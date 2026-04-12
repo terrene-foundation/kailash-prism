@@ -1,11 +1,163 @@
 # Kailash Prism — Navigation Patterns
-# Defines Sidebar, top-nav, bottom-nav, breadcrumb patterns.
-# See docs/specs/ for navigation specifications.
+# Defines sidebar, top-nav, bottom-nav, breadcrumb navigation patterns.
+# See docs/specs/05-engine-specifications.md § 5.3 for the full specification.
 
 version: "0.1.0"
 
 patterns:
-  - sidebar
-  - top-nav
-  - bottom-nav
-  - breadcrumb
+  sidebar:
+    description: "Vertical sidebar navigation with collapsible groups, responsive collapse, and badges"
+    responsive:
+      mobile:
+        behavior: "hidden"
+        trigger: "hamburger-icon-in-header"
+        presentation: "full-screen-slide-over-drawer-from-left"
+        dismiss: ["close-button", "backdrop-tap"]
+      tablet:
+        behavior: "icon-only-rail"
+        width: 60
+        tooltip: true
+        nested_groups: "popover-menus"
+      desktop:
+        behavior: "full"
+        width: 240
+        labels: true
+        nested_groups: "expand-inline"
+        collapse_toggle: true
+      wide:
+        behavior: "full"
+        width: 280
+        labels: true
+        nested_groups: "expand-inline"
+        collapse_toggle: true
+    props:
+      width:
+        collapsed: { type: "integer", default: 60 }
+        expanded: { type: "integer", default: 240 }
+      wide_width: { type: "integer", default: 280 }
+      default_collapsed: { type: "boolean", default: false }
+      collapse_breakpoint: { type: "breakpoint", default: "tablet" }
+      position: { type: "enum", values: ["left", "right"], default: "left" }
+      show_collapse_toggle: { type: "boolean", default: true }
+    composition_slots:
+      - name: "sidebarHeader"
+        purpose: "Content at top of sidebar (logo, org name)"
+        default: null
+      - name: "sidebarFooter"
+        purpose: "Content at bottom of sidebar (user menu, settings)"
+        default: null
+      - name: "navItem"
+        purpose: "Custom renderer for a navigation item"
+        default: "Icon + Label + Badge (NavItem molecule)"
+    accessibility:
+      landmark: '<nav aria-label="Main navigation">'
+      active_item: 'aria-current="page"'
+      expandable_groups: 'aria-expanded + aria-controls'
+      keyboard: "Arrow keys navigate items, Enter activates, Home/End jump, Escape closes drawer"
+      toggle_button: 'aria-label="Collapse sidebar" / "Expand sidebar"'
+      mobile_drawer: 'role="dialog" with focus trap'
+    state_persistence:
+      web: "localStorage key 'prism:sidebar-collapsed'"
+      flutter: "SharedPreferences"
+
+  top-nav:
+    description: "Horizontal top navigation bar with items arranged left-to-right"
+    responsive:
+      mobile:
+        behavior: "hamburger-collapse"
+        presentation: "dropdown-menu or full-screen-overlay"
+      tablet:
+        behavior: "condensed"
+        overflow: "more-menu-dropdown"
+      desktop:
+        behavior: "full"
+        layout: "horizontal-items-with-dropdowns"
+      wide:
+        behavior: "full"
+        layout: "horizontal-items-with-dropdowns"
+    props:
+      height: { type: "integer", default: 56 }
+      position: { type: "enum", values: ["top", "sticky-top"], default: "sticky-top" }
+      show_search: { type: "boolean", default: false }
+    accessibility:
+      landmark: '<nav aria-label="Main navigation">'
+      active_item: 'aria-current="page"'
+      keyboard: "Arrow keys navigate horizontally, Enter activates, Escape closes dropdowns"
+
+  bottom-nav:
+    description: "Bottom navigation bar for mobile-first applications (max 5 items)"
+    responsive:
+      mobile:
+        behavior: "visible"
+        max_items: 5
+        layout: "icon-above-label"
+      tablet:
+        behavior: "hidden"
+        fallback: "sidebar or top-nav"
+      desktop:
+        behavior: "hidden"
+        fallback: "sidebar or top-nav"
+      wide:
+        behavior: "hidden"
+        fallback: "sidebar or top-nav"
+    props:
+      max_items: { type: "integer", default: 5, max: 5 }
+      show_labels: { type: "boolean", default: true }
+    platform_mapping:
+      web: "fixed-bottom nav with flex items"
+      flutter: "NavigationBar (Material 3)"
+    accessibility:
+      landmark: '<nav aria-label="Main navigation">'
+      active_item: 'aria-current="page"'
+      keyboard: "Arrow keys navigate horizontally"
+
+  breadcrumb:
+    description: "Hierarchical path indicator showing current location in navigation tree"
+    responsive:
+      mobile:
+        behavior: "hidden"
+        fallback: "current page title shown in header"
+      tablet:
+        behavior: "visible"
+        overflow: "collapse-middle-to-ellipsis-dropdown"
+      desktop:
+        behavior: "visible"
+        overflow: "collapse-middle-to-ellipsis-dropdown"
+      wide:
+        behavior: "visible"
+        overflow: "collapse-middle-to-ellipsis-dropdown"
+    props:
+      enabled: { type: "boolean", default: true }
+      max_items: { type: "integer", default: 4 }
+      separator: { type: "string", default: "/" }
+      home_label: { type: "string", default: "first route label" }
+    accessibility:
+      landmark: '<nav aria-label="Breadcrumb">'
+      structure: "ordered list (<ol>)"
+      current_page: "last item is not a link, has aria-current='page'"
+    composition_slots:
+      - name: "breadcrumbItem"
+        purpose: "Custom renderer for a breadcrumb segment"
+        default: "Link with route label"
+
+route_node:
+  description: "Common route definition used by all navigation patterns"
+  fields:
+    path: { type: "string", required: true, description: "URL path segment" }
+    label: { type: "string", required: true, description: "Display label in navigation" }
+    icon: { type: "string", required: false, description: "Icon identifier" }
+    template: { type: "string", required: false, description: "Page template name from Spec 06" }
+    position: { type: "enum", values: ["top", "bottom"], default: "top" }
+    children: { type: "array of RouteNode", required: false }
+    badge:
+      type: { type: "enum", values: ["count", "dot"] }
+      source: { type: "string", description: "Data source URL for badge count" }
+    nav_visible: { type: "boolean", default: true }
+    divider_before: { type: "boolean", default: false }
+    group: { type: "string", required: false, description: "Visual grouping label" }
+
+performance:
+  route_matching: "< 1ms for up to 200 nodes"
+  sidebar_render: "< 20ms for 50 items"
+  badge_refresh: "async, non-blocking, stale counts shown until refresh"
+  navigation_transition: "< 16ms (single frame)"

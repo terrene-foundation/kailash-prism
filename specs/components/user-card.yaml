@@ -1,0 +1,108 @@
+name: UserCard
+category: molecule
+version: 0.1.0
+description: Compact card displaying a user's avatar, name, subtitle, and online status
+
+composed_of:
+  - Avatar
+  - Typography
+  - StatusDot
+
+props:
+  - name: name
+    type: string
+    required: true
+    default: null
+    description: User's display name
+  - name: subtitle
+    type: string
+    required: false
+    default: null
+    description: Secondary text such as role or email
+  - name: avatarSrc
+    type: string
+    required: false
+    default: null
+    description: URL of the user's avatar image
+  - name: status
+    type: '"online" | "offline" | "busy" | "away"'
+    required: false
+    default: null
+    description: Current online status displayed as a colored status dot
+  - name: onClick
+    type: "() => void"
+    required: false
+    default: null
+    description: Click handler that makes the card interactive
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Normal display state
+    - name: hover
+      description: User is hovering over the card (only when onClick is provided)
+    - name: active
+      description: Card is being pressed (only when onClick is provided)
+  transitions:
+    - from: default
+      to: hover
+      trigger: Mouse enters the card area (when onClick is provided)
+      visual_change: Background changes to hover color, cursor becomes pointer
+    - from: hover
+      to: default
+      trigger: Mouse leaves the card area
+      visual_change: Background returns to default
+    - from: hover
+      to: active
+      trigger: Mouse button pressed on the card
+      visual_change: Card slightly depresses or darkens
+
+variants:
+  - name: default
+    description: Standard card layout with avatar, name, subtitle, and status
+  - name: compact
+    description: Inline layout with smaller avatar and single-line text
+
+accessibility:
+  role: button
+  aria_attributes:
+    - attribute: role
+      source: button if onClick is provided, group if display only
+      required: true
+  keyboard:
+    - key: Enter
+      action: Activates the card's onClick handler (when interactive)
+    - key: Space
+      action: Activates the card's onClick handler (when interactive)
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: name prop combined with status for accessible label
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: Same layout across all breakpoints
+  - breakpoint: tablet
+    behavior: Same layout across all breakpoints
+  - breakpoint: desktop
+    behavior: Same layout across all breakpoints
+  - breakpoint: wide
+    behavior: Same layout across all breakpoints
+
+tokens:
+  consumes:
+    - user-card.default.bg
+    - user-card.default.border
+    - user-card.default.radius
+    - user-card.default.padding
+    - user-card.default.gap
+  inherits_from: null

@@ -1,0 +1,165 @@
+# Kailash Prism — Wizard Page Template
+# Multi-step guided process with progress indicator and step validation.
+# See docs/specs/06-page-templates.md section 6.2.9 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Wizard
+  description: >
+    Multi-step guided process with progress indicator
+    and step validation.
+  use_cases:
+    - Onboarding
+    - Multi-step form
+    - Checkout
+    - Setup guide
+    - Import process
+
+  navigation:
+    renders_inside: navigation-engine-or-modal
+    breadcrumb: "Home > {process_name}"
+    note: >
+      Wizards MAY render as full page (inside navigation) or as modal overlay
+      (no navigation). When full page, breadcrumb shows: Home > {Process Name}.
+      Cancel button navigates back.
+
+  layout:
+    root: Stack
+    direction: vertical
+
+  zones:
+    wizard-header:
+      description: Title + step counter + cancel/close button.
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      default_organism: Toolbar
+      default_props:
+        title: "{process_name}"
+        cancel:
+          label: Cancel
+          on_click: "navigate:/"
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    step-indicator:
+      description: Visual progress indicator (horizontal steps with connectors).
+      content_type: steps
+      layout:
+        primitive: Row
+        props:
+          justify: center
+      default_organism: StepIndicator
+      default_props:
+        steps: []
+        current_step: "bind:wizard.currentStep"
+      responsive:
+        wide:
+          display: horizontal-with-labels
+          description: Horizontal step indicator with labels.
+        desktop:
+          display: horizontal-with-labels
+          description: Horizontal step indicator with labels.
+        tablet:
+          display: horizontal-icons-only
+          description: Horizontal step indicator with icons only (no labels).
+        mobile:
+          display: text-with-progress-bar
+          description: >
+            Collapses to "Step {n} of {total}" text + progress bar.
+
+    step-content:
+      description: Content for the current step (usually a form section).
+      content_type: form
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      default_engine: Form
+      default_props:
+        steps: []
+      responsive:
+        wide:
+          max_width: 720px
+          centered: true
+          description: step-content max-width 720px, centered.
+        desktop:
+          max_width: 640px
+          centered: true
+          description: Max-width 640px.
+        tablet:
+          max_width: null
+          centered: false
+          description: Full-width step content.
+        mobile:
+          max_width: null
+          centered: false
+          swipe_navigation: true
+          description: >
+            Swipe gesture to navigate between steps (in addition to buttons).
+
+    wizard-nav:
+      description: Previous/Next/Finish buttons.
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+      default_organism: WizardNav
+      default_props:
+        on_previous: wizard.previousStep
+        on_next: wizard.nextStep
+        on_finish: "api:POST /{entity_path}"
+        finish_label: "{finish_action_label}"
+        previous_label: Previous
+        previous_variant: ghost
+        next_label: Next
+        next_variant: primary
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+          sticky: true
+          sticky_position: bottom
+          description: wizard-nav buttons fixed to bottom.
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Full layout. step-content max-width 720px, centered.
+        Horizontal step indicator with labels.
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Same as wide. Max-width 640px.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        Horizontal step indicator with icons only (no labels).
+        Full-width step content.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        Step indicator collapses to "Step {n} of {total}" text + progress bar.
+        wizard-nav buttons fixed to bottom. Swipe gesture to navigate between
+        steps (in addition to buttons).

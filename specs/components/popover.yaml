@@ -1,0 +1,109 @@
+name: Popover
+category: molecule
+version: 0.1.0
+description: Floating content panel triggered by a click, for displaying rich content alongside a trigger element
+
+composed_of:
+  - Button
+  - IconButton
+
+props:
+  - name: trigger
+    type: ReactNode
+    required: true
+    default: null
+    description: Element that triggers the popover
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: Content displayed inside the floating popover panel
+  - name: open
+    type: boolean
+    required: false
+    default: null
+    description: Controlled open state of the popover
+  - name: onOpenChange
+    type: "(open: boolean) => void"
+    required: false
+    default: null
+    description: Callback invoked when the open state changes
+  - name: side
+    type: '"top" | "bottom" | "left" | "right"'
+    required: false
+    default: "bottom"
+    description: Side of the trigger where the popover appears
+  - name: align
+    type: '"start" | "center" | "end"'
+    required: false
+    default: "center"
+    description: Alignment of the popover relative to the trigger
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: closed
+  states:
+    - name: closed
+      description: Popover panel is hidden, only trigger is visible
+    - name: open
+      description: Popover panel is visible as a floating element
+  transitions:
+    - from: closed
+      to: open
+      trigger: User clicks the trigger element
+      visual_change: Floating content panel appears at the specified side and alignment
+    - from: open
+      to: closed
+      trigger: User clicks outside the popover, presses Escape, or explicitly closes
+      visual_change: Floating content panel closes
+
+variants:
+  - name: default
+    description: Standard floating content panel
+
+accessibility:
+  role: dialog
+  aria_attributes:
+    - attribute: aria-haspopup
+      source: Set to "dialog" on the trigger element
+      required: true
+    - attribute: aria-expanded
+      source: Set to true on trigger when popover is open
+      required: true
+  keyboard:
+    - key: Escape
+      action: Closes the popover and returns focus to trigger
+    - key: Tab
+      action: Moves focus between focusable elements inside the popover
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: Trigger element or aria-label provides the popover's accessible name
+    announcements:
+      - Popover open/close state announced
+
+responsive:
+  - breakpoint: mobile
+    behavior: May render as a bottom sheet instead of floating panel
+  - breakpoint: tablet
+    behavior: Floating panel positioned relative to trigger
+  - breakpoint: desktop
+    behavior: Floating panel positioned relative to trigger
+  - breakpoint: wide
+    behavior: Floating panel positioned relative to trigger
+
+tokens:
+  consumes:
+    - popover.default.bg
+    - popover.default.border
+    - popover.default.radius
+    - popover.default.shadow
+    - popover.default.padding
+    - popover.default.max_width
+  inherits_from: null

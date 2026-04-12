@@ -1,0 +1,210 @@
+# Kailash Prism — Calendar Page Template
+# Time-based view for events and scheduling with day/week/month views.
+# See docs/specs/06-page-templates.md section 6.2.11 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Calendar
+  description: >
+    Time-based view for events and scheduling with day/week/month
+    views and event detail.
+  use_cases:
+    - Scheduling
+    - Event management
+    - Booking
+    - Resource allocation
+    - Content calendar
+
+  navigation:
+    renders_inside: navigation-engine
+    breadcrumb: "Home > Calendar"
+    deep_links:
+      pattern: "/calendar?view={view}&date={date}"
+      example: "/calendar?view=week&date=2026-04-11"
+
+  layout:
+    root: Stack
+    direction: vertical
+
+  calendar_views:
+    month:
+      description: >
+        7-column grid showing days with event indicators
+        (dots or truncated event bars).
+      layout:
+        primitive: Grid
+        props:
+          columns: 7
+    week:
+      description: >
+        7-column timeline with hourly rows (7am-9pm).
+        Events as positioned blocks.
+      layout:
+        primitive: Grid
+        props:
+          columns: 7
+          rows: hourly
+          hour_range:
+            start: 7
+            end: 21
+    day:
+      description: >
+        Single-column timeline with hourly rows.
+        Events as full-width blocks.
+      layout:
+        primitive: Grid
+        props:
+          columns: 1
+          rows: hourly
+          hour_range:
+            start: 7
+            end: 21
+
+  zones:
+    calendar-header:
+      description: >
+        Navigation (prev/next/today) + current period label +
+        view switcher + create button.
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      default_organism: CalendarToolbar
+      default_props:
+        views:
+          - day
+          - week
+          - month
+        default_view: month
+        on_navigate: calendar.navigate
+        actions:
+          - label: New Event
+            variant: primary
+            icon: plus
+            on_click: "openModal:CreateEvent"
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    calendar-grid:
+      description: >
+        The calendar visualization (month grid, week timeline, day timeline).
+      content_type: data
+      layout:
+        primitive: Grid
+        props:
+          varies_by_view: true
+      default_organism: CalendarGrid
+      default_props:
+        events: "api:/events"
+        view: "bind:calendar.view"
+        date: "bind:calendar.date"
+        on_event_click: selectEvent
+        on_date_click: selectDate
+        on_event_drag: "api:PATCH /events/{id}"
+        event_renderer: EventBlock
+      responsive:
+        wide:
+          placement: split-left
+          width: fill
+          description: Full month/week/day grid.
+        desktop:
+          placement: split-left
+          width: fill
+          description: Full month/week/day grid.
+        tablet:
+          placement: full
+          width: full
+          week_days: 5
+          week_day_note: Week view shows 5 days (Mon-Fri).
+        mobile:
+          placement: full
+          width: full
+          month_compact: true
+          month_note: >
+            Compact grid with dots only (no event text). Tapping a day shows
+            day's events as list below the grid.
+          week_rolling: 3
+          week_note: >
+            3-day rolling view with horizontal swipe.
+
+    event-detail:
+      description: >
+        Detail panel for selected event or selected day's events list.
+      content_type: any
+      layout:
+        primitive: Stack
+        props:
+          direction: vertical
+      default_organism: EventDetail
+      default_props:
+        event: "bind:selectedEvent"
+        empty_state:
+          icon: calendar
+          message: "Select an event to view details"
+        actions:
+          - label: Edit
+            variant: secondary
+            on_click: "openModal:EditEvent"
+          - label: Delete
+            variant: destructive
+            confirm_message: "Delete this event?"
+      responsive:
+        wide:
+          visible: true
+          width: 320px
+          display: panel
+          description: >
+            Split: calendar-grid (fill) + event-detail (320px).
+        desktop:
+          visible: false
+          width: 280px
+          display: panel-togglable
+          description: >
+            event-detail togglable.
+        tablet:
+          visible: false
+          display: slide-over
+          slide_from: right
+          description: >
+            event-detail as slide-over from right.
+        mobile:
+          visible: false
+          display: bottom-sheet
+          description: >
+            event-detail as bottom sheet.
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        Split: calendar-grid (fill) + event-detail (320px).
+        Full month/week/day grid.
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        Split: calendar-grid (fill) + event-detail (280px).
+        event-detail togglable.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        calendar-grid full width. event-detail as slide-over from right.
+        Week view shows 5 days (Mon-Fri).
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        Month view: compact grid with dots only (no event text). Tapping a day
+        shows events as list below the grid. Week view: 3-day rolling view with
+        horizontal swipe. event-detail as bottom sheet.

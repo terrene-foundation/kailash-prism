@@ -1,0 +1,111 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.19
+version: 0.1.0
+
+name: Link
+category: atom
+description: "Navigation element for internal or external destinations."
+
+props:
+  - name: href
+    type: string
+    required: true
+    default: null
+    description: "Destination URL"
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Link text"
+  - name: external
+    type: boolean
+    required: false
+    default: false
+    description: "Opens in new tab with external icon"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Non-interactive"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Interactive.primary text, underline optional"
+    - name: hover
+      description: "Underline appears/darkens"
+    - name: visited
+      description: "Slightly different hue (optional)"
+    - name: focus
+      description: "Focus ring"
+    - name: disabled
+      description: "text.disabled, no interaction"
+  transitions:
+    - from: default
+      to: hover
+      trigger: "Mouse enter"
+      visual_change: "Underline appears"
+    - from: hover
+      to: default
+      trigger: "Mouse leave"
+      visual_change: "Underline removed"
+
+variants:
+  - name: default
+    description: "interactive.primary text"
+  - name: external
+    description: "Same + trailing external-link icon"
+
+accessibility:
+  role: "link"
+  aria_attributes:
+    - attribute: "target"
+      source: "'_blank' if external"
+      required: false
+    - attribute: "rel"
+      source: "'noopener noreferrer' if external"
+      required: true
+  keyboard:
+    - key: "Enter"
+      action: "Navigate to href"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "Children text content"
+    announcements:
+      - "External links: announces 'opens in new tab'"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "44px touch target height"
+  - breakpoint: desktop
+    behavior: "Inline"
+
+tokens:
+  consumes:
+    - "link.default.text"
+    - "link.hover.text"
+    - "link.visited.text"
+    - "link.disabled.text"
+    - "link.focus.ring_color"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Render as an <a> element. For external links, set target="_blank" and
+    rel="noopener noreferrer" to prevent reverse tabnapping. Append a small
+    external-link icon (SVG) after the children when external=true. For
+    disabled state, render as a <span> with aria-disabled="true" instead of
+    an anchor to prevent navigation. Use :visited pseudo-class for the
+    visited state color. Ensure the 44px touch target on mobile via
+    min-height and padding.
+  flutter: >
+    Use GestureDetector wrapping a Text widget with TextStyle for link
+    styling. For external links, use url_launcher package to open in the
+    system browser. Append an Icon(Icons.open_in_new, size: 14) after the
+    text for external variant. For disabled state, ignore tap callbacks and
+    apply the disabled text color. Use Semantics(link: true) to convey
+    link semantics to the accessibility tree.

@@ -1,0 +1,95 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.17
+version: 0.1.0
+
+name: Skeleton
+category: atom
+description: "Placeholder loading shape that mimics content layout."
+
+props:
+  - name: variant
+    type: '"text" | "circle" | "rect" | "custom"'
+    required: false
+    default: "text"
+    description: "Shape: text (lines), circle, rectangle, or custom dimensions"
+  - name: width
+    type: "string | number | undefined"
+    required: false
+    default: "100%"
+    description: "Width (CSS value or pixels)"
+  - name: height
+    type: "string | number | undefined"
+    required: false
+    default: null
+    description: "Height (inferred from variant if not specified)"
+  - name: lines
+    type: number
+    required: false
+    default: 1
+    description: "Number of text lines (variant=text only)"
+  - name: animate
+    type: boolean
+    required: false
+    default: true
+    description: "Whether shimmer animation is active"
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: "Animated shimmer"
+  transitions: []
+
+variants:
+  - name: text
+    description: "Rounded rectangle, height matches body-default line height, last line 75% width"
+  - name: circle
+    description: "Circular, diameter = width = height"
+  - name: rect
+    description: "Rounded rectangle with specified dimensions"
+
+accessibility:
+  role: "presentation"
+  aria_attributes:
+    - attribute: "aria-hidden"
+      source: "Always true"
+      required: true
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "Hidden from screen readers. Parent container should have aria-busy=true."
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Fills container width"
+  - breakpoint: desktop
+    behavior: "Respects specified width"
+
+tokens:
+  consumes:
+    - "skeleton.default.bg"
+    - "skeleton.default.shimmer_color"
+    - "skeleton.default.radius"
+    - "skeleton.default.animation_duration"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Shimmer effect achieved via a CSS linear-gradient animation that slides
+    from left to right (background-position animation). Use
+    prefers-reduced-motion to disable the shimmer and show a static
+    placeholder instead. For variant=text with multiple lines, render
+    multiple div elements with the last line at 75% width. Ensure the
+    component is aria-hidden=true and the parent loading container sets
+    aria-busy=true.
+  flutter: >
+    Use a ShimmerEffect custom painter or a third-party shimmer package.
+    For variant=circle, use a ClipOval. For variant=text with multiple
+    lines, use a Column of Container widgets with the last at 75% width.
+    Respect MediaQuery.disableAnimations to show a static placeholder.
+    Set Semantics(excludeSemantics: true) to hide from the accessibility
+    tree.

@@ -1,0 +1,145 @@
+# Kailash Prism — ChatInput AI Organism Contract
+# Source: docs/specs/03-component-contracts.md § 3.4.17
+# Message input area with auto-growing textarea, attachments, source selector, and send button.
+
+version: "0.1.0"
+
+name: ChatInput
+category: ai-organism
+description: "Message input area with auto-growing textarea, attachments, source selector, and send button."
+
+composed_of:
+  atoms:
+    - IconButton      # Attachment button, send button
+    - TextArea        # Auto-growing message input
+  molecules:
+    - Select          # Source selector dropdown
+
+props:
+  - name: value
+    type: string
+    required: true
+    default: null
+    description: "Current text value of the input"
+  - name: onChange
+    type: "(value: string) => void"
+    required: true
+    default: null
+    description: "Callback fired when the input text changes"
+  - name: onSend
+    type: "() => void"
+    required: true
+    default: null
+    description: "Callback fired when the user sends the message"
+  - name: onAttach
+    type: "(files: File[]) => void"
+    required: false
+    default: null
+    description: "Callback fired when the user attaches files"
+  - name: sources
+    type: "{ label: string; value: string }[]"
+    required: false
+    default: "[]"
+    description: "Available data sources for the AI to query"
+  - name: placeholder
+    type: string
+    required: false
+    default: "Type a message..."
+    description: "Placeholder text in the input"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Whether the input is disabled (e.g., during message sending)"
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition"
+
+states:
+  initial: empty
+  states:
+    - name: empty
+      description: "No text entered; send button is inactive"
+    - name: typing
+      description: "User is actively typing; textarea grows as content expands"
+    - name: ready-to-send
+      description: "Non-empty input; send button is active"
+    - name: sending
+      description: "Message is being sent; input is disabled"
+  transitions:
+    - from: empty
+      to: typing
+      trigger: "User starts typing"
+      visual_change: "Textarea begins to grow; placeholder text disappears"
+    - from: typing
+      to: ready-to-send
+      trigger: "Input has non-whitespace content"
+      visual_change: "Send button becomes active (enabled styling)"
+    - from: ready-to-send
+      to: typing
+      trigger: "User deletes all content"
+      visual_change: "Send button becomes inactive"
+    - from: ready-to-send
+      to: sending
+      trigger: "User clicks send or presses Cmd/Ctrl+Enter"
+      visual_change: "Input becomes disabled; send button shows loading state"
+    - from: sending
+      to: empty
+      trigger: "Message sent successfully"
+      visual_change: "Input clears and re-enables; focus returns to input"
+
+composition_slots:
+  - name: toolbar
+    description: "Attachment button, source selector, and custom action buttons"
+  - name: prefix
+    description: "Content before the textarea (e.g., selected source indicator)"
+
+accessibility:
+  role: textbox
+  aria_attributes:
+    - attribute: aria-label
+      source: "Static string: 'Message input'"
+      required: true
+    - attribute: aria-multiline
+      source: "Static: true"
+      required: true
+    - attribute: aria-disabled
+      source: "Reflects the disabled prop"
+      required: true
+  keyboard:
+    - key: "Cmd+Enter / Ctrl+Enter"
+      action: "Send the message"
+    - key: Enter
+      action: "New line in the textarea"
+    - key: Escape
+      action: "Clear the input (optional)"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "aria-label on the textbox"
+    announcements:
+      - "Message sent"
+      - "File attached: [filename]"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width; attachment and source buttons may collapse into overflow menu"
+  - breakpoint: tablet
+    behavior: "Full-width; all buttons visible"
+  - breakpoint: desktop
+    behavior: "Full-width; all buttons visible"
+  - breakpoint: wide
+    behavior: "Full-width; all buttons visible"
+
+tokens:
+  consumes:
+    - chat-input.default.bg
+    - chat-input.default.border
+    - chat-input.default.radius
+    - chat-input.default.padding
+    - chat-input.default.min_height
+  inherits_from: null

@@ -1,7 +1,690 @@
-# Kailash Prism — Minimal Theme
-# Monochrome/spacious palette.
-# See docs/specs/02-token-architecture.md for token definitions.
+# Kailash Prism -- Minimal Theme
+# Monochrome/spacious palette inspired by iA Writer, Things 3, Bear.
+# Near-black primary on pure gray neutrals, single warm amber accent.
+# Tight radii, barely-visible shadows, restrained motion -- content first.
+# Spec: docs/specs/02-token-architecture.md (three-tier token system)
+# Format: docs/specs/01-design-system-protocol.md (design-system.yaml schema)
 
-theme:
-  name: minimal
-  description: Monochrome spacious palette
+prism_spec: "0.1.0"
+design_system_version: "1.0.0"
+name: "Minimal"
+description: "Monochrome spacious palette with near-black primary and amber accent"
+
+# =============================================================================
+# TIER 1: PRIMITIVE TOKENS
+# Raw value scales. No semantic meaning. Naming: {category}.raw.{name}
+# =============================================================================
+
+tokens:
+  primitive:
+
+    # -------------------------------------------------------------------------
+    # Color primitives -- enumerated palette, all 6-digit hex
+    # Constraint: within a hue, lower shade = higher luminance (lighter)
+    # Personality: monochrome with pure grays (no blue/warm tint).
+    # Single warm accent (amber) for highlights only.
+    # -------------------------------------------------------------------------
+    color:
+      # Neutral family (brand primary hue -- near-black)
+      neutral-100: "#F3F4F6"
+      neutral-200: "#E5E7EB"
+      neutral-300: "#D1D5DB"
+      neutral-400: "#9CA3AF"
+      neutral-500: "#6B7280"
+      neutral-600: "#4B5563"
+      neutral-700: "#374151"
+      neutral-800: "#1F2937"
+      neutral-900: "#111827"
+
+      # Gray family (pure gray, no tint)
+      gray-50: "#FAFAFA"
+      gray-100: "#F5F5F5"
+      gray-200: "#E5E5E5"
+      gray-300: "#D4D4D4"
+      gray-400: "#A3A3A3"
+      gray-500: "#737373"
+      gray-600: "#525252"
+      gray-700: "#404040"
+      gray-800: "#262626"
+      gray-900: "#171717"
+
+      # Red family (destructive / error)
+      red-100: "#FEE2E2"
+      red-400: "#F87171"
+      red-500: "#EF4444"
+      red-600: "#DC2626"
+      red-700: "#B91C1C"
+
+      # Green family (success)
+      green-100: "#DCFCE7"
+      green-400: "#4ADE80"
+      green-500: "#22C55E"
+      green-600: "#16A34A"
+      green-700: "#15803D"
+
+      # Amber family (warning + sole accent hue)
+      amber-100: "#FEF3C7"
+      amber-400: "#FBBF24"
+      amber-500: "#F59E0B"
+      amber-600: "#D97706"
+      amber-700: "#B45309"
+
+      # Blue family (info)
+      blue-100: "#DBEAFE"
+      blue-400: "#60A5FA"
+      blue-500: "#3B82F6"
+      blue-600: "#2563EB"
+
+      # Absolute
+      white: "#FFFFFF"
+      black: "#000000"
+
+    # -------------------------------------------------------------------------
+    # Spacing primitives -- strictly ascending, all divisible by 4
+    # Minimal: includes 20 and 40 for more generous component/section spacing.
+    # -------------------------------------------------------------------------
+    spacing:
+      scale: [4, 8, 12, 16, 20, 24, 32, 40, 48, 64]
+
+    # -------------------------------------------------------------------------
+    # Typography primitives
+    # System font stack for fast load, Source Code Pro for mono.
+    # -------------------------------------------------------------------------
+    typography:
+      families:
+        sans: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif"
+        mono: "Source Code Pro, Menlo, Consolas, monospace"
+      scale: [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 45, 57]
+      weights: [400, 500, 600, 700]
+      line_heights: [1.25, 1.4, 1.5, 1.6]
+
+    # -------------------------------------------------------------------------
+    # Radius primitives -- strictly ascending, non-negative integers
+    # Minimal: tight radii, barely rounded. Content takes center stage.
+    # -------------------------------------------------------------------------
+    radius:
+      scale: [0, 2, 4, 8, 12, 9999]
+
+    # -------------------------------------------------------------------------
+    # Shadow primitives -- CSS box-shadow values
+    # Barely visible -- rely on borders for elevation, not drop shadows.
+    # Blur radius: sm<=4, md<=10, lg<=20, xl>20
+    # -------------------------------------------------------------------------
+    shadow:
+      none: "none"
+      sm: "0px 1px 2px 0px rgba(0, 0, 0, 0.03)"
+      md: "0px 2px 6px -1px rgba(0, 0, 0, 0.06)"
+      lg: "0px 6px 12px -3px rgba(0, 0, 0, 0.08)"
+      xl: "0px 12px 24px -6px rgba(0, 0, 0, 0.1)"
+
+    # -------------------------------------------------------------------------
+    # Motion primitives
+    # Restrained: shorter durations, linear or subtle easing. No flourish.
+    # -------------------------------------------------------------------------
+    motion:
+      durations: [0, 100, 150, 200, 300, 500]
+      easings:
+        linear: "linear"
+        default: "cubic-bezier(0.25, 0.1, 0.25, 1)"
+        emphasize: "cubic-bezier(0.2, 0, 0, 1)"
+        decelerate: "cubic-bezier(0, 0, 0.2, 1)"
+        accelerate: "cubic-bezier(0.4, 0, 1, 1)"
+
+    # -------------------------------------------------------------------------
+    # Breakpoint primitives -- fixed, strictly ascending
+    # -------------------------------------------------------------------------
+    breakpoints:
+      mobile: 0
+      tablet: 768
+      desktop: 1024
+      wide: 1440
+
+  # ===========================================================================
+  # TIER 2: SEMANTIC TOKENS
+  # Intent-mapped tokens referencing primitives. Theme-switching layer.
+  # ===========================================================================
+
+  semantic:
+
+    # -------------------------------------------------------------------------
+    # Color semantics -- 19 required + optional extras
+    # Each token: value (light default), usage, optional contrast_min
+    # Neutral-700 (#374151) on gray-50 (#FAFAFA): contrast ~9.6:1 (passes AAA)
+    # Neutral-500 (#6B7280) on white: contrast ~5.0:1 (passes AA)
+    # Red-600 (#DC2626) on white: contrast ~4.6:1 (passes AA)
+    # Neutral-900 on gray-50: contrast ~15.6:1 (passes AAA)
+    # -------------------------------------------------------------------------
+    color:
+      interactive:
+        primary:
+          value: "$primitive.color.neutral-700"
+          usage: "Primary actions, active states, links"
+          contrast_min: 4.5
+        primary-hover:
+          value: "$primitive.color.neutral-900"
+          usage: "Hover state for primary interactive elements"
+        secondary:
+          value: "$primitive.color.neutral-500"
+          usage: "Secondary actions, less prominent interactions"
+        destructive:
+          value: "$primitive.color.red-600"
+          usage: "Delete, remove, destructive actions"
+          contrast_min: 4.5
+
+      surface:
+        page:
+          value: "$primitive.color.gray-50"
+          usage: "Page background"
+        card:
+          value: "$primitive.color.white"
+          usage: "Card and container backgrounds"
+        elevated:
+          value: "$primitive.color.white"
+          usage: "Elevated container backgrounds (modals, popovers)"
+
+      text:
+        primary:
+          value: "$primitive.color.neutral-900"
+          usage: "Headings, high-emphasis body text"
+          contrast_min: 4.5
+        secondary:
+          value: "$primitive.color.neutral-500"
+          usage: "Descriptions, secondary information"
+          contrast_min: 4.5
+        disabled:
+          value: "$primitive.color.neutral-400"
+          usage: "Disabled text, placeholder text"
+        on-primary:
+          value: "$primitive.color.white"
+          usage: "Text on primary-colored backgrounds"
+          contrast_min: 4.5
+        on-destructive:
+          value: "$primitive.color.white"
+          usage: "Text on destructive-colored backgrounds"
+          contrast_min: 4.5
+
+      border:
+        default:
+          value: "$primitive.color.gray-300"
+          usage: "Default borders for inputs and containers"
+        subtle:
+          value: "$primitive.color.gray-200"
+          usage: "Subtle borders for dividers and separators"
+
+      status:
+        success:
+          value: "$primitive.color.green-600"
+          usage: "Success states, confirmations"
+        warning:
+          value: "$primitive.color.amber-600"
+          usage: "Warning states, caution indicators"
+        error:
+          value: "$primitive.color.red-600"
+          usage: "Error states, validation failures"
+        info:
+          value: "$primitive.color.blue-600"
+          usage: "Informational states, help indicators"
+
+    # -------------------------------------------------------------------------
+    # Spacing semantics -- 4 required
+    # All values must exist in spacing.raw scale
+    # Minimal: more generous spacing -- content breathes.
+    # -------------------------------------------------------------------------
+    spacing:
+      component:
+        padding:
+          value: 20
+          usage: "Default internal padding for components"
+        gap:
+          value: 12
+          usage: "Default gap between sibling elements in a component"
+      page:
+        margin:
+          value: 32
+          usage: "Page-level horizontal margins"
+      section:
+        gap:
+          value: 40
+          usage: "Vertical gap between major page sections"
+
+    # -------------------------------------------------------------------------
+    # Typography semantics -- 9 required composites
+    # Ordering: h1 > h2 > h3 > h4 > body.default > body.small > caption
+    # System font: fast, native, familiar.
+    # -------------------------------------------------------------------------
+    typography:
+      heading:
+        h1:
+          family: "sans"
+          size: 32
+          weight: 700
+          line_height: 1.25
+          usage: "Page titles, hero headings"
+        h2:
+          family: "sans"
+          size: 24
+          weight: 600
+          line_height: 1.25
+          usage: "Section headings"
+        h3:
+          family: "sans"
+          size: 20
+          weight: 600
+          line_height: 1.4
+          usage: "Sub-section headings, sidebar headers"
+        h4:
+          family: "sans"
+          size: 18
+          weight: 500
+          line_height: 1.4
+          usage: "Card headings, group labels"
+      body:
+        default:
+          family: "sans"
+          size: 16
+          weight: 400
+          line_height: 1.6
+          usage: "Standard body text, descriptions, paragraphs"
+        small:
+          family: "sans"
+          size: 14
+          weight: 400
+          line_height: 1.5
+          usage: "Compact body text, table cells, metadata"
+      caption:
+        family: "sans"
+        size: 12
+        weight: 400
+        line_height: 1.5
+        usage: "Captions, helper text, timestamps"
+      code:
+        family: "mono"
+        size: 14
+        weight: 400
+        line_height: 1.5
+        usage: "Code snippets, technical values, monospaced content"
+      label:
+        family: "sans"
+        size: 14
+        weight: 500
+        line_height: 1.4
+        usage: "Form labels, button text, navigation items"
+
+    # -------------------------------------------------------------------------
+    # Radius semantics -- 5 required
+    # none < small < default < large < pill
+    # Minimal: tight radii. Near-square for most elements.
+    # -------------------------------------------------------------------------
+    radius:
+      component:
+        none:
+          value: 0
+          usage: "No rounding, sharp corners"
+        small:
+          value: 2
+          usage: "Subtle rounding for buttons, inputs, badges"
+        default:
+          value: 4
+          usage: "Standard rounding for cards, containers"
+        large:
+          value: 8
+          usage: "Pronounced rounding for modals, elevated surfaces"
+        pill:
+          value: 9999
+          usage: "Fully rounded for pills, tags, avatars"
+
+    # -------------------------------------------------------------------------
+    # Shadow semantics -- 5 required
+    # Elevation ordering: none < card < dropdown < modal <= tooltip
+    # Minimal: barely there. Rely on borders, not shadow depth.
+    # -------------------------------------------------------------------------
+    shadow:
+      component:
+        none:
+          value: "$primitive.shadow.none"
+          usage: "No shadow, flat surface"
+        card:
+          value: "$primitive.shadow.sm"
+          usage: "Default card and container elevation"
+        dropdown:
+          value: "$primitive.shadow.md"
+          usage: "Dropdown menu and popover elevation"
+        modal:
+          value: "$primitive.shadow.lg"
+          usage: "Modal and dialog elevation"
+        tooltip:
+          value: "$primitive.shadow.xl"
+          usage: "Tooltip and command palette elevation"
+
+    # -------------------------------------------------------------------------
+    # Motion semantics -- 4 required composites
+    # Ordering: micro < state < content < layout
+    # Minimal: restrained and quick. No bounce, no overshoot.
+    # -------------------------------------------------------------------------
+    motion:
+      interaction:
+        micro:
+          duration: 100
+          easing: "default"
+          usage: "Micro-interactions: toggles, checks, radio selections"
+        state:
+          duration: 150
+          easing: "default"
+          usage: "State transitions: hover, focus, active changes"
+        content:
+          duration: 250
+          easing: "decelerate"
+          usage: "Content transitions: tab switches, accordion expand/collapse"
+        layout:
+          duration: 350
+          easing: "decelerate"
+          usage: "Layout animations: sidebar collapse, modal enter/exit"
+
+    # -------------------------------------------------------------------------
+    # Breakpoint semantics -- 4 required, min/max ranges
+    # -------------------------------------------------------------------------
+    breakpoints:
+      mobile:
+        min: 0
+        max: 767
+        usage: "Phones in portrait and landscape"
+      tablet:
+        min: 768
+        max: 1023
+        usage: "Tablets in portrait, phones in landscape"
+      desktop:
+        min: 1024
+        max: 1439
+        usage: "Standard desktop viewports"
+      wide:
+        min: 1440
+        max: null
+        usage: "Wide desktop monitors, large displays"
+
+  # ===========================================================================
+  # TIER 3: COMPONENT TOKENS
+  # Scoped to specific components. Reference Tier 2 semantic tokens only.
+  # ===========================================================================
+
+  component:
+
+    # -------------------------------------------------------------------------
+    # Button -- 5 variants, each with default/hover/active/focus/disabled states
+    # Minimal: sharp corners, flat, content-focused.
+    # -------------------------------------------------------------------------
+    button:
+      primary:
+        bg: "$semantic.color.interactive.primary"
+        text: "$semantic.color.text.on-primary"
+        border: "none"
+        height: 44
+        radius: "$semantic.radius.component.small"
+        padding_x: 24
+        padding_y: 0
+        font_size: 14
+        font_weight: 500
+        hover:
+          bg: "$semantic.color.interactive.primary-hover"
+        active:
+          bg: "$semantic.color.interactive.primary-hover"
+          transform: "scale(0.99)"
+        focus:
+          ring_color: "$semantic.color.interactive.primary"
+          ring_width: 2
+          ring_offset: 2
+        disabled:
+          bg: "$semantic.color.surface.page"
+          text: "$semantic.color.text.disabled"
+          opacity: 0.5
+
+      secondary:
+        bg: "transparent"
+        text: "$semantic.color.text.primary"
+        border: "$semantic.color.border.default"
+        height: 44
+        radius: "$semantic.radius.component.small"
+        padding_x: 24
+        padding_y: 0
+        font_size: 14
+        font_weight: 500
+        hover:
+          bg: "$semantic.color.surface.page"
+          border: "$semantic.color.border.default"
+        active:
+          bg: "$semantic.color.surface.page"
+          transform: "scale(0.99)"
+        focus:
+          ring_color: "$semantic.color.interactive.primary"
+          ring_width: 2
+          ring_offset: 2
+        disabled:
+          bg: "transparent"
+          text: "$semantic.color.text.disabled"
+          border: "$semantic.color.border.subtle"
+          opacity: 0.5
+
+      tertiary:
+        bg: "transparent"
+        text: "$semantic.color.interactive.primary"
+        border: "none"
+        height: 44
+        radius: "$semantic.radius.component.small"
+        padding_x: 16
+        padding_y: 0
+        font_size: 14
+        font_weight: 500
+        hover:
+          bg: "$semantic.color.surface.page"
+        active:
+          bg: "$semantic.color.surface.page"
+          transform: "scale(0.99)"
+        focus:
+          ring_color: "$semantic.color.interactive.primary"
+          ring_width: 2
+          ring_offset: 2
+        disabled:
+          text: "$semantic.color.text.disabled"
+          opacity: 0.5
+
+      destructive:
+        bg: "$semantic.color.interactive.destructive"
+        text: "$semantic.color.text.on-destructive"
+        border: "none"
+        height: 44
+        radius: "$semantic.radius.component.small"
+        padding_x: 24
+        padding_y: 0
+        font_size: 14
+        font_weight: 500
+        hover:
+          bg: "$primitive.color.red-700"
+        active:
+          bg: "$semantic.color.interactive.destructive"
+          transform: "scale(0.99)"
+        focus:
+          ring_color: "$semantic.color.interactive.destructive"
+          ring_width: 2
+          ring_offset: 2
+        disabled:
+          bg: "$semantic.color.surface.page"
+          text: "$semantic.color.text.disabled"
+          opacity: 0.5
+
+      ghost:
+        bg: "transparent"
+        text: "$semantic.color.text.secondary"
+        border: "none"
+        height: 44
+        radius: "$semantic.radius.component.small"
+        padding_x: 12
+        padding_y: 0
+        font_size: 14
+        font_weight: 500
+        hover:
+          bg: "$semantic.color.surface.page"
+          text: "$semantic.color.text.primary"
+        active:
+          bg: "$semantic.color.surface.page"
+          transform: "scale(0.99)"
+        focus:
+          ring_color: "$semantic.color.interactive.primary"
+          ring_width: 2
+          ring_offset: 2
+        disabled:
+          text: "$semantic.color.text.disabled"
+          opacity: 0.5
+
+    # -------------------------------------------------------------------------
+    # Card
+    # Minimal: flat with a border, almost no shadow. Content-forward.
+    # -------------------------------------------------------------------------
+    card:
+      bg: "$semantic.color.surface.card"
+      border: "$semantic.color.border.default"
+      radius: "$semantic.radius.component.default"
+      padding: 20
+      shadow: "$semantic.shadow.component.none"
+
+    # -------------------------------------------------------------------------
+    # Input (text-input, text-area, select share this base)
+    # Minimal: clean borders, understated focus. No flourish.
+    # -------------------------------------------------------------------------
+    input:
+      default:
+        bg: "$semantic.color.surface.card"
+        text: "$semantic.color.text.primary"
+        placeholder: "$semantic.color.text.disabled"
+        border: "$semantic.color.border.default"
+        border_focus: "$semantic.color.interactive.primary"
+        radius: "$semantic.radius.component.small"
+        height: 44
+        padding_x: 12
+        font_size: 16
+      focus:
+        border: "$semantic.color.interactive.primary"
+        ring_color: "$semantic.color.interactive.primary"
+        ring_width: 2
+        ring_offset: 0
+      error:
+        border: "$semantic.color.status.error"
+        ring_color: "$semantic.color.status.error"
+      disabled:
+        bg: "$semantic.color.surface.page"
+        text: "$semantic.color.text.disabled"
+        border: "$semantic.color.border.subtle"
+
+# =============================================================================
+# THEMES
+# Map semantic color tokens to primitive values per theme.
+# light is the default. dark is required. Both must cover all 19 color tokens.
+# =============================================================================
+
+themes:
+  light:
+    color.interactive.primary: "$primitive.color.neutral-700"
+    color.interactive.primary-hover: "$primitive.color.neutral-900"
+    color.interactive.secondary: "$primitive.color.neutral-500"
+    color.interactive.destructive: "$primitive.color.red-600"
+    color.surface.page: "$primitive.color.gray-50"
+    color.surface.card: "$primitive.color.white"
+    color.surface.elevated: "$primitive.color.white"
+    color.text.primary: "$primitive.color.neutral-900"
+    color.text.secondary: "$primitive.color.neutral-500"
+    color.text.disabled: "$primitive.color.neutral-400"
+    color.text.on-primary: "$primitive.color.white"
+    color.text.on-destructive: "$primitive.color.white"
+    color.border.default: "$primitive.color.gray-300"
+    color.border.subtle: "$primitive.color.gray-200"
+    color.status.success: "$primitive.color.green-600"
+    color.status.warning: "$primitive.color.amber-600"
+    color.status.error: "$primitive.color.red-600"
+    color.status.info: "$primitive.color.blue-600"
+
+  dark:
+    color.interactive.primary: "$primitive.color.neutral-300"
+    color.interactive.primary-hover: "$primitive.color.neutral-200"
+    color.interactive.secondary: "$primitive.color.neutral-400"
+    color.interactive.destructive: "$primitive.color.red-400"
+    color.surface.page: "$primitive.color.gray-900"
+    color.surface.card: "$primitive.color.gray-800"
+    color.surface.elevated: "$primitive.color.gray-700"
+    color.text.primary: "$primitive.color.gray-100"
+    color.text.secondary: "$primitive.color.neutral-400"
+    color.text.disabled: "$primitive.color.neutral-600"
+    color.text.on-primary: "$primitive.color.gray-900"
+    color.text.on-destructive: "$primitive.color.white"
+    color.border.default: "$primitive.color.gray-700"
+    color.border.subtle: "$primitive.color.gray-800"
+    color.status.success: "$primitive.color.green-400"
+    color.status.warning: "$primitive.color.amber-400"
+    color.status.error: "$primitive.color.red-400"
+    color.status.info: "$primitive.color.blue-400"
+
+# =============================================================================
+# CONSTRAINTS
+# Declarative validation rules the token compiler must enforce.
+# =============================================================================
+
+constraints:
+  contrast:
+    text_on_surface:
+      ratio_min: 4.5
+      applies_to:
+        - ["color.text.primary", "color.surface.page"]
+        - ["color.text.primary", "color.surface.card"]
+        - ["color.text.secondary", "color.surface.page"]
+        - ["color.text.secondary", "color.surface.card"]
+        - ["color.text.on-primary", "color.interactive.primary"]
+        - ["color.text.on-destructive", "color.interactive.destructive"]
+    large_text_on_surface:
+      ratio_min: 3.0
+      applies_to:
+        - ["typography.heading.h1", "color.surface.page"]
+        - ["typography.heading.h2", "color.surface.page"]
+    ui_elements:
+      ratio_min: 3.0
+      applies_to:
+        - ["color.interactive.primary", "color.surface.page"]
+        - ["color.interactive.primary", "color.surface.card"]
+        - ["color.border.default", "color.surface.card"]
+
+  touch_target:
+    min_width: 44
+    min_height: 44
+    applies_to:
+      - "button"
+      - "input"
+      - "select"
+      - "checkbox"
+      - "radio"
+      - "toggle"
+      - "icon-button"
+
+  spacing_grid:
+    base: 4
+    rule: "All spacing values MUST be divisible by 4"
+
+  motion:
+    reduced_motion:
+      rule: "When prefers-reduced-motion is active, all durations MUST be 0.01ms"
+    gpu_only:
+      allowed_properties: ["transform", "opacity", "filter"]
+      rule: "Animations MUST only animate properties in allowed_properties list"
+
+  color_pairing:
+    rules:
+      - foreground: "color.text.primary"
+        allowed_backgrounds:
+          - "color.surface.page"
+          - "color.surface.card"
+          - "color.surface.elevated"
+      - foreground: "color.text.on-primary"
+        allowed_backgrounds:
+          - "color.interactive.primary"
+          - "color.interactive.destructive"
+          - "color.status.success"
+          - "color.status.error"
+      - foreground: "color.status.error"
+        disallowed_backgrounds:
+          - "color.interactive.destructive"
+        reason: "Red text on red background is indistinguishable"

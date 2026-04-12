@@ -1,0 +1,157 @@
+name: DatePicker
+category: molecule
+version: 0.1.0
+description: Date selection input with a calendar popup for picking single dates or date ranges
+
+composed_of:
+  - TextInput
+  - IconButton
+  - Typography
+
+props:
+  - name: value
+    type: Date
+    required: false
+    default: null
+    description: Currently selected date value
+  - name: min
+    type: Date
+    required: false
+    default: null
+    description: Earliest selectable date
+  - name: max
+    type: Date
+    required: false
+    default: null
+    description: Latest selectable date
+  - name: locale
+    type: string
+    required: false
+    default: null
+    description: Locale string for date formatting and calendar localization
+  - name: format
+    type: string
+    required: false
+    default: null
+    description: Date format string for display in the text input
+  - name: onChange
+    type: "(date: Date) => void"
+    required: true
+    default: null
+    description: Callback invoked when a date is selected
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: Whether the date picker is disabled
+  - name: errorMessage
+    type: string
+    required: false
+    default: null
+    description: Error message displayed below the input
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: closed
+  states:
+    - name: closed
+      description: Calendar popup is hidden, text input displays formatted date or placeholder
+    - name: open
+      description: Calendar popup is visible, user can navigate months and years
+    - name: day-selection
+      description: User is navigating days within the calendar using keyboard or mouse
+  transitions:
+    - from: closed
+      to: open
+      trigger: User clicks input or presses Enter/Space
+      visual_change: Calendar popup appears below or above input
+    - from: open
+      to: day-selection
+      trigger: User begins navigating calendar days
+      visual_change: Focus highlight moves between days in the calendar grid
+    - from: day-selection
+      to: closed
+      trigger: User selects a day or presses Escape
+      visual_change: Calendar popup closes, selected date appears in input
+    - from: open
+      to: closed
+      trigger: User presses Escape or clicks outside
+      visual_change: Calendar popup closes without changing selection
+
+variants:
+  - name: default
+    description: Single date selection
+  - name: range
+    description: Two-date range selection with start and end dates
+  - name: error
+    description: Error state with error-colored border
+  - name: disabled
+    description: Non-interactive state with reduced opacity
+
+accessibility:
+  role: group
+  aria_attributes:
+    - attribute: aria-label
+      source: Describes the date picker purpose
+      required: true
+    - attribute: aria-expanded
+      source: Set to true when calendar popup is open
+      required: true
+    - attribute: aria-haspopup
+      source: Set to "dialog"
+      required: true
+  keyboard:
+    - key: Enter
+      action: Opens calendar when input is focused, selects highlighted day when calendar is open
+    - key: Space
+      action: Opens calendar when input is focused
+    - key: Escape
+      action: Closes calendar popup without selection
+    - key: ArrowUp
+      action: Moves to same day in previous week
+    - key: ArrowDown
+      action: Moves to same day in next week
+    - key: ArrowLeft
+      action: Moves to previous day
+    - key: ArrowRight
+      action: Moves to next day
+    - key: Home
+      action: Moves to first day of the current week
+    - key: End
+      action: Moves to last day of the current week
+    - key: PageUp
+      action: Moves to same day in previous month
+    - key: PageDown
+      action: Moves to same day in next month
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: aria-label on the group element
+    announcements:
+      - Selected date announced when changed
+      - Current month and year announced when navigating
+
+responsive:
+  - breakpoint: mobile
+    behavior: Calendar renders as full-screen overlay or bottom sheet
+  - breakpoint: tablet
+    behavior: Calendar renders as full-screen overlay or bottom sheet
+  - breakpoint: desktop
+    behavior: Calendar renders as floating dropdown below input
+  - breakpoint: wide
+    behavior: Calendar renders as floating dropdown below input
+
+tokens:
+  consumes:
+    - date-picker.calendar.bg
+    - date-picker.calendar.shadow
+    - date-picker.day.default.bg
+    - date-picker.day.selected.bg
+    - date-picker.day.today.border
+  inherits_from: null

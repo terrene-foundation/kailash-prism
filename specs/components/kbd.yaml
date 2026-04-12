@@ -1,0 +1,71 @@
+# Kailash Prism — Component Contract
+# Auto-generated from docs/specs/03-component-contracts.md section 3.2.23
+version: 0.1.0
+
+name: Kbd
+category: atom
+description: "Keyboard shortcut display element."
+
+props:
+  - name: children
+    type: ReactNode
+    required: true
+    default: null
+    description: "Key label (e.g., 'Cmd', 'K', 'Enter')"
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: "Displays key"
+  transitions: []
+
+variants:
+  - name: default
+    description: "surface.page bg, border.default border, code typography, radius.sm, slight inset shadow"
+
+accessibility:
+  role: "none"
+  aria_attributes: []
+  keyboard: []
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: "Children text"
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Same across breakpoints"
+  - breakpoint: desktop
+    behavior: "Same across breakpoints"
+
+tokens:
+  consumes:
+    - "kbd.default.bg"
+    - "kbd.default.text"
+    - "kbd.default.border"
+    - "kbd.default.radius"
+    - "kbd.default.padding_x"
+    - "kbd.default.padding_y"
+    - "kbd.default.font_size"
+    - "kbd.default.shadow"
+  inherits_from: null
+
+platform_notes:
+  web: >
+    Render as a <kbd> HTML element for correct semantics. Apply a subtle
+    inset box-shadow to create the "keycap" raised appearance. Use the
+    code/monospace font family from typography tokens. For compound
+    shortcuts (e.g., Cmd+K), compose multiple Kbd atoms separated by a
+    "+" character or a small gap. Ensure font-size scales with the
+    surrounding text context when used inline.
+  flutter: >
+    Render as a Container with BoxDecoration (border, borderRadius,
+    boxShadow with a slight inset effect via negative spread). Use a
+    monospace fontFamily from the theme's code text style. Wrap the
+    Text child in Padding matching the padding_x and padding_y tokens.
+    For compound shortcuts, build a Row of KKbd widgets separated by
+    a Text("+") or SizedBox gap.

@@ -1,0 +1,183 @@
+# Kailash Prism — Kanban Page Template
+# Column-based board for managing items through stages with drag-and-drop.
+# See docs/specs/06-page-templates.md section 6.2.10 for the full specification.
+
+version: "0.1.0"
+
+template:
+  name: Kanban
+  description: >
+    Column-based board for managing items through stages
+    with drag-and-drop.
+  use_cases:
+    - Project boards
+    - Sales pipelines
+    - Recruitment stages
+    - Content workflows
+    - Task management
+
+  navigation:
+    renders_inside: navigation-engine
+    breadcrumb: "Home > {board_name}"
+
+  layout:
+    root: Stack
+    direction: vertical
+
+  zones:
+    board-header:
+      description: >
+        Title + filters + column management + view toggle (board/list).
+      content_type: actions
+      layout:
+        primitive: Row
+        props:
+          justify: between
+          align: center
+      default_organism: Toolbar
+      default_props:
+        title: "{board_name}"
+        actions: []
+        view_toggle:
+          options:
+            - board
+            - list
+          default: board
+      responsive:
+        wide:
+          visible: true
+        desktop:
+          visible: true
+        tablet:
+          visible: true
+        mobile:
+          visible: true
+
+    board-columns:
+      description: >
+        Horizontally scrollable row of columns, each containing
+        a scrollable list of cards.
+      content_type: data
+      layout:
+        primitive: Scroll
+        props:
+          direction: horizontal
+        children:
+          primitive: Row
+          props:
+            gap: 16
+            align: start
+      default_organism: KanbanBoard
+      default_props:
+        data: "api:/boards/{id}/columns"
+        on_card_move: "api:PATCH /cards/{cardId}"
+        on_card_click: "openSlideOver:CardDetail"
+        card_renderer: TaskCard
+        column_props:
+          add_enabled: true
+          on_add: "openModal:CreateTask"
+      column_schema:
+        id:
+          type: string
+          required: true
+        title:
+          type: string
+          required: true
+        color:
+          type: string
+          description: Accent color for column header (token reference).
+        max_items:
+          type: number
+          description: WIP limit. Shows warning when exceeded.
+        items:
+          type: array
+          item_type: KanbanCard
+          required: true
+        add_enabled:
+          type: boolean
+          default: true
+          description: Show "Add item" button at bottom.
+      card_schema:
+        id:
+          type: string
+          required: true
+        title:
+          type: string
+          required: true
+        description:
+          type: string
+        labels:
+          type: array
+          item_schema:
+            text:
+              type: string
+            color:
+              type: string
+        assignee:
+          type: object
+          properties:
+            name:
+              type: string
+            avatar:
+              type: string
+        due_date:
+          type: string
+        priority:
+          type: enum
+          values:
+            - low
+            - medium
+            - high
+            - critical
+        attachment_count:
+          type: number
+        comment_count:
+          type: number
+      responsive:
+        wide:
+          column_width: 280px
+          scroll: horizontal
+          description: >
+            All columns visible (horizontal scroll if more than 5 columns).
+        desktop:
+          column_width: 260px
+          scroll: horizontal
+          description: >
+            All columns visible. Horizontal scroll if needed.
+        tablet:
+          column_width: 280px
+          scroll: horizontal-snap
+          description: >
+            Columns horizontally scrollable. Snap scroll to column edges.
+        mobile:
+          mode: single-column-swipe
+          view_toggle: true
+          description: >
+            Single column view: Horizontal swipe between columns with column
+            title + count as header. Or toggle to list view (all items sorted
+            by column with column headers as dividers).
+
+  responsive_transformations:
+    wide:
+      min_width: 1440
+      description: >
+        All columns visible (horizontal scroll if more than 5 columns).
+        Column width: 280px.
+    desktop:
+      min_width: 1024
+      max_width: 1439
+      description: >
+        All columns visible. Column width: 260px. Horizontal scroll if needed.
+    tablet:
+      min_width: 768
+      max_width: 1023
+      description: >
+        Columns horizontally scrollable. Column width: 280px.
+        Snap scroll to column edges.
+    mobile:
+      min_width: 0
+      max_width: 767
+      description: >
+        Single column view: Horizontal swipe between columns with column
+        title + count as header. Or toggle to list view (all items sorted
+        by column with column headers as dividers).

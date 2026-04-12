@@ -1,0 +1,97 @@
+name: MetricCard
+category: molecule
+version: 0.1.0
+description: Dashboard card displaying a labeled metric value with optional trend indicator and sparkline
+
+composed_of:
+  - Typography
+  - Icon
+
+props:
+  - name: label
+    type: string
+    required: true
+    default: null
+    description: Caption-style label describing the metric
+  - name: value
+    type: "string | number"
+    required: true
+    default: null
+    description: Primary metric value displayed prominently
+  - name: trend
+    type: '{ direction: "up" | "down" | "flat"; value: string }'
+    required: false
+    default: null
+    description: Trend indicator with direction arrow and percentage or delta value
+  - name: sparkline
+    type: "number[]"
+    required: false
+    default: null
+    description: Array of numeric values rendered as a small inline sparkline chart
+  - name: loading
+    type: boolean
+    required: false
+    default: false
+    description: Whether the card shows a skeleton loading state
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: loading
+  states:
+    - name: loading
+      description: Skeleton placeholder visible while data is being fetched
+    - name: loaded
+      description: Full metric display with value, trend, and sparkline
+  transitions:
+    - from: loading
+      to: loaded
+      trigger: Data becomes available (loading prop changes to false)
+      visual_change: Skeleton replaced with actual metric value, trend, and sparkline
+
+variants:
+  - name: default
+    description: Standard metric card with full content
+  - name: compact
+    description: Smaller metric card without sparkline
+
+accessibility:
+  role: group
+  aria_attributes:
+    - attribute: aria-label
+      source: Combines label, value, and trend into a single accessible description
+      required: true
+  keyboard:
+    - key: Tab
+      action: Card is not independently focusable unless interactive
+  focus:
+    tabindex: "-1"
+    focus_visible: false
+    trap: false
+  screen_reader:
+    label_source: aria-label combining label, value, and trend direction
+    announcements: []
+
+responsive:
+  - breakpoint: mobile
+    behavior: Same layout, sized by parent grid cell
+  - breakpoint: tablet
+    behavior: Same layout, sized by parent grid cell
+  - breakpoint: desktop
+    behavior: Same layout, sized by parent grid cell
+  - breakpoint: wide
+    behavior: Same layout, sized by parent grid cell
+
+tokens:
+  consumes:
+    - metric-card.default.bg
+    - metric-card.default.border
+    - metric-card.default.radius
+    - metric-card.default.padding
+    - metric-card.value.font_size
+    - metric-card.trend.up_color
+    - metric-card.trend.down_color
+  inherits_from: null

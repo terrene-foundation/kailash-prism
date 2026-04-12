@@ -1,0 +1,106 @@
+name: Pagination
+category: molecule
+version: 0.1.0
+description: Page navigation controls with page numbers, previous/next buttons, and optional page size selector
+
+composed_of:
+  - Button
+  - IconButton
+  - Select
+
+props:
+  - name: totalItems
+    type: number
+    required: true
+    default: null
+    description: Total number of items across all pages
+  - name: pageSize
+    type: number
+    required: true
+    default: null
+    description: Number of items displayed per page
+  - name: currentPage
+    type: number
+    required: true
+    default: null
+    description: Currently active page number (1-indexed)
+  - name: onPageChange
+    type: "(page: number) => void"
+    required: true
+    default: null
+    description: Callback invoked when the user navigates to a different page
+  - name: pageSizeOptions
+    type: "number[]"
+    required: false
+    default: null
+    description: Available page size options for the page size selector
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Page navigation is interactive and ready for user input
+    - name: loading
+      description: Page transition in progress, controls may show loading state
+  transitions:
+    - from: default
+      to: loading
+      trigger: User clicks a page number or navigation button
+      visual_change: Current page button may show loading indicator
+    - from: loading
+      to: default
+      trigger: New page data has loaded
+      visual_change: New page number is highlighted as current
+
+variants:
+  - name: default
+    description: Full page numbers with previous and next buttons
+  - name: compact
+    description: Previous and next buttons with current page indicator only
+
+accessibility:
+  role: navigation
+  aria_attributes:
+    - attribute: aria-label
+      source: Set to "Pagination"
+      required: true
+    - attribute: aria-current
+      source: Set to "page" on the current page button
+      required: true
+  keyboard:
+    - key: Tab
+      action: Moves focus between pagination controls
+    - key: Enter
+      action: Activates the focused page button
+    - key: Space
+      action: Activates the focused page button
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: aria-label "Pagination" on the nav element
+    announcements:
+      - Current page announced when changed
+
+responsive:
+  - breakpoint: mobile
+    behavior: Compact variant with previous/next and current page only
+  - breakpoint: tablet
+    behavior: Truncated page numbers with ellipsis for large page counts
+  - breakpoint: desktop
+    behavior: Full page numbers visible
+  - breakpoint: wide
+    behavior: Full page numbers visible
+
+tokens:
+  consumes:
+    - pagination.default.gap
+    - pagination.page.height
+    - pagination.page.min_width
+  inherits_from: null

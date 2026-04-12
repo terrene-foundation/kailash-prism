@@ -1,0 +1,133 @@
+name: Tab
+category: molecule
+version: 0.1.0
+description: Tabbed interface with selectable tab buttons and associated content panels
+
+composed_of:
+  - Button
+  - Icon
+
+props:
+  - name: tabs
+    type: "{ key: string; label: string; icon?: IconName; disabled?: boolean }[]"
+    required: true
+    default: null
+    description: Array of tab definitions with unique keys, display labels, optional icons, and disabled state
+  - name: activeKey
+    type: string
+    required: true
+    default: null
+    description: Key of the currently active tab
+  - name: onChange
+    type: "(key: string) => void"
+    required: true
+    default: null
+    description: Callback invoked when the user selects a different tab
+  - name: lazy
+    type: boolean
+    required: false
+    default: false
+    description: Whether to lazily render tab content only when the tab is first activated
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: Additional CSS class for composition
+
+states:
+  initial: default
+  states:
+    - name: default
+      description: Tab is not selected and not hovered
+    - name: hover
+      description: User is hovering over a tab button
+    - name: active
+      description: Tab is the currently selected tab
+    - name: disabled
+      description: Tab is non-interactive and cannot be selected
+  transitions:
+    - from: default
+      to: hover
+      trigger: Mouse enters a tab button
+      visual_change: Tab button background changes to hover color
+    - from: hover
+      to: default
+      trigger: Mouse leaves the tab button
+      visual_change: Tab button background returns to default
+    - from: default
+      to: active
+      trigger: User clicks or activates a tab
+      visual_change: Active indicator appears below/around the tab, content panel switches
+    - from: active
+      to: default
+      trigger: Another tab is selected
+      visual_change: Active indicator removed, tab returns to default styling
+    - from: "*"
+      to: disabled
+      trigger: Tab's disabled property is true
+      visual_change: Tab appears dimmed and non-interactive
+
+variants:
+  - name: default
+    description: Underline indicator below the active tab
+  - name: pills
+    description: Filled background indicator on the active tab
+  - name: vertical
+    description: Tabs stacked vertically with content beside them
+
+accessibility:
+  role: tablist
+  aria_attributes:
+    - attribute: role
+      source: tablist on container, tab on each tab button, tabpanel on content area
+      required: true
+    - attribute: aria-selected
+      source: Set to true on the active tab
+      required: true
+    - attribute: aria-controls
+      source: ID of the associated tabpanel for each tab
+      required: true
+    - attribute: aria-labelledby
+      source: ID of the tab button for each tabpanel
+      required: true
+  keyboard:
+    - key: ArrowLeft
+      action: Moves focus to the previous tab
+    - key: ArrowRight
+      action: Moves focus to the next tab
+    - key: Enter
+      action: Activates the focused tab
+    - key: Space
+      action: Activates the focused tab
+    - key: Home
+      action: Moves focus to the first tab
+    - key: End
+      action: Moves focus to the last tab
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: Tab label text provides accessible name
+    announcements:
+      - Active tab and panel announced when selection changes
+
+responsive:
+  - breakpoint: mobile
+    behavior: Horizontal scroll with overflow indicator, or switch to accordion layout
+  - breakpoint: tablet
+    behavior: Horizontal scroll if tabs exceed available width
+  - breakpoint: desktop
+    behavior: Full tab bar visible
+  - breakpoint: wide
+    behavior: Full tab bar visible
+
+tokens:
+  consumes:
+    - tab.default.text
+    - tab.active.text
+    - tab.active.indicator_color
+    - tab.active.indicator_height
+    - tab.hover.bg
+    - tab.disabled.text
+  inherits_from: null

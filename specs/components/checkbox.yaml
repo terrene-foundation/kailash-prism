@@ -1,0 +1,127 @@
+# Checkbox Component Contract
+# Spec version: 0.1.0
+# Source: docs/specs/03-component-contracts.md section 3.2.6
+
+name: Checkbox
+category: atom
+description: "Binary or tri-state selection control."
+
+props:
+  - name: checked
+    type: boolean
+    required: false
+    default: false
+    description: "Whether checked"
+  - name: indeterminate
+    type: boolean
+    required: false
+    default: false
+    description: "Partial selection state (parent of mixed children)"
+  - name: disabled
+    type: boolean
+    required: false
+    default: false
+    description: "Non-interactive"
+  - name: label
+    type: string
+    required: true
+    default: null
+    description: "Visible label text"
+  - name: onChange
+    type: "(checked: boolean) => void"
+    required: false
+    default: null
+    description: "Change handler"
+
+states:
+  initial: unchecked
+  states:
+    - name: unchecked
+      description: "Empty box"
+    - name: checked
+      description: "Box with checkmark icon"
+    - name: indeterminate
+      description: "Box with dash/minus icon"
+    - name: disabled
+      description: "Dimmed, non-interactive"
+  transitions:
+    - from: unchecked
+      to: checked
+      trigger: "Click or Space key"
+      visual_change: "Checkmark icon appears with micro animation"
+    - from: checked
+      to: unchecked
+      trigger: "Click or Space key"
+      visual_change: "Checkmark removed"
+    - from: unchecked
+      to: indeterminate
+      trigger: "indeterminate prop set true"
+      visual_change: "Dash icon appears"
+    - from: indeterminate
+      to: checked
+      trigger: "Click or Space key"
+      visual_change: "Dash replaced by checkmark"
+
+variants:
+  - name: unchecked
+    description: "Empty box, border.default border"
+  - name: checked
+    description: "Filled box bg=interactive.primary, white checkmark"
+  - name: indeterminate
+    description: "Filled box bg=interactive.primary, white dash"
+
+accessibility:
+  role: "checkbox"
+  aria_attributes:
+    - attribute: "aria-checked"
+      source: "checked: true/false, indeterminate: 'mixed'"
+      required: true
+    - attribute: "aria-disabled"
+      source: "disabled prop"
+      required: true
+  keyboard:
+    - key: "Space"
+      action: "Toggle checked state"
+  focus:
+    tabindex: "0"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "label prop"
+    announcements:
+      - "State change: announces 'checked' or 'not checked' or 'partially checked'"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Touch target 44px (checkbox + label click area)"
+  - breakpoint: tablet
+    behavior: "Same as mobile"
+  - breakpoint: desktop
+    behavior: "Standard 20px checkbox with label"
+  - breakpoint: wide
+    behavior: "Same as desktop"
+
+tokens:
+  consumes:
+    - "checkbox.unchecked.bg"
+    - "checkbox.unchecked.border"
+    - "checkbox.checked.bg"
+    - "checkbox.checked.icon_color"
+    - "checkbox.indeterminate.bg"
+    - "checkbox.disabled.opacity"
+    - "checkbox.focus.ring_color"
+  inherits_from: null
+
+platform_notes:
+  web:
+    - "Custom checkbox (hidden native input + styled span) for consistent cross-browser styling"
+    - "Label wraps checkbox input for full click area"
+    - "indeterminate state set via ref (not an HTML attribute)"
+    - "Micro animation uses CSS transition on checkmark SVG stroke-dashoffset"
+    - "className prop accepted for composition"
+  flutter:
+    - "Widget name: KCheckbox"
+    - "Uses custom paint or AnimatedContainer for check animation"
+    - "indeterminate state renders a horizontal line instead of checkmark"
+    - "Label rendered as Text widget in a Row with the checkbox"
+    - "GestureDetector wraps the entire row for full touch area"
