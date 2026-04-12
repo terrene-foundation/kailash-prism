@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/prism_colors.dart';
@@ -54,13 +56,16 @@ class KToolCallData {
   final String name;
   final Map<String, Object?> parameters;
   final KToolCallStatus status;
-  final int? durationMs;
+
+  /// Tool call duration in milliseconds. Matches web `duration` field on
+  /// `ToolCallData` in `web/src/engines/ai-chat/types.ts`.
+  final int? duration;
 
   const KToolCallData({
     required this.name,
     required this.parameters,
     required this.status,
-    this.durationMs,
+    this.duration,
   });
 }
 
@@ -136,14 +141,17 @@ class KToolCallStep {
   final String id;
   final String name;
   final KToolCallStatus status;
-  final int? durationMs;
+
+  /// Step duration in milliseconds. Matches web `duration` field on
+  /// `ToolCallStep` in `web/src/engines/ai-chat/types.ts`.
+  final int? duration;
   final String? summary;
 
   const KToolCallStep({
     required this.id,
     required this.name,
     required this.status,
-    this.durationMs,
+    this.duration,
     this.summary,
   });
 }
@@ -174,16 +182,20 @@ class KChatInputConfig {
   final String placeholder;
   final int? maxLength;
   final bool disabled;
-  final bool allowAttachments;
 
   const KChatInputConfig({
     this.placeholder = 'Type a message...',
     this.maxLength,
     this.disabled = false,
-    this.allowAttachments = false,
   });
 }
 
+/// Event fired when the user sends a chat message.
+///
+/// The `attachments` field is reserved for future file-attachment support.
+/// Phase 1 does not ship a file picker — attachment UX requires a platform
+/// channel (e.g. `file_picker` package) that will be added in Phase 2. See
+/// journal 0019-GAP-flutter-chat-attachments-deferred.md.
 class KChatSendEvent {
   final String content;
   final List<String>? attachments;
@@ -244,10 +256,14 @@ class _KChatEngineState extends State<KChatEngine> {
   @override
   void didUpdateWidget(KChatEngine oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Auto-scroll to bottom on new messages or stream buffer change
+    // Auto-scroll to bottom on new messages or stream buffer change.
     if (oldWidget.messages.length != widget.messages.length ||
         oldWidget.streamBuffer != widget.streamBuffer) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Guard against the widget being torn down between this frame and
+        // the next — without it, a mid-stream unmount throws
+        // `ScrollController used after dispose`.
+        if (!mounted) return;
         if (_scrollController.hasClients) {
           _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
         }
@@ -285,20 +301,29 @@ class _KChatEngineState extends State<KChatEngine> {
 
     return Semantics(
       label: widget.ariaLabel ?? 'Chat conversation',
-      liveRegion: true,
       container: true,
       child: Container(
         color: PrismColors.surfacePage,
         child: Column(
           children: [
-            // Message list (or empty state)
+            // Message list (or empty state).
+            //
+            // `liveRegion: true` is scoped to the message list only so the
+            // chat's input (TextField) does not re-announce on every
+            // keystroke. Web does the same via `aria-live="polite"` on
+            // the log element, not the container.
             Expanded(
-              child: isEmpty
-                  ? _EmptyState(
-                      suggestions: widget.features.suggestions ? widget.suggestions : const [],
-                      onSelect: _handleSuggestionTap,
-                    )
-                  : _buildMessageList(),
+              child: Semantics(
+                liveRegion: true,
+                container: true,
+                child: isEmpty
+                    ? _EmptyState(
+                        suggestions:
+                            widget.features.suggestions ? widget.suggestions : const [],
+                        onSelect: _handleSuggestionTap,
+                      )
+                    : _buildMessageList(),
+              ),
             ),
 
             // Inline suggestions between messages and input
@@ -318,13 +343,8 @@ class _KChatEngineState extends State<KChatEngine> {
             _KChatInput(
               controller: _inputController,
               onSend: _handleSend,
-              onAttach: widget.input.allowAttachments && widget.onSend != null
-                  ? (files) =>
-                      widget.onSend!(KChatSendEvent(content: '', attachments: files))
-                  : null,
               placeholder: widget.input.placeholder,
               disabled: widget.input.disabled || widget.isStreaming,
-              allowAttachments: widget.input.allowAttachments,
               maxLength: widget.input.maxLength,
             ),
           ],
@@ -665,7 +685,7 @@ class _StreamingTextState extends State<_StreamingText> with SingleTickerProvide
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1060),
-    )..repeat(reverse: true);
+    );
   }
 
   @override
@@ -676,7 +696,32 @@ class _StreamingTextState extends State<_StreamingText> with SingleTickerProvide
 
   @override
   Widget build(BuildContext context) {
-    // Use a Row with a plain Text + animated cursor so `find.text(...)` works.
+    // Honor OS-level reduced-motion / disable-animations preferences
+    // (WCAG 2.3.3 / 2.2.2). If the OS disables animations we show a
+    // static cursor instead of blinking.
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
+    if (disableAnimations) {
+      if (_controller.isAnimating) _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+
+    // The cursor is decorative — `ExcludeSemantics` keeps screen readers
+    // from re-announcing it on every frame while the message list is in
+    // its live region.
+    final cursor = ExcludeSemantics(
+      child: FadeTransition(
+        opacity: _controller,
+        child: Container(
+          width: 2,
+          height: 14,
+          margin: const EdgeInsets.only(left: 2, bottom: 2),
+          color: widget.color,
+        ),
+      ),
+    );
+
+    // Row with a plain Text + animated cursor so `find.text(...)` works.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
@@ -687,15 +732,7 @@ class _StreamingTextState extends State<_StreamingText> with SingleTickerProvide
             style: TextStyle(color: widget.color, fontSize: 14, height: 1.5),
           ),
         ),
-        FadeTransition(
-          opacity: _controller,
-          child: Container(
-            width: 2,
-            height: 14,
-            margin: const EdgeInsets.only(left: 2, bottom: 2),
-            color: widget.color,
-          ),
-        ),
+        cursor,
       ],
     );
   }
@@ -943,9 +980,9 @@ class _ToolCallCardState extends State<_ToolCallCard> {
                   ),
                 ),
                 const Spacer(),
-                if (tool.durationMs != null)
+                if (tool.duration != null)
                   Text(
-                    _formatDuration(tool.durationMs),
+                    _formatDuration(tool.duration),
                     style: const TextStyle(fontSize: 11, color: PrismColors.textSecondary),
                   ),
               ],
@@ -960,8 +997,12 @@ class _ToolCallCardState extends State<_ToolCallCard> {
                   color: PrismColors.gray50,
                   borderRadius: BorderRadius.circular(4),
                 ),
+                // Encode nested objects via JSON with 2-space indent to match
+                // web `JSON.stringify(tool.parameters, null, 2)` behavior.
+                // `e.value.toString()` collapses Maps/Lists to unreadable
+                // `{k: Instance of 'Foo'}` output for structured args.
                 child: Text(
-                  tool.parameters.entries.map((e) => '${e.key}: ${e.value}').join('\n'),
+                  _prettyJson(tool.parameters),
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
@@ -969,6 +1010,18 @@ class _ToolCallCardState extends State<_ToolCallCard> {
         ],
       ),
     );
+  }
+}
+
+/// Encode a Dart value as a pretty-printed JSON string. Falls back to
+/// `toString()` for objects not directly encodable by `jsonEncode` (e.g.
+/// a `DateTime` or a custom class), matching web's behavior where
+/// `JSON.stringify` emits a string for any non-object.
+String _prettyJson(Object? value) {
+  try {
+    return const JsonEncoder.withIndent('  ').convert(value);
+  } catch (_) {
+    return value?.toString() ?? '';
   }
 }
 
@@ -1029,8 +1082,12 @@ class _ToolResultCardState extends State<_ToolResultCard> {
                   color: PrismColors.gray50,
                   borderRadius: BorderRadius.circular(4),
                 ),
+                // Match web `chat-message.tsx:293`: strings render as-is,
+                // everything else is JSON-encoded with 2-space indent.
                 child: Text(
-                  result.data?.toString() ?? '',
+                  result.data is String
+                      ? result.data as String
+                      : _prettyJson(result.data),
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
@@ -1131,7 +1188,7 @@ class KStreamOfThought extends StatelessWidget {
                       child: Text(
                         step.status == KToolCallStatus.running
                             ? '...'
-                            : _formatDuration(step.durationMs),
+                            : _formatDuration(step.duration),
                         style: const TextStyle(fontSize: 11, color: PrismColors.textSecondary),
                         textAlign: TextAlign.right,
                       ),
@@ -1165,14 +1222,36 @@ class _KActionPlanState extends State<KActionPlan> {
   final _editController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    // Drive the Save button's enabled state off the live text. Without the
+    // listener the disabled check evaluated at build() becomes stale the
+    // moment the user types — Save stayed disabled even after input.
+    _editController.addListener(_onEditChanged);
+  }
+
+  @override
   void dispose() {
+    _editController.removeListener(_onEditChanged);
     _editController.dispose();
     super.dispose();
+  }
+
+  void _onEditChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _startModify(int stepIndex) {
     setState(() {
       _editingStep = stepIndex;
+      _editController.clear();
+    });
+  }
+
+  void _cancelModify() {
+    setState(() {
+      _editingStep = null;
       _editController.clear();
     });
   }
@@ -1327,29 +1406,36 @@ class _KActionPlanState extends State<KActionPlan> {
   }
 
   Widget _buildEditor(int stepIndex) {
+    final canSave = _editController.text.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: _editController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Describe the modification...',
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                border: OutlineInputBorder(),
+            // `CallbackShortcuts` lets us dismiss the editor with Escape
+            // (matches web `action-plan.tsx:144`). Enter still submits via
+            // the TextField's `onSubmitted`.
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.escape): _cancelModify,
+              },
+              child: TextField(
+                controller: _editController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Describe the modification...',
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  border: OutlineInputBorder(),
+                ),
+                style: const TextStyle(fontSize: 13),
+                onSubmitted: (_) => _submitModification(stepIndex),
               ),
-              style: const TextStyle(fontSize: 13),
-              onSubmitted: (_) => _submitModification(stepIndex),
             ),
           ),
           const SizedBox(width: 8),
           ElevatedButton(
-            onPressed: _editController.text.trim().isEmpty
-                ? null
-                : () => _submitModification(stepIndex),
+            onPressed: canSave ? () => _submitModification(stepIndex) : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: PrismColors.interactivePrimary,
               foregroundColor: PrismColors.textOnPrimary,
@@ -1480,25 +1566,25 @@ class _KSuggestionChipsRow extends StatelessWidget {
 }
 
 // ============================================================================
-// KChatInput — auto-growing textarea with send + attachments
+// KChatInput — auto-growing textarea with send. Cmd/Ctrl+Enter sends.
+//
+// Attachments are not wired in Phase 1 — a real file picker requires a
+// platform-channel package (e.g. `file_picker`). Removed to avoid a stub.
+// See journal 0019-GAP-flutter-chat-attachments-deferred.md.
 // ============================================================================
 
 class _KChatInput extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
-  final void Function(List<String>)? onAttach;
   final String placeholder;
   final bool disabled;
-  final bool allowAttachments;
   final int? maxLength;
 
   const _KChatInput({
     required this.controller,
     required this.onSend,
-    required this.onAttach,
     required this.placeholder,
     required this.disabled,
-    required this.allowAttachments,
     required this.maxLength,
   });
 
@@ -1507,8 +1593,6 @@ class _KChatInput extends StatefulWidget {
 }
 
 class _KChatInputState extends State<_KChatInput> {
-  final _focusNode = FocusNode();
-
   @override
   void initState() {
     super.initState();
@@ -1518,22 +1602,18 @@ class _KChatInputState extends State<_KChatInput> {
   @override
   void dispose() {
     widget.controller.removeListener(_onChanged);
-    _focusNode.dispose();
     super.dispose();
   }
 
-  void _onChanged() => setState(() {});
+  void _onChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
 
   bool get _canSend => widget.controller.text.trim().isNotEmpty && !widget.disabled;
 
-  void _handleKeyEvent(KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.enter &&
-        (HardwareKeyboard.instance.isMetaPressed ||
-            HardwareKeyboard.instance.isControlPressed) &&
-        _canSend) {
-      widget.onSend();
-    }
+  void _handleShortcutSend() {
+    if (_canSend) widget.onSend();
   }
 
   @override
@@ -1547,26 +1627,18 @@ class _KChatInputState extends State<_KChatInput> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (widget.allowAttachments) ...[
-            Semantics(
-              label: 'Attach files',
-              button: true,
-              child: IconButton(
-                icon: const Icon(Icons.attach_file, size: 20),
-                color: PrismColors.textSecondary,
-                onPressed: widget.disabled || widget.onAttach == null
-                    ? null
-                    : () => widget.onAttach!(const []),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
           Expanded(
-            child: KeyboardListener(
-              focusNode: _focusNode,
-              onKeyEvent: _handleKeyEvent,
+            // `CallbackShortcuts` registers the shortcut on the TextField's
+            // own focus scope, so Cmd/Ctrl+Enter fires while the user is
+            // typing. A plain `KeyboardListener` with a separate FocusNode
+            // never fires because the TextField owns focus.
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.enter, meta: true):
+                    _handleShortcutSend,
+                const SingleActivator(LogicalKeyboardKey.enter, control: true):
+                    _handleShortcutSend,
+              },
               child: TextField(
                 controller: widget.controller,
                 enabled: !widget.disabled,

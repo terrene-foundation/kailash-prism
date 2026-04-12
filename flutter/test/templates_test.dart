@@ -4,6 +4,7 @@ import 'package:kailash_prism/kailash_prism.dart';
 
 void main() {
   const desktopSize = Size(1280, 800);
+  const tabletSize = Size(900, 800); // 768 ≤ width < 1024
   const mobileSize = Size(400, 800);
 
   // Default desktop surface — 1280×800 is above desktop breakpoint (1024).
@@ -264,6 +265,84 @@ void main() {
       expect(find.text('Month'), findsOneWidget);
       expect(find.text('Calendar grid'), findsOneWidget);
       expect(find.text('Selected event'), findsOneWidget);
+    });
+  });
+
+  // Tablet breakpoint (768 ≤ width < 1024) — stack-and-split decisions
+  // change here for every template that has a sidebar. Smoke-test the
+  // templates where the decision is observably different from desktop.
+  group('Tablet breakpoint', () {
+    testWidgets('KConversationTemplate hides detail panel on tablet', (tester) async {
+      await pumpAt(
+        tester,
+        const KConversationTemplate(
+          conversationList: Text('Chat list'),
+          content: Text('Chat content'),
+          detailPanel: Text('Citation panel'),
+        ),
+        size: tabletSize,
+      );
+      // List stays visible on tablet; detail panel hides.
+      expect(find.text('Chat list'), findsOneWidget);
+      expect(find.text('Chat content'), findsOneWidget);
+      expect(find.text('Citation panel'), findsNothing);
+    });
+
+    testWidgets('KDashboardTemplate stacks primary/secondary on tablet', (tester) async {
+      await pumpAt(
+        tester,
+        const KDashboardTemplate(
+          title: 'Overview',
+          primaryChart: Text('Chart'),
+          secondaryContent: Text('Activity'),
+        ),
+        size: tabletSize,
+      );
+      // Both render but layout collapses to stack — both visible.
+      expect(find.text('Chart'), findsOneWidget);
+      expect(find.text('Activity'), findsOneWidget);
+    });
+
+    testWidgets('KDetailTemplate stacks content+sidebar on tablet', (tester) async {
+      await pumpAt(
+        tester,
+        const KDetailTemplate(
+          title: 'Contact',
+          content: Text('Tabs'),
+          sidebar: Text('Metadata'),
+        ),
+        size: tabletSize,
+      );
+      expect(find.text('Tabs'), findsOneWidget);
+      expect(find.text('Metadata'), findsOneWidget);
+    });
+
+    testWidgets('KCalendarTemplate stacks event detail on tablet', (tester) async {
+      await pumpAt(
+        tester,
+        const KCalendarTemplate(
+          title: 'Schedule',
+          content: Text('Calendar grid'),
+          eventDetail: Text('Event detail'),
+        ),
+        size: tabletSize,
+      );
+      expect(find.text('Calendar grid'), findsOneWidget);
+      expect(find.text('Event detail'), findsOneWidget);
+    });
+
+    testWidgets('KFormTemplate stacks sidebar on tablet', (tester) async {
+      await pumpAt(
+        tester,
+        const KFormTemplate(
+          title: 'New item',
+          content: Text('Form'),
+          sidebar: Text('Help'),
+        ),
+        size: tabletSize,
+      );
+      expect(find.text('Form'), findsOneWidget);
+      expect(find.text('Help'), findsOneWidget);
     });
   });
 }

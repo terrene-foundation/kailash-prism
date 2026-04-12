@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kailash_prism/kailash_prism.dart';
 
@@ -242,7 +243,7 @@ void main() {
             name: 'search',
             status: KToolCallStatus.done,
             summary: 'Searching knowledge base',
-            durationMs: 1200,
+            duration: 1200,
           ),
           KToolCallStep(
             id: 's2',
@@ -319,6 +320,198 @@ void main() {
 
       expect(find.text('All steps reviewed'), findsOneWidget);
       expect(find.text('Action Plan (1/1 reviewed)'), findsOneWidget);
+    });
+
+    testWidgets('tapping reject fires onResponse with reject action', (tester) async {
+      KActionPlanResponse? response;
+      await tester.pumpWidget(wrap(
+        KActionPlan(
+          steps: const [
+            KActionPlanStep(index: 0, description: 'Step one'),
+          ],
+          onResponse: (r) => response = r,
+        ),
+      ));
+
+      await tester.tap(find.text('Reject'));
+      await tester.pump();
+
+      expect(response, isNotNull);
+      expect(response!.action, KActionPlanAction.reject);
+      expect(response!.stepIndex, 0);
+    });
+
+    testWidgets('modify flow: Save button enables once user types', (tester) async {
+      KActionPlanResponse? response;
+      await tester.pumpWidget(wrap(
+        KActionPlan(
+          steps: const [
+            KActionPlanStep(index: 0, description: 'Step one'),
+          ],
+          onResponse: (r) => response = r,
+        ),
+      ));
+
+      // Open the editor
+      await tester.tap(find.text('Modify'));
+      await tester.pump();
+
+      // Save button is disabled before typing
+      final saveBefore = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Save'),
+      );
+      expect(saveBefore.onPressed, isNull);
+
+      // After typing, Save is enabled
+      await tester.enterText(find.byType(TextField), 'Use smaller batch size');
+      await tester.pump();
+      final saveAfter = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Save'),
+      );
+      expect(saveAfter.onPressed, isNotNull);
+
+      // Tap Save fires modify with the text
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+      await tester.pump();
+      expect(response, isNotNull);
+      expect(response!.action, KActionPlanAction.modify);
+      expect(response!.modification, 'Use smaller batch size');
+    });
+  });
+
+  group('KChatEngine — tool-call / tool-result rendering', () {
+    testWidgets('tool-call message renders name and status icon', (tester) async {
+      await tester.pumpWidget(wrap(
+        KChatEngine(
+          messages: [
+            KChatMessage(
+              id: 'tc1',
+              type: KMessageType.toolCall,
+              content: '',
+              timestamp: DateTime(2026, 4, 12),
+              sender: KMessageSender.assistant,
+              toolCall: const KToolCallData(
+                name: 'search_kb',
+                parameters: {'query': 'prism', 'top_k': 5},
+                status: KToolCallStatus.done,
+                duration: 1234,
+              ),
+            ),
+          ],
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.text('search_kb'), findsOneWidget);
+      expect(find.text('1.2s'), findsOneWidget);
+    });
+
+    testWidgets('tool-call expanded view shows JSON-encoded parameters', (tester) async {
+      await tester.pumpWidget(wrap(
+        KChatEngine(
+          messages: [
+            KChatMessage(
+              id: 'tc1',
+              type: KMessageType.toolCall,
+              content: '',
+              timestamp: DateTime(2026, 4, 12),
+              sender: KMessageSender.assistant,
+              toolCall: const KToolCallData(
+                name: 'search_kb',
+                parameters: {
+                  'filters': {'active': true, 'tag': 'prism'},
+                  'top_k': 5,
+                },
+                status: KToolCallStatus.done,
+              ),
+            ),
+          ],
+        ),
+      ));
+      await tester.pump();
+
+      await tester.tap(find.text('search_kb'));
+      await tester.pump();
+
+      // JSON-encoded with 2-space indent — structured args must not collapse
+      // to `Instance of 'IdentityMap'` etc.
+      final jsonText = tester.widgetList<Text>(find.byType(Text)).map((t) => t.data ?? '').join('\n');
+      expect(jsonText.contains('"filters"'), isTrue);
+      expect(jsonText.contains('"active": true'), isTrue);
+      expect(jsonText.contains('"top_k": 5'), isTrue);
+    });
+
+    testWidgets('tool-result message renders summary and success marker', (tester) async {
+      await tester.pumpWidget(wrap(
+        KChatEngine(
+          messages: [
+            KChatMessage(
+              id: 'tr1',
+              type: KMessageType.toolResult,
+              content: '',
+              timestamp: DateTime(2026, 4, 12),
+              sender: KMessageSender.assistant,
+              toolResult: const KToolResultData(
+                summary: 'Found 3 matching documents',
+                data: {'count': 3},
+                success: true,
+              ),
+            ),
+          ],
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.text('Found 3 matching documents'), findsOneWidget);
+    });
+
+    testWidgets('toolCalls: false feature toggle hides tool-call/result', (tester) async {
+      await tester.pumpWidget(wrap(
+        KChatEngine(
+          messages: [
+            KChatMessage(
+              id: 'tc1',
+              type: KMessageType.toolCall,
+              content: '',
+              timestamp: DateTime(2026, 4, 12),
+              sender: KMessageSender.assistant,
+              toolCall: const KToolCallData(
+                name: 'search_kb',
+                parameters: {'q': 'x'},
+                status: KToolCallStatus.done,
+              ),
+            ),
+          ],
+          features: const KChatFeatures(toolCalls: false),
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.text('search_kb'), findsNothing);
+    });
+  });
+
+  group('KChatEngine — keyboard shortcut', () {
+    testWidgets('Ctrl+Enter sends the message', (tester) async {
+      String? sent;
+      await tester.pumpWidget(wrap(
+        KChatEngine(
+          messages: const [],
+          onSend: (e) => sent = e.content,
+        ),
+      ));
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField), 'Hello');
+      await tester.pump();
+
+      // Focus is already on the TextField from enterText.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+
+      expect(sent, 'Hello');
     });
   });
 }

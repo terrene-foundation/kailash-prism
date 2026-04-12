@@ -328,6 +328,12 @@ class KSettingsTemplate extends StatelessWidget {
   final Widget? settingsNav;
   final Widget content;
 
+  /// Minimum width in logical pixels for the settings nav column on desktop.
+  /// At the 1024px desktop lower bound, a raw 1:3 flex split crushes the nav
+  /// to ~240px minus padding, wrapping or truncating link labels. We cap the
+  /// minimum to keep the nav usable.
+  final double navMinWidth;
+
   const KSettingsTemplate({
     super.key,
     required this.title,
@@ -335,6 +341,7 @@ class KSettingsTemplate extends StatelessWidget {
     this.subtitle,
     this.headerActions,
     this.settingsNav,
+    this.navMinWidth = 200,
   });
 
   @override
@@ -349,7 +356,10 @@ class KSettingsTemplate extends StatelessWidget {
             KTemplateHeader(title: title, subtitle: subtitle, actions: headerActions),
             if (settingsNav != null && !isMobile)
               KSplit(
-                primary: settingsNav!,
+                primary: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: navMinWidth),
+                  child: settingsNav!,
+                ),
                 secondary: content,
                 primaryFlex: 1,
                 secondaryFlex: 3,
@@ -625,6 +635,12 @@ class KKanbanTemplate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Board uses its own horizontal scroll controller so the `Scrollbar`
+    // wrapper can attach to it — on desktop Flutter this makes the scroll
+    // affordance visible, and enables keyboard arrow-key scroll traversal
+    // across columns (WCAG 2.1.1).
+    final scrollController = ScrollController();
+
     return KStack.vertical(
       gap: PrismSpacing.lg,
       children: [
@@ -634,11 +650,15 @@ class KKanbanTemplate extends StatelessWidget {
           container: true,
           child: SizedBox(
             height: 400,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(bottom: PrismSpacing.lg),
-              itemCount: columns.length,
-              separatorBuilder: (_, __) => const SizedBox(width: PrismSpacing.lg),
+            child: Scrollbar(
+              controller: scrollController,
+              thumbVisibility: true,
+              child: ListView.separated(
+                controller: scrollController,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(bottom: PrismSpacing.lg),
+                itemCount: columns.length,
+                separatorBuilder: (_, __) => const SizedBox(width: PrismSpacing.lg),
               itemBuilder: (context, i) {
                 final col = columns[i];
                 return Container(
@@ -693,8 +713,9 @@ class KKanbanTemplate extends StatelessWidget {
                       ],
                     ),
                   ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ),
