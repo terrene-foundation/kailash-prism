@@ -4,6 +4,7 @@
  */
 
 export { Form, useFormContext } from './form-root.js';
+export { FormWizard, type WizardStep, type FormWizardConfig } from './form-wizard.js';
 export { FieldRenderer, FormSection } from './form-fields.js';
 export {
   evaluateCondition,

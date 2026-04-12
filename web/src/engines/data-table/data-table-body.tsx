@@ -3,7 +3,7 @@
  * Sub-component of DataTable engine
  */
 
-import { useRef, useCallback, type KeyboardEvent } from 'react';
+import { useRef, useCallback, type KeyboardEvent, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ColumnDef, DataTableRow } from './types.js';
 
@@ -41,6 +41,10 @@ interface DataTableBodyProps<T extends DataTableRow> {
   onRowClick: ((row: T) => void) | undefined;
   onToggleRow: (index: number) => void;
   getRowId: (row: T, index: number) => string;
+  expandable: boolean;
+  expandedIds: Set<string>;
+  onToggleExpand: (index: number) => void;
+  expandContent?: (row: T) => ReactNode;
 }
 
 // --- Component ---
@@ -55,6 +59,10 @@ export function DataTableBody<T extends DataTableRow>({
   onRowClick,
   onToggleRow,
   getRowId,
+  expandable,
+  expandedIds,
+  onToggleExpand,
+  expandContent,
 }: DataTableBodyProps<T>) {
   if (virtualScroll) {
     return (
@@ -71,11 +79,14 @@ export function DataTableBody<T extends DataTableRow>({
     );
   }
 
+  const columnCount = columns.length + (selectionEnabled ? 1 : 0) + (expandable ? 1 : 0);
+
   return (
     <tbody>
       {rows.map((row, index) => {
         const id = getRowId(row, index);
         const isSelected = selectedIds.has(id);
+        const isExpanded = expandable && expandedIds.has(id);
         return (
           <TableRow
             key={id}
@@ -86,6 +97,11 @@ export function DataTableBody<T extends DataTableRow>({
             isSelected={isSelected}
             onRowClick={onRowClick}
             onToggleRow={onToggleRow}
+            expandable={expandable}
+            isExpanded={isExpanded}
+            onToggleExpand={onToggleExpand}
+            expandContent={expandContent}
+            columnCount={columnCount}
           />
         );
       })}
@@ -184,6 +200,11 @@ interface TableRowProps<T extends DataTableRow> {
   isSelected: boolean;
   onRowClick: ((row: T) => void) | undefined;
   onToggleRow: (index: number) => void;
+  expandable: boolean;
+  isExpanded: boolean;
+  onToggleExpand: (index: number) => void;
+  expandContent?: (row: T) => ReactNode;
+  columnCount: number;
 }
 
 function TableRow<T extends DataTableRow>({
@@ -194,6 +215,11 @@ function TableRow<T extends DataTableRow>({
   isSelected,
   onRowClick,
   onToggleRow,
+  expandable,
+  isExpanded,
+  onToggleExpand,
+  expandContent,
+  columnCount,
 }: TableRowProps<T>) {
   const handleClick = useCallback(() => {
     onRowClick?.(row);
@@ -213,41 +239,86 @@ function TableRow<T extends DataTableRow>({
     onToggleRow(index);
   }, [index, onToggleRow]);
 
+  const handleExpandClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onToggleExpand(index);
+    },
+    [index, onToggleExpand],
+  );
+
   return (
-    <tr
-      role="row"
-      style={isSelected ? selectedRowStyle : rowStyle}
-      onClick={onRowClick ? handleClick : undefined}
-      onKeyDown={onRowClick ? handleKeyDown : undefined}
-      tabIndex={onRowClick ? 0 : undefined}
-      aria-selected={selectionEnabled ? isSelected : undefined}
-      data-testid={`data-table-row-${String(index)}`}
-    >
-      {selectionEnabled && (
-        <td style={{ ...cellStyle, width: '48px', textAlign: 'center' }}>
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={handleCheckboxChange}
-            onClick={(e) => { e.stopPropagation(); }}
-            aria-label={`Select row ${String(index + 1)}`}
-          />
-        </td>
-      )}
-      {columns.map((col) => {
-        const value = row[col.field];
-        return (
-          <td
-            key={col.field}
-            style={{ ...cellStyle, textAlign: col.align ?? 'left' }}
-            role="gridcell"
-          >
-            {col.render
-              ? col.render(value, row)
-              : String(value ?? '')}
+    <>
+      <tr
+        role="row"
+        style={isSelected ? selectedRowStyle : rowStyle}
+        onClick={onRowClick ? handleClick : undefined}
+        onKeyDown={onRowClick ? handleKeyDown : undefined}
+        tabIndex={onRowClick ? 0 : undefined}
+        aria-selected={selectionEnabled ? isSelected : undefined}
+        aria-expanded={expandable ? isExpanded : undefined}
+        data-testid={`data-table-row-${String(index)}`}
+      >
+        {expandable && (
+          <td style={{ ...cellStyle, width: '36px', textAlign: 'center', cursor: 'pointer', padding: '8px' }}>
+            <button
+              onClick={handleExpandClick}
+              aria-label={isExpanded ? `Collapse row ${String(index + 1)}` : `Expand row ${String(index + 1)}`}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 12,
+                color: 'var(--prism-color-text-secondary, #64748B)',
+                padding: 4,
+                transition: 'transform 150ms',
+                transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+              }}
+            >
+              ▶
+            </button>
           </td>
-        );
-      })}
-    </tr>
+        )}
+        {selectionEnabled && (
+          <td style={{ ...cellStyle, width: '48px', textAlign: 'center' }}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={handleCheckboxChange}
+              onClick={(e) => { e.stopPropagation(); }}
+              aria-label={`Select row ${String(index + 1)}`}
+            />
+          </td>
+        )}
+        {columns.map((col) => {
+          const value = row[col.field];
+          return (
+            <td
+              key={col.field}
+              style={{ ...cellStyle, textAlign: col.align ?? 'left' }}
+              role="gridcell"
+            >
+              {col.render
+                ? col.render(value, row)
+                : String(value ?? '')}
+            </td>
+          );
+        })}
+      </tr>
+      {isExpanded && expandContent && (
+        <tr data-testid={`data-table-expanded-${String(index)}`}>
+          <td
+            colSpan={columnCount}
+            style={{
+              padding: 16,
+              backgroundColor: 'var(--prism-color-surface-elevated, #F8FAFC)',
+              borderBottom: '1px solid var(--prism-color-border-default, #E2E8F0)',
+            }}
+          >
+            {expandContent(row)}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

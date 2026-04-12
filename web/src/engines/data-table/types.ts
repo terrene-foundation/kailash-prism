@@ -170,6 +170,10 @@ export interface DataTableConfig<T extends DataTableRow> {
   'aria-label'?: string;
   /** Row height in px for virtual scrolling. Default: 48 */
   rowHeight?: number;
+  /** Enable expandable rows. Default: false */
+  expandable?: boolean;
+  /** Render function for expanded row content */
+  expandContent?: (row: T) => ReactNode;
 }
 
 // --- Internal resolved state ---

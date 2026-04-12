@@ -55,6 +55,10 @@ export interface UseDataTableResult<T extends DataTableRow> {
   clearSelection: () => void;
   /** Get stable ID for a row */
   getRowId: (row: T, index: number) => string;
+  /** Set of expanded row IDs */
+  expandedIds: Set<string>;
+  /** Toggle expand/collapse of a row */
+  handleToggleExpand: (index: number) => void;
 }
 
 export function useDataTable<T extends DataTableRow>(
@@ -96,6 +100,9 @@ export function useDataTable<T extends DataTableRow>(
 
   // --- Selection state ---
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // --- Expand state ---
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   // --- Row ID resolution ---
   const getRowId = useCallback((row: T, index: number): string => {
@@ -315,6 +322,24 @@ export function useDataTable<T extends DataTableRow>(
     onSelectionChange?.([]);
   }, [onSelectionChange]);
 
+  const handleToggleExpand = useCallback(
+    (index: number) => {
+      const row = displayRows[index];
+      if (!row) return;
+      const id = getRowId(row, index);
+      setExpandedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+    },
+    [displayRows, getRowId],
+  );
+
   return {
     displayRows,
     totalCount,
@@ -337,5 +362,7 @@ export function useDataTable<T extends DataTableRow>(
     handleSelectAll,
     clearSelection,
     getRowId,
+    expandedIds,
+    handleToggleExpand,
   };
 }

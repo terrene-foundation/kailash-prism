@@ -5,6 +5,24 @@
  * Spec: docs/specs/00-prism-manifest.md
  */
 
+// Atoms
+export {
+  Button,
+  Badge,
+  Avatar,
+  Spinner,
+  type ButtonProps,
+  type ButtonVariant,
+  type ButtonSize,
+  type BadgeProps,
+  type BadgeVariant,
+  type BadgeSize,
+  type AvatarProps,
+  type AvatarSize,
+  type SpinnerProps,
+  type SpinnerSize,
+} from './atoms/index.js';
+
 // Engines
 export {
   ThemeProvider,
@@ -96,6 +114,7 @@ export {
 
 export {
   Form,
+  FormWizard,
   useFormContext,
   evaluateCondition,
   validateFieldRules,
@@ -108,4 +127,6 @@ export {
   type SectionDef,
   type FormStatus,
   type FormConfig,
+  type WizardStep,
+  type FormWizardConfig,
 } from './engines/form/index.js';

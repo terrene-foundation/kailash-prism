@@ -69,6 +69,8 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
     className,
     'aria-label': ariaLabel,
     rowHeight = 48,
+    expandable = false,
+    expandContent,
   } = props;
 
   const state = useDataTable(props);
@@ -91,7 +93,7 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
   const pageSizeOptions = pagination?.pageSizeOptions ?? [10, 25, 50, 100];
 
   // --- Column count for colSpan ---
-  const columnCount = columns.length + (selectionEnabled ? 1 : 0);
+  const columnCount = columns.length + (selectionEnabled ? 1 : 0) + (expandable ? 1 : 0);
 
   // --- Global search handler (debounced concept — immediate for now, consumer can debounce) ---
   const handleGlobalSearchInput = useCallback(
@@ -227,6 +229,10 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
                 onRowClick={props.onRowClick}
                 onToggleRow={state.handleToggleRow}
                 getRowId={state.getRowId}
+                expandable={expandable}
+                expandedIds={state.expandedIds}
+                onToggleExpand={state.handleToggleExpand}
+                expandContent={expandContent}
               />
             )}
           </table>
