@@ -9,6 +9,9 @@ export { ChatInput } from './chat-input.js';
 export { StreamOfThought } from './stream-of-thought.js';
 export { ActionPlan } from './action-plan.js';
 export { SuggestionChips } from './suggestion-chips.js';
+export { ConversationSidebar } from './conversation-sidebar.js';
+export { useChatState } from './use-chat-state.js';
+export type { ChatStateOptions, ChatStateValue } from './use-chat-state.js';
 
 export type {
   ChatEngineConfig,
@@ -25,4 +28,7 @@ export type {
   SuggestionChip,
   SourceOption,
   ConversationSummary,
+  ChatAdapter,
+  ChatStreamHandle,
+  ConversationSidebarProps,
 } from './types.js';

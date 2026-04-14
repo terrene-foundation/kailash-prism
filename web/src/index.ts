@@ -96,6 +96,8 @@ export {
   StreamOfThought,
   ActionPlan,
   SuggestionChips,
+  ConversationSidebar,
+  useChatState,
   type ChatEngineConfig,
   type ChatMessage,
   type MessageType,
@@ -110,6 +112,11 @@ export {
   type SuggestionChip,
   type SourceOption,
   type ConversationSummary,
+  type ChatAdapter,
+  type ChatStreamHandle,
+  type ConversationSidebarProps,
+  type ChatStateOptions,
+  type ChatStateValue,
 } from './engines/ai-chat/index.js';
 
 export {

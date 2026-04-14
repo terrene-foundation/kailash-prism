@@ -102,6 +102,71 @@ export interface ConversationSummary {
   messageCount: number;
 }
 
+// --- Chat adapter (transport-agnostic) ---
+
+/** Handle returned by ChatAdapter.sendMessage for managing an active stream */
+export interface ChatStreamHandle {
+  /** Register a callback for each text token as it arrives */
+  onToken(callback: (token: string) => void): void;
+  /** Register a callback for when the stream completes */
+  onComplete(callback: (message: ChatMessage) => void): void;
+  /** Register a callback for stream errors */
+  onError(callback: (error: Error) => void): void;
+  /** Abort the active stream */
+  abort(): void;
+}
+
+/**
+ * Transport-agnostic adapter for chat backends.
+ * Consumers implement this interface to connect Prism's chat state
+ * management to their specific API (SSE, WebSocket, REST, etc.).
+ */
+export interface ChatAdapter {
+  /** List all conversations for the current user */
+  listConversations(): Promise<ConversationSummary[]>;
+  /** Load message history for a conversation */
+  loadMessages(conversationId: string): Promise<ChatMessage[]>;
+  /** Send a message. Returns a stream handle for token-by-token updates. */
+  sendMessage(
+    conversationId: string | null,
+    content: string,
+    attachments?: File[],
+  ): ChatStreamHandle;
+  /** Delete a conversation */
+  deleteConversation(id: string): Promise<void>;
+  /** Rename a conversation */
+  renameConversation(id: string, title: string): Promise<void>;
+}
+
+// --- Conversation sidebar ---
+
+export interface ConversationSidebarProps {
+  /** Conversations to display */
+  conversations: ConversationSummary[];
+  /** Currently active conversation ID */
+  activeId: string | null;
+  /** Called when a conversation is selected */
+  onSelect: (id: string) => void;
+  /** Called when "New Conversation" is clicked */
+  onNew: () => void;
+  /** Called when a conversation is deleted */
+  onDelete?: (id: string) => void;
+  /** Called when a conversation is renamed */
+  onRename?: (id: string, title: string) => void;
+  /** Whether delete operations are in progress */
+  deleteLoading?: boolean;
+  /** Whether rename operations are in progress */
+  renameLoading?: boolean;
+  /** Collapsed mode — shows icon strip only */
+  collapsed?: boolean;
+  /** Toggle collapsed state */
+  onToggleCollapse?: () => void;
+  /** Render custom metadata per conversation (e.g. risk tier badge) */
+  renderMeta?: (conversation: ConversationSummary) => ReactNode;
+  /** Composition */
+  className?: string;
+}
+
 // --- Engine config ---
 
 export interface ChatEngineConfig {
