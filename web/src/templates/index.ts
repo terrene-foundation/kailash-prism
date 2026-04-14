@@ -12,7 +12,13 @@ export { DetailTemplate, type DetailTemplateProps } from './detail-template.js';
 export { FormTemplate, type FormTemplateProps } from './form-template.js';
 export { SettingsTemplate, type SettingsTemplateProps } from './settings-template.js';
 export { AuthTemplate, type AuthTemplateProps } from './auth-template.js';
-export { ConversationTemplate, type ConversationTemplateProps } from './conversation-template.js';
+export {
+  ConversationTemplate,
+  type ConversationTemplateProps,
+  type ConversationTemplateManualProps,
+  type ConversationTemplateWiredProps,
+  type WiredChatState,
+} from './conversation-template.js';
 export { SplitTemplate, type SplitTemplateProps } from './split-template.js';
 export { WizardTemplate, type WizardTemplateProps } from './wizard-template.js';
 export { KanbanTemplate, type KanbanTemplateProps, type KanbanColumn } from './kanban-template.js';

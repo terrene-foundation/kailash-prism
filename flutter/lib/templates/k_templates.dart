@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../engines/k_chat.dart';
+import '../engines/k_chat_sidebar.dart';
 import '../layouts/k_layout.dart';
 import '../layouts/k_responsive.dart';
 import '../theme/prism_colors.dart';
@@ -457,8 +459,18 @@ class KAuthTemplate extends StatelessWidget {
 
 // ============================================================================
 // KConversationTemplate — chat layout with optional list + detail panels
+//
+// Two usage modes:
+//
+// 1. **Wired mode** (recommended): Pass `adapter` + optional overrides.
+//    The template internally wires KConversationSidebar, KChatEngine,
+//    and KChatState into a turnkey chat layout.
+//
+// 2. **Manual mode**: Pass `conversationList` + `content` as Widgets.
+//    Full control, no internal state management.
 // ============================================================================
 
+/// Manual-mode conversation template — bare layout with consumer-supplied widgets.
 class KConversationTemplate extends StatelessWidget {
   final Widget? conversationList;
   final Widget content;
@@ -468,6 +480,206 @@ class KConversationTemplate extends StatelessWidget {
 
   const KConversationTemplate({
     super.key,
+    required this.content,
+    this.conversationList,
+    this.detailPanel,
+    this.listWidth = 280,
+    this.detailWidth = 320,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _ConversationLayout(
+      conversationList: conversationList,
+      content: content,
+      detailPanel: detailPanel,
+      listWidth: listWidth,
+      detailWidth: detailWidth,
+    );
+  }
+}
+
+/// Wired-mode conversation template — pass a [KChatAdapter] and the template
+/// internally composes [KConversationSidebar], [KChatEngine], and [KChatState].
+class KWiredConversationTemplate extends StatefulWidget {
+  /// Transport adapter — required for wired mode.
+  final KChatAdapter adapter;
+
+  /// Whether to auto-load conversations on mount. Default: true.
+  final bool autoLoad;
+
+  /// Detail panel widget (e.g. citation panel).
+  final Widget? detailPanel;
+
+  /// Build custom metadata per conversation row (e.g. risk tier badge).
+  final Widget Function(KConversationSummary)? metaBuilder;
+
+  /// Chat engine avatars.
+  final Widget? userAvatar;
+  final Widget? assistantAvatar;
+
+  /// Chat engine feature toggles.
+  final KChatFeatures features;
+
+  /// Chat input configuration.
+  final KChatInputConfig input;
+
+  /// Active tool call steps for StreamOfThought display.
+  final List<KToolCallStep> toolCallSteps;
+
+  /// Action plan awaiting user response.
+  final List<KActionPlanStep>? actionPlan;
+
+  /// Suggestion chips.
+  final List<KSuggestionChip> suggestions;
+
+  /// Callbacks for advanced consumers.
+  final void Function(KActionPlanResponse response)? onActionPlanResponse;
+  final void Function(KCitation citation)? onCitationClick;
+  final void Function(KSuggestionChip suggestion)? onSuggestionClick;
+  final void Function(String messageId)? onRetry;
+
+  /// Called after a message is sent (for domain-specific side effects).
+  final void Function(String content)? onMessageSent;
+
+  /// Called when the active conversation changes.
+  final void Function(String? id)? onConversationChange;
+
+  /// Override the rendered chat content entirely.
+  final Widget Function(KChatState state)? contentBuilder;
+
+  /// Override the rendered sidebar entirely.
+  final Widget Function(KChatState state)? sidebarBuilder;
+
+  final double listWidth;
+  final double detailWidth;
+
+  const KWiredConversationTemplate({
+    super.key,
+    required this.adapter,
+    this.autoLoad = true,
+    this.detailPanel,
+    this.metaBuilder,
+    this.userAvatar,
+    this.assistantAvatar,
+    this.features = const KChatFeatures(),
+    this.input = const KChatInputConfig(),
+    this.toolCallSteps = const [],
+    this.actionPlan,
+    this.suggestions = const [],
+    this.onActionPlanResponse,
+    this.onCitationClick,
+    this.onSuggestionClick,
+    this.onRetry,
+    this.onMessageSent,
+    this.onConversationChange,
+    this.contentBuilder,
+    this.sidebarBuilder,
+    this.listWidth = 280,
+    this.detailWidth = 320,
+  });
+
+  @override
+  State<KWiredConversationTemplate> createState() =>
+      _KWiredConversationTemplateState();
+}
+
+class _KWiredConversationTemplateState
+    extends State<KWiredConversationTemplate> {
+  late KChatState _chatState;
+  bool _sidebarCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _chatState = KChatState(widget.adapter);
+    if (widget.autoLoad) {
+      _chatState.loadConversations();
+    }
+  }
+
+  @override
+  void dispose() {
+    _chatState.dispose();
+    super.dispose();
+  }
+
+  void _handleSend(KChatSendEvent event) {
+    _chatState.sendMessage(event.content);
+    widget.onMessageSent?.call(event.content);
+  }
+
+  void _handleSelect(String id) {
+    _chatState.switchConversation(id);
+    widget.onConversationChange?.call(id);
+  }
+
+  void _handleNew() {
+    _chatState.startNewConversation();
+    widget.onConversationChange?.call(null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _chatState,
+      builder: (context, _) {
+        final sidebar = widget.sidebarBuilder != null
+            ? widget.sidebarBuilder!(_chatState)
+            : KConversationSidebar(
+                conversations: _chatState.conversations,
+                activeId: _chatState.activeConversationId,
+                onSelect: _handleSelect,
+                onNew: _handleNew,
+                onDelete: _chatState.deleteConversation,
+                onRename: _chatState.renameConversation,
+                collapsed: _sidebarCollapsed,
+                onToggleCollapse: () =>
+                    setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+                metaBuilder: widget.metaBuilder,
+              );
+
+        final content = widget.contentBuilder != null
+            ? widget.contentBuilder!(_chatState)
+            : KChatEngine(
+                messages: _chatState.messages,
+                isStreaming: _chatState.isStreaming,
+                streamBuffer: _chatState.streamBuffer,
+                toolCallSteps: widget.toolCallSteps,
+                actionPlan: widget.actionPlan,
+                suggestions: widget.suggestions,
+                input: widget.input,
+                features: widget.features,
+                userAvatar: widget.userAvatar,
+                assistantAvatar: widget.assistantAvatar,
+                onSend: _handleSend,
+                onActionPlanResponse: widget.onActionPlanResponse,
+                onCitationClick: widget.onCitationClick,
+                onSuggestionClick: widget.onSuggestionClick,
+                onRetry: widget.onRetry,
+              );
+
+        return _ConversationLayout(
+          conversationList: sidebar,
+          content: content,
+          detailPanel: widget.detailPanel,
+          listWidth: _sidebarCollapsed ? 52 : widget.listWidth,
+          detailWidth: widget.detailWidth,
+        );
+      },
+    );
+  }
+}
+
+/// Shared responsive layout used by both manual and wired conversation templates.
+class _ConversationLayout extends StatelessWidget {
+  final Widget? conversationList;
+  final Widget content;
+  final Widget? detailPanel;
+  final double listWidth;
+  final double detailWidth;
+
+  const _ConversationLayout({
     required this.content,
     this.conversationList,
     this.detailPanel,
@@ -491,7 +703,8 @@ class KConversationTemplate extends StatelessWidget {
                 width: listWidth,
                 decoration: const BoxDecoration(
                   color: PrismColors.surfaceCard,
-                  border: Border(right: BorderSide(color: PrismColors.borderDefault)),
+                  border:
+                      Border(right: BorderSide(color: PrismColors.borderDefault)),
                 ),
                 child: conversationList!,
               ),
@@ -501,7 +714,8 @@ class KConversationTemplate extends StatelessWidget {
                 width: detailWidth,
                 decoration: const BoxDecoration(
                   color: PrismColors.surfaceCard,
-                  border: Border(left: BorderSide(color: PrismColors.borderDefault)),
+                  border:
+                      Border(left: BorderSide(color: PrismColors.borderDefault)),
                 ),
                 child: detailPanel!,
               ),

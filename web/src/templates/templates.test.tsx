@@ -160,13 +160,111 @@ describe('AuthTemplate', () => {
 // --- ConversationTemplate ---
 
 describe('ConversationTemplate', () => {
-  it('renders chat content', () => {
+  it('renders chat content (manual mode)', () => {
     render(withLayout(
       <ConversationTemplate
         content={<div>chat messages</div>}
       />,
     ));
     expect(screen.getByText('chat messages')).toBeDefined();
+  });
+
+  it('renders sidebar and detail panel (manual mode)', () => {
+    render(withLayout(
+      <ConversationTemplate
+        conversationList={<div>thread list</div>}
+        content={<div>chat content</div>}
+        detailPanel={<div>citations</div>}
+      />,
+    ));
+    expect(screen.getByText('thread list')).toBeDefined();
+    expect(screen.getByText('chat content')).toBeDefined();
+    expect(screen.getByText('citations')).toBeDefined();
+  });
+});
+
+describe('ConversationTemplate (wired mode)', () => {
+  function createMockAdapter() {
+    return {
+      listConversations: async () => [
+        { id: 'c1', title: 'First chat', timestamp: Date.now(), messageCount: 2 },
+        { id: 'c2', title: 'Second chat', timestamp: Date.now() - 3600000, messageCount: 5 },
+      ],
+      loadMessages: async () => [
+        { id: 'm1', type: 'user' as const, content: 'Hello', timestamp: Date.now(), sender: 'user' as const },
+        { id: 'm2', type: 'assistant' as const, content: 'Hi there!', timestamp: Date.now(), sender: 'assistant' as const },
+      ],
+      sendMessage: () => {
+        const callbacks: Record<string, Function> = {};
+        return {
+          onToken: (cb: Function) => { callbacks.token = cb; },
+          onComplete: (cb: Function) => { callbacks.complete = cb; },
+          onError: (cb: Function) => { callbacks.error = cb; },
+          abort: () => {},
+        };
+      },
+      deleteConversation: async () => {},
+      renameConversation: async () => {},
+    };
+  }
+
+  it('renders conversation sidebar and chat engine from adapter', async () => {
+    const adapter = createMockAdapter();
+    const { findByText } = render(withLayout(
+      <ConversationTemplate
+        adapter={adapter}
+      />,
+    ));
+    // ConversationSidebar should show conversations from adapter
+    expect(await findByText('First chat')).toBeDefined();
+    expect(await findByText('Second chat')).toBeDefined();
+    // Chat engine shows empty state initially (no conversation selected)
+    expect(await findByText('Start a conversation')).toBeDefined();
+  });
+
+  it('renders detail panel alongside wired content', async () => {
+    const adapter = createMockAdapter();
+    const { findByText } = render(withLayout(
+      <ConversationTemplate
+        adapter={adapter}
+        detailPanel={<div>citation panel</div>}
+      />,
+    ));
+    expect(await findByText('citation panel')).toBeDefined();
+  });
+
+  it('accepts renderMeta for domain badges', async () => {
+    const adapter = createMockAdapter();
+    const { findByText } = render(withLayout(
+      <ConversationTemplate
+        adapter={adapter}
+        renderMeta={(conv) => <span>badge-{conv.id}</span>}
+      />,
+    ));
+    expect(await findByText('badge-c1')).toBeDefined();
+    expect(await findByText('badge-c2')).toBeDefined();
+  });
+
+  it('accepts renderContent override', async () => {
+    const adapter = createMockAdapter();
+    const { findByText } = render(withLayout(
+      <ConversationTemplate
+        adapter={adapter}
+        renderContent={(state) => <div>custom content: {state.conversations.length} convs</div>}
+      />,
+    ));
+    expect(await findByText('custom content: 2 convs')).toBeDefined();
+  });
+
+  it('accepts renderSidebar override', async () => {
+    const adapter = createMockAdapter();
+    const { findByText } = render(withLayout(
+      <ConversationTemplate
+        adapter={adapter}
+        renderSidebar={(state) => <div>custom sidebar: {state.conversations.length}</div>}
+      />,
+    ));
+    expect(await findByText('custom sidebar: 2')).toBeDefined();
   });
 });
 
