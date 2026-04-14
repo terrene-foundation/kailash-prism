@@ -9,7 +9,7 @@
 
 import {
   createContext,
-  useCallback,
+  // useCallback — reserved for future keyboard/gesture handlers
   useContext,
   useEffect,
   useMemo,
@@ -94,7 +94,9 @@ function resolveResponsive<T>(
   const order: Breakpoint[] = ['wide', 'desktop', 'tablet', 'mobile'];
   const startIdx = order.indexOf(breakpoint);
   for (let i = startIdx; i < order.length; i++) {
-    const val = responsive[order[i]];
+    const key = order[i];
+    if (key === undefined) continue;
+    const val = responsive[key];
     if (val !== undefined) return val;
   }
   return fallback;
@@ -191,7 +193,7 @@ export interface VStackProps {
   gap?: number;
   align?: 'start' | 'center' | 'end' | 'stretch';
   padding?: number;
-  className?: string;
+  className?: string | undefined;
 }
 
 export function VStack({ children, gap = 0, align = 'stretch', padding = 0, className }: VStackProps) {
@@ -258,7 +260,7 @@ export interface SplitProps {
   children: [ReactNode, ReactNode];
   ratio?: string | ResponsiveValue<string>;
   gap?: number;
-  className?: string;
+  className?: string | undefined;
 }
 
 export function Split({ children, ratio = '1:2', gap = 0, className }: SplitProps) {
@@ -270,7 +272,9 @@ export function Split({ children, ratio = '1:2', gap = 0, className }: SplitProp
     return <VStack gap={gap} className={className}>{children[1]}</VStack>;
   }
 
-  const [left, right] = resolvedRatio.split(':').map(Number);
+  const parts = resolvedRatio.split(':').map(Number);
+  const left = parts[0] ?? 1;
+  const right = parts[1] ?? 2;
   const total = left + right;
 
   const style: CSSProperties = {

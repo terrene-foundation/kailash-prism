@@ -44,7 +44,7 @@ interface DataTableBodyProps<T extends DataTableRow> {
   expandable: boolean;
   expandedIds: Set<string>;
   onToggleExpand: (index: number) => void;
-  expandContent?: (row: T) => ReactNode;
+  expandContent?: ((row: T) => ReactNode) | undefined;
 }
 
 // --- Component ---
@@ -198,13 +198,13 @@ interface TableRowProps<T extends DataTableRow> {
   columns: ColumnDef<T>[];
   selectionEnabled: boolean;
   isSelected: boolean;
-  onRowClick: ((row: T) => void) | undefined;
+  onRowClick?: ((row: T) => void) | undefined;
   onToggleRow: (index: number) => void;
-  expandable: boolean;
-  isExpanded: boolean;
-  onToggleExpand: (index: number) => void;
-  expandContent?: (row: T) => ReactNode;
-  columnCount: number;
+  expandable?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: ((index: number) => void) | undefined;
+  expandContent?: ((row: T) => ReactNode) | undefined;
+  columnCount?: number;
 }
 
 function TableRow<T extends DataTableRow>({
@@ -242,7 +242,7 @@ function TableRow<T extends DataTableRow>({
   const handleExpandClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      onToggleExpand(index);
+      onToggleExpand?.(index);
     },
     [index, onToggleExpand],
   );

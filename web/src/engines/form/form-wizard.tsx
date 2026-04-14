@@ -7,11 +7,10 @@ import {
   useState,
   useCallback,
   useMemo,
-  type ReactNode,
   type CSSProperties,
 } from 'react';
-import { Form, type FormConfig } from './form-root.js';
-import type { FieldDef, SectionDef } from './form-types.js';
+import { Form } from './form-root.js';
+import type { FieldDef, SectionDef, FormConfig } from './form-types.js';
 
 export interface WizardStep {
   name: string;

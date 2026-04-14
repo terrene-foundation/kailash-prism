@@ -6,7 +6,7 @@
  */
 
 import type { ReactNode } from 'react';
-import { useLayout, VStack, Row, Grid, Split } from '../engines/layout.js';
+import { useLayout, VStack, Grid, Split } from '../engines/layout.js';
 import { TemplateHeader } from './template-shell.js';
 import type { BaseTemplateProps } from './types.js';
 

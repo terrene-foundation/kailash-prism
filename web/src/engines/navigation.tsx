@@ -460,7 +460,7 @@ export function AppShell({
   );
 }
 
-function MobileHeader({ config }: { config: NavigationConfig }) {
+function MobileHeader({ config: _config }: { config: NavigationConfig }) {
   const { isMobile } = useLayout();
   const nav = useNavigation();
 

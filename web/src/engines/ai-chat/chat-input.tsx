@@ -15,11 +15,11 @@ export interface ChatInputProps {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
-  onAttach?: (files: File[]) => void;
-  placeholder?: string;
+  onAttach?: ((files: File[]) => void) | undefined;
+  placeholder?: string | undefined;
   disabled?: boolean;
-  allowAttachments?: boolean;
-  className?: string;
+  allowAttachments?: boolean | undefined;
+  className?: string | undefined;
 }
 
 const containerStyle: CSSProperties = {

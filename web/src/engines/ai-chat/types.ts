@@ -150,9 +150,9 @@ export interface ConversationSidebarProps {
   /** Called when "New Conversation" is clicked */
   onNew: () => void;
   /** Called when a conversation is deleted */
-  onDelete?: (id: string) => void;
+  onDelete?: ((id: string) => void) | undefined;
   /** Called when a conversation is renamed */
-  onRename?: (id: string, title: string) => void;
+  onRename?: ((id: string, title: string) => void) | undefined;
   /** Whether delete operations are in progress */
   deleteLoading?: boolean;
   /** Whether rename operations are in progress */
@@ -160,11 +160,11 @@ export interface ConversationSidebarProps {
   /** Collapsed mode — shows icon strip only */
   collapsed?: boolean;
   /** Toggle collapsed state */
-  onToggleCollapse?: () => void;
+  onToggleCollapse?: (() => void) | undefined;
   /** Render custom metadata per conversation (e.g. risk tier badge) */
-  renderMeta?: (conversation: ConversationSummary) => ReactNode;
+  renderMeta?: ((conversation: ConversationSummary) => ReactNode) | undefined;
   /** Composition */
-  className?: string;
+  className?: string | undefined;
 }
 
 // --- Engine config ---
@@ -175,13 +175,13 @@ export interface ChatEngineConfig {
   /** Whether a response is currently streaming */
   isStreaming?: boolean;
   /** Accumulated stream buffer (shown as in-progress message) */
-  streamBuffer?: string;
+  streamBuffer?: string | undefined;
   /** Active tool call steps for StreamOfThought display */
-  toolCallSteps?: ToolCallStep[];
+  toolCallSteps?: ToolCallStep[] | undefined;
   /** Action plan awaiting user response */
-  actionPlan?: ActionPlanStep[];
+  actionPlan?: ActionPlanStep[] | undefined;
   /** Suggestion chips shown when conversation is empty or after a response */
-  suggestions?: SuggestionChip[];
+  suggestions?: SuggestionChip[] | undefined;
 
   /** Input configuration */
   input?: {
@@ -190,13 +190,13 @@ export interface ChatEngineConfig {
     disabled?: boolean;
     sources?: SourceOption[];
     allowAttachments?: boolean;
-  };
+  } | undefined;
 
   /** Avatars */
   avatars?: {
     user?: ReactNode;
     assistant?: ReactNode;
-  };
+  } | undefined;
 
   /** Features toggles */
   features?: {
@@ -204,16 +204,16 @@ export interface ChatEngineConfig {
     toolCalls?: boolean;
     actionPlans?: boolean;
     suggestions?: boolean;
-  };
+  } | undefined;
 
   /** Callbacks */
-  onSend?: (message: { content: string; attachments?: File[]; source?: string }) => void;
-  onActionPlanResponse?: (response: { stepIndex: number; action: ActionPlanAction; modification?: string }) => void;
-  onCitationClick?: (citation: Citation) => void;
-  onSuggestionClick?: (suggestion: SuggestionChip) => void;
-  onRetry?: (messageId: string) => void;
+  onSend?: ((message: { content: string; attachments?: File[]; source?: string }) => void) | undefined;
+  onActionPlanResponse?: ((response: { stepIndex: number; action: ActionPlanAction; modification?: string }) => void) | undefined;
+  onCitationClick?: ((citation: Citation) => void) | undefined;
+  onSuggestionClick?: ((suggestion: SuggestionChip) => void) | undefined;
+  onRetry?: ((messageId: string) => void) | undefined;
 
   /** Composition */
-  className?: string;
-  'aria-label'?: string;
+  className?: string | undefined;
+  'aria-label'?: string | undefined;
 }

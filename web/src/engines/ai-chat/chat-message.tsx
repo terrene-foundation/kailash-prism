@@ -6,8 +6,8 @@
  * with avatar, citations, action buttons, and streaming indicator.
  */
 
-import { useState, useCallback, type CSSProperties, type ReactNode } from 'react';
-import type { ChatMessage as ChatMessageData, Citation, ToolCallStep } from './types.js';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import type { ChatMessage as ChatMessageData, Citation } from './types.js';
 
 // --- Styles ---
 
@@ -95,7 +95,7 @@ function CitationList({
   onCitationClick,
 }: {
   citations: Citation[];
-  onCitationClick?: (citation: Citation) => void;
+  onCitationClick?: ((citation: Citation) => void) | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -302,9 +302,9 @@ function ToolResultDisplay({ message }: { message: ChatMessageData }) {
 export interface ChatMessageBubbleProps {
   message: ChatMessageData;
   streaming?: boolean;
-  avatar?: ReactNode;
-  onCitationClick?: (citation: Citation) => void;
-  onRetry?: (messageId: string) => void;
+  avatar?: ReactNode | undefined;
+  onCitationClick?: ((citation: Citation) => void) | undefined;
+  onRetry?: ((messageId: string) => void) | undefined;
 }
 
 export function ChatMessageBubble({

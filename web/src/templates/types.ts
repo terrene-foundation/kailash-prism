@@ -25,9 +25,9 @@ export interface BaseTemplateProps {
   /** Page title displayed in the header zone */
   title: string;
   /** Subtitle or description */
-  subtitle?: string;
+  subtitle?: string | undefined;
   /** Actions rendered in the header (buttons, dropdowns) */
-  headerActions?: ReactNode;
+  headerActions?: ReactNode | undefined;
   /** Additional CSS class */
-  className?: string;
+  className?: string | undefined;
 }

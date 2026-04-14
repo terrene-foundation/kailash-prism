@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ChatEngine } from './ai-chat/index.js';
 import { ChatMessageBubble } from './ai-chat/chat-message.js';
 import { ChatInput } from './ai-chat/chat-input.js';

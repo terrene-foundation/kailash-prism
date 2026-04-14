@@ -78,20 +78,20 @@ export type FormStatus = 'idle' | 'validating' | 'submitting' | 'success' | 'err
 
 export interface FormConfig {
   fields: FieldDef[];
-  sections?: SectionDef[];
+  sections?: SectionDef[] | undefined;
   validation?: {
     mode?: 'onBlur' | 'onSubmit';
     schema?: ZodSchema;
-  };
+  } | undefined;
   onSubmit: (values: Record<string, unknown>) => void | Promise<void>;
-  onReset?: () => void;
-  initialValues?: Record<string, unknown>;
-  submitLabel?: string;
-  resetLabel?: string;
+  onReset?: (() => void) | undefined;
+  initialValues?: Record<string, unknown> | undefined;
+  submitLabel?: string | undefined;
+  resetLabel?: string | undefined;
   showReset?: boolean;
   layout?: 'single-column' | 'two-column';
-  className?: string;
-  'aria-label'?: string;
+  className?: string | undefined;
+  'aria-label'?: string | undefined;
 }
 
 // --- Internal state ---

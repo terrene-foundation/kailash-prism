@@ -27,8 +27,8 @@ import type {
   ActionPlanStep,
   Citation,
   SourceOption,
-  ChatStateOptions,
 } from '../engines/ai-chat/types.js';
+import type { ChatStateOptions } from '../engines/ai-chat/use-chat-state.js';
 
 // --- Shared layout props ---
 

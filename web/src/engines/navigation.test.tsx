@@ -60,7 +60,7 @@ describe('useNavigation', () => {
 
     const { result } = renderHook(() => useNavigation(), { wrapper: deepWrapper });
     expect(result.current.breadcrumbs.length).toBeGreaterThanOrEqual(1);
-    expect(result.current.breadcrumbs[0].label).toBe('Contacts');
+    expect(result.current.breadcrumbs[0]?.label).toBe('Contacts');
   });
 
   it('throws outside provider', () => {
