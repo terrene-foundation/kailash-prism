@@ -109,6 +109,8 @@ export interface ConversationTemplateWiredProps extends LayoutProps {
   onCitationClick?: (citation: Citation) => void;
   onSuggestionClick?: (suggestion: SuggestionChip) => void;
   onRetry?: (messageId: string) => void;
+  /** Context passed to every adapter.sendMessage call (e.g. company_id, tenant) */
+  sendContext?: Record<string, unknown> | undefined;
   /** Called after a message is sent (for domain-specific side effects) */
   onMessageSent?: (content: string, attachments?: File[]) => void;
   /** Called when the active conversation changes */
@@ -185,6 +187,7 @@ function WiredConversation({
   actionPlan,
   suggestions,
   renderMessageActions,
+  sendContext,
   onActionPlanResponse,
   onCitationClick,
   onSuggestionClick,
@@ -211,10 +214,10 @@ function WiredConversation({
 
   const handleSend = useCallback(
     (msg: { content: string; attachments?: File[] }) => {
-      chatState.sendMessage(msg.content, msg.attachments);
+      chatState.sendMessage(msg.content, msg.attachments, sendContext);
       onMessageSent?.(msg.content, msg.attachments);
     },
-    [chatState, onMessageSent],
+    [chatState, onMessageSent, sendContext],
   );
 
   const handleSelect = useCallback(
@@ -246,6 +249,7 @@ function WiredConversation({
       onNew={handleNew}
       onDelete={chatState.deleteConversation}
       onRename={chatState.renameConversation}
+      isLoading={chatState.isLoadingConversations}
       collapsed={sidebarCollapsed}
       onToggleCollapse={toggleSidebar}
       renderMeta={renderMeta}

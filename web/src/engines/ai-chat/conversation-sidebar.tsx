@@ -231,6 +231,18 @@ const renameInputStyle: CSSProperties = {
   outline: 'none',
 };
 
+// --- Skeleton ---
+
+function skeletonBarStyle(width: number, height = 14): CSSProperties {
+  return {
+    width,
+    height,
+    borderRadius: 4,
+    backgroundColor: 'var(--prism-color-border-default, #E2E8F0)',
+    animation: 'prism-skeleton-pulse 1.5s ease-in-out infinite',
+  };
+}
+
 // --- Helpers ---
 
 function formatTimestamp(timestamp: number): string {
@@ -258,6 +270,7 @@ export function ConversationSidebar({
   onNew,
   onDelete,
   onRename,
+  isLoading = false,
   deleteLoading = false,
   renameLoading = false,
   collapsed = false,
@@ -416,7 +429,25 @@ export function ConversationSidebar({
 
       {/* List */}
       <div style={listStyle} role="list">
-        {filtered.length === 0 && (
+        {isLoading && conversations.length === 0 && (
+          <div aria-label="Loading conversations" role="status">
+            {[1, 2, 3].map((i) => (
+              <div key={i} style={{ ...itemStyle, gap: 6, cursor: 'default' }}>
+                <div style={skeletonBarStyle(140 - i * 20)} />
+                <div style={skeletonBarStyle(180 - i * 10, 10)} />
+                <div style={skeletonBarStyle(60, 10)} />
+              </div>
+            ))}
+            <style>{`
+              @keyframes prism-skeleton-pulse {
+                0%, 100% { opacity: 0.4; }
+                50% { opacity: 0.8; }
+              }
+            `}</style>
+          </div>
+        )}
+
+        {!isLoading && filtered.length === 0 && (
           <div style={{ padding: 16, textAlign: 'center', color: 'var(--prism-color-text-secondary, #64748B)', fontSize: 13 }}>
             {searchQuery ? 'No matching conversations' : 'No conversations yet'}
           </div>

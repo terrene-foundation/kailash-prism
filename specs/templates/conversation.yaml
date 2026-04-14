@@ -28,9 +28,10 @@ template:
       optional_props:
         - renderMeta        # Domain badges per conversation (e.g. risk tier)
         - renderMessageActions  # Per-message actions (e.g. feedback, escalation)
+        - sendContext        # Record<string, unknown> forwarded to every adapter.sendMessage call (e.g. company_id)
         - avatars           # User/assistant avatars
         - features          # Feature toggles (citations, toolCalls, etc.)
-        - input             # Input config (placeholder, maxLength)
+        - input             # Input config (placeholder, maxLength, enableVoice)
         - renderContent     # Override chat content entirely
         - renderSidebar     # Override sidebar entirely
         - onMessageSent     # Side-effect callback after send
@@ -157,6 +158,7 @@ template:
       default_props:
         placeholder: "Ask anything..."
         attachments: true
+        voice: false  # opt-in via input.enableVoice (Web Speech Recognition API)
         sources: []
       responsive:
         wide:

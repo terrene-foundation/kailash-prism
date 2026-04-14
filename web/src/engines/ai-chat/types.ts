@@ -135,6 +135,7 @@ export interface ChatAdapter {
     conversationId: string | null,
     content: string,
     attachments?: File[],
+    context?: Record<string, unknown>,
   ): ChatStreamHandle;
   /** Delete a conversation */
   deleteConversation(id: string): Promise<void>;
@@ -157,6 +158,8 @@ export interface ConversationSidebarProps {
   onDelete?: ((id: string) => void) | undefined;
   /** Called when a conversation is renamed */
   onRename?: ((id: string, title: string) => void) | undefined;
+  /** Whether the conversation list is loading */
+  isLoading?: boolean;
   /** Whether delete operations are in progress */
   deleteLoading?: boolean;
   /** Whether rename operations are in progress */
@@ -194,6 +197,8 @@ export interface ChatEngineConfig {
     disabled?: boolean;
     sources?: SourceOption[];
     allowAttachments?: boolean;
+    /** Enable voice input via Web Speech Recognition API */
+    enableVoice?: boolean;
   } | undefined;
 
   /** Avatars */

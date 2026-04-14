@@ -6,6 +6,8 @@
 import {
   useCallback,
   useRef,
+  useState,
+  useEffect,
   type CSSProperties,
   type KeyboardEvent,
   type ChangeEvent,
@@ -19,6 +21,8 @@ export interface ChatInputProps {
   placeholder?: string | undefined;
   disabled?: boolean;
   allowAttachments?: boolean | undefined;
+  /** Enable voice input via Web Speech Recognition API */
+  enableVoice?: boolean | undefined;
   className?: string | undefined;
 }
 
@@ -61,6 +65,30 @@ const buttonBaseStyle: CSSProperties = {
   flexShrink: 0,
 };
 
+// Voice recognition type declarations (Web Speech API)
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: { [index: number]: { [index: number]: { transcript: string }; isFinal: boolean }; length: number };
+}
+
+interface SpeechRecognitionInstance extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+}
+
+function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
+  const w = globalThis as Record<string, unknown>;
+  return (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
+    (new () => SpeechRecognitionInstance) | null ?? null;
+}
+
 export function ChatInput({
   value,
   onChange,
@@ -69,10 +97,74 @@ export function ChatInput({
   placeholder = 'Type a message...',
   disabled = false,
   allowAttachments = false,
+  enableVoice = false,
   className,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+
+  // Check for Speech Recognition API availability
+  useEffect(() => {
+    if (enableVoice) {
+      setVoiceSupported(getSpeechRecognition() !== null);
+    }
+  }, [enableVoice]);
+
+  const toggleVoice = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const SpeechRecognitionCtor = getSpeechRecognition();
+    if (!SpeechRecognitionCtor) return;
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+    recognitionRef.current = recognition;
+
+    const baseValue = value;
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const alternative = result?.[0];
+        if (alternative) {
+          transcript += alternative.transcript;
+        }
+      }
+      const separator = baseValue && !baseValue.endsWith(' ') ? ' ' : '';
+      onChange(baseValue + separator + transcript);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = (event: { error: string }) => {
+      if (event.error !== 'aborted') {
+        setIsListening(false);
+      }
+      recognitionRef.current = null;
+    };
+
+    recognition.start();
+    setIsListening(true);
+  }, [isListening, value, onChange]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort();
+    };
+  }, []);
 
   const canSend = value.trim().length > 0 && !disabled;
 
@@ -142,12 +234,34 @@ export function ChatInput({
         </>
       )}
 
+      {enableVoice && voiceSupported && (
+        <button
+          type="button"
+          onClick={toggleVoice}
+          disabled={disabled}
+          aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+          aria-pressed={isListening}
+          style={{
+            ...buttonBaseStyle,
+            backgroundColor: isListening
+              ? 'var(--prism-color-status-error, #EF4444)'
+              : 'transparent',
+            color: isListening
+              ? 'var(--prism-color-text-on-primary, #FFFFFF)'
+              : 'var(--prism-color-text-secondary, #64748B)',
+            opacity: disabled ? 0.5 : 1,
+          }}
+        >
+          🎤
+        </button>
+      )}
+
       <textarea
         ref={textareaRef}
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder}
+        placeholder={isListening ? 'Listening...' : placeholder}
         disabled={disabled}
         aria-label="Message input"
         aria-multiline="true"
