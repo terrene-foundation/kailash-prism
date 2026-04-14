@@ -48,7 +48,7 @@ export interface ChatStateValue {
   /** Start a new conversation (clears active) */
   startNewConversation: () => void;
   /** Send a message in the active (or new) conversation */
-  sendMessage: (content: string, attachments?: File[]) => void;
+  sendMessage: (content: string, attachments?: File[], context?: Record<string, unknown>) => void;
   /** Stop the current stream */
   stopStreaming: () => void;
   /** Delete a conversation */
@@ -164,7 +164,7 @@ export function useChatState(options: ChatStateOptions): ChatStateValue {
   }, []);
 
   const sendMessage = useCallback(
-    (content: string, attachments?: File[]) => {
+    (content: string, attachments?: File[], context?: Record<string, unknown>) => {
       if (!content.trim()) return;
 
       // Add user message optimistically
@@ -186,6 +186,7 @@ export function useChatState(options: ChatStateOptions): ChatStateValue {
         activeConversationId,
         content.trim(),
         attachments,
+        context,
       );
       streamRef.current = handle;
 

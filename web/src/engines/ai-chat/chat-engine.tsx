@@ -206,6 +206,7 @@ export function ChatEngine({
         placeholder={input.placeholder}
         disabled={input.disabled ?? isStreaming}
         allowAttachments={input.allowAttachments}
+        enableVoice={input.enableVoice}
         onAttach={onSend ? (files) => onSend({ content: '', attachments: files }) : undefined}
       />
 

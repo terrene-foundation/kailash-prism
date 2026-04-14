@@ -19,19 +19,19 @@ Arbor's advisory page (133 LOC bespoke → 55 LOC with Prism) successfully compi
 
 ### MEDIUM — Should fix for adoption quality
 
-| # | Finding | Prism component | Recommendation |
-|---|---------|----------------|----------------|
-| M1 | Turbopack can't resolve `file:` symlinked packages — forced `npm pack` tarball workaround | DX / docs | Document in adoption guide; resolved when published to npm |
-| M2 | No `onSend` interception in wired mode that can modify the request (e.g., add `company_id`) | `conversation-template.tsx` | Expose `transformRequest` or `adapterConfig` prop |
-| M3 | `LayoutProvider` required but not obvious — ConversationTemplate crashes without it | `conversation-template.tsx` | Auto-wrap with LayoutProvider internally if not present |
+| # | Finding | Prism component | Status |
+|---|---------|----------------|--------|
+| M1 | Turbopack can't resolve `file:` symlinked packages — forced `npm pack` tarball workaround | DX / docs | Deferred — resolved when published to npm |
+| M2 | No `onSend` interception in wired mode that can modify the request (e.g., add `company_id`) | `conversation-template.tsx` | **FIXED** — added `sendContext` prop + `context` param on `ChatAdapter.sendMessage` |
+| M3 | `LayoutProvider` required but not obvious — ConversationTemplate crashes without it | `conversation-template.tsx` | **FIXED** (prior session) — auto-wraps with `WithLayout` |
 
 ### LOW — Nice to have
 
-| # | Finding | Recommendation |
-|---|---------|----------------|
-| L1 | No voice input in ChatInput | Add optional `enableVoice` flag |
-| L2 | CSS token conflicts with host app's Tailwind | Document CSS isolation strategy |
-| L3 | No loading skeleton for conversation list | Add `isLoading` prop to ConversationSidebar |
+| # | Finding | Status |
+|---|---------|--------|
+| L1 | No voice input in ChatInput | **FIXED** — `enableVoice` prop via Web Speech Recognition API, graceful degradation |
+| L2 | CSS token conflicts with host app's Tailwind | **FIXED** — CSS isolation strategy documented in `docs/specs/07-cross-platform-strategy.md` § 7.3 |
+| L3 | No loading skeleton for conversation list | **FIXED** — `isLoading` prop on ConversationSidebar, wired mode auto-forwards `isLoadingConversations` |
 
 ## Arbor Adapter Pattern Assessment
 
@@ -46,6 +46,6 @@ The `ChatAdapter` interface proved well-designed for the adapter pattern:
 - Sidebar date grouping, search, rename, delete all inherited from Prism
 
 **What's missing for production parity:**
-- Per-message metadata (risk tier, confidence, citations)
-- Per-message action buttons (feedback, escalation)
-- Loading states for conversations list and messages
+- ~~Per-message metadata (risk tier, confidence, citations)~~ FIXED (H1 — `meta` field)
+- ~~Per-message action buttons (feedback, escalation)~~ FIXED (H3 — `renderMessageActions`)
+- ~~Loading states for conversations list and messages~~ FIXED (L3 — `isLoading` prop)

@@ -122,6 +122,37 @@ These concerns have the same semantic meaning in both engines but differ in thei
 | Form state | React Hook Form + Zod | All form handling; validation schemas from component contracts |
 | URL state | React Router / Next.js searchParams | Filter/sort/page parameters that should be shareable via URL |
 
+### CSS Isolation Strategy
+
+Prism components use **CSS custom properties** (e.g., `--prism-color-primary`, `--prism-color-surface-card`) for all visual values. This namespaced approach avoids conflicts with host application styles, including Tailwind CSS utilities.
+
+**How Prism avoids conflicts:**
+
+| Layer | Approach |
+|-------|----------|
+| Colors, spacing, typography | All values reference `--prism-*` CSS custom properties with hardcoded fallbacks |
+| Component styling | Inline `CSSProperties` objects — no global class names that could collide |
+| Layout | CSS flexbox/grid via inline styles, not utility classes |
+| Animations | Scoped `@keyframes` with `prism-` prefix (e.g., `prism-cursor-blink`, `prism-skeleton-pulse`) |
+
+**Host app integration checklist:**
+
+1. **Tailwind class conflicts**: Prism does not emit Tailwind utility classes. If the host app uses Tailwind, there are no class collisions. Prism's inline styles take precedence over Tailwind's utility classes on shared DOM elements.
+
+2. **CSS custom property overrides**: Host apps can override Prism's visual tokens by setting `--prism-*` variables on a parent element:
+   ```css
+   .my-chat-container {
+     --prism-color-primary: #7C3AED;
+     --prism-color-surface-card: #1E1E2E;
+   }
+   ```
+
+3. **CSS reset interference**: Prism components do not depend on a CSS reset. If the host app's reset aggressively overrides `button`, `input`, or `textarea` styles, wrap Prism components in a container with `all: revert` or scope the reset.
+
+4. **Tailwind `@layer` ordering**: If using Tailwind v4's `@layer` system, Prism's inline styles always win over layered utility classes (inline styles have the highest specificity regardless of layer order).
+
+5. **Shadow DOM (optional)**: For strict isolation in micro-frontend or widget-embed scenarios, wrap the Prism component tree in a shadow root. Prism's inline style approach works inside shadow DOM without modification.
+
 ### Next.js 15+ Extensions
 
 Next.js extends the web engine with server-side capabilities. These are additive — they import and wrap web engine components without modifying them.
