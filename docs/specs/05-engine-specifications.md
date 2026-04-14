@@ -980,6 +980,11 @@ interface ChatMessage {
   // Branch metadata
   parentId?: string;              // If this message is a branch, the parent message ID.
   branchIndex?: number;           // Branch number (0 = original, 1+ = branches).
+
+  // Domain-specific metadata
+  meta?: Record<string, unknown>; // Extensible metadata (e.g. riskTier, confidenceScore, conversationId).
+                                  // Adapters set meta.conversationId on complete events so useChatState
+                                  // can track new conversation IDs without a racy refresh.
 }
 
 interface Citation {
@@ -1040,6 +1045,53 @@ interface Citation {
 | `suggestionChips` | Custom suggestion chip layout. | Horizontal scrollable row of chip buttons. |
 | `emptyConversation` | Content shown when conversation has no messages. | Welcome message + suggestion chips. |
 | `headerBar` | Content in the chat header (conversation title, actions). | Conversation title + search button + settings button. |
+| `renderMessageActions` | Custom action buttons per message (e.g. feedback, escalation, risk badge). | None (no default actions). |
+
+### Transport Adapter
+
+The ChatAdapter interface decouples the chat engine from any specific backend:
+
+```typescript
+interface ChatAdapter {
+  listConversations(): Promise<ConversationSummary[]>;
+  loadMessages(conversationId: string): Promise<ChatMessage[]>;
+  sendMessage(conversationId: string | null, content: string, attachments?: File[]): ChatStreamHandle;
+  deleteConversation(id: string): Promise<void>;
+  renameConversation(id: string, title: string): Promise<void>;
+}
+
+interface ChatStreamHandle {
+  onToken(callback: (token: string) => void): void;
+  onComplete(callback: (message: ChatMessage) => void): void;
+  onError(callback: (error: Error) => void): void;
+  abort(): void;
+}
+
+interface ConversationSummary {
+  id: string;
+  title: string;
+  lastMessage?: string;
+  timestamp: number;     // Unix ms.
+  messageCount: number;
+  meta?: Record<string, unknown>;  // Domain-specific (e.g. riskTier).
+}
+```
+
+**ID contract**: All IDs are `string`. Backends using numeric IDs (e.g. arbor advisory) convert in their adapter. The `onComplete` message should set `meta.conversationId` when a new conversation is created so the state manager can track it.
+
+### State Management (useChatState / KChatState)
+
+Transport-agnostic state management provided as a React hook (`useChatState`) and Flutter ChangeNotifier (`KChatState`). Manages conversations, messages, streaming buffer, and conversation CRUD. Consumer passes a ChatAdapter; the hook wires everything internally.
+
+### ConversationTemplate Wired Mode
+
+The ConversationTemplate supports two modes:
+
+1. **Wired mode**: Pass `adapter: ChatAdapter` and the template internally composes ConversationSidebar, ChatEngine, and useChatState. Consumers customize via `renderMeta` (domain badges per conversation), `renderMessageActions` (per-message actions like feedback), and `renderContent`/`renderSidebar` overrides.
+
+2. **Manual mode**: Pass `conversationList` and `content` as ReactNode/Widget for full control.
+
+The template auto-wraps with LayoutProvider if not already inside one, so consumers don't need to know about the layout dependency.
 
 ### Streaming Contract
 

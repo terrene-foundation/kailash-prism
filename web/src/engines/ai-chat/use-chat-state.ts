@@ -202,10 +202,15 @@ export function useChatState(options: ChatStateOptions): ChatStateValue {
         setStreamBuffer('');
         setMessages((prev) => [...prev, assistantMessage]);
 
-        // If this was a new conversation, the adapter may have set
-        // the conversation ID in the completed message
-        if (activeConversationId === null && assistantMessage.id) {
-          // Refresh conversation list so the new one appears
+        // If this was a new conversation, extract the backend-assigned
+        // conversation ID from meta and set it as active. This prevents
+        // the race where refreshConversations arrives before the state
+        // update, and subsequent messages go to null instead of the new ID.
+        if (activeConversationId === null) {
+          const newId = assistantMessage.meta?.conversationId as string | undefined;
+          if (newId) {
+            setActiveConversationId(newId);
+          }
           refreshConversations();
         }
       });

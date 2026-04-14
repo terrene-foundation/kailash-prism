@@ -29,12 +29,16 @@ class KConversationSummary {
   final DateTime timestamp;
   final int messageCount;
 
+  /// Domain-specific metadata (e.g. risk tier, category).
+  final Map<String, Object?>? meta;
+
   const KConversationSummary({
     required this.id,
     required this.title,
     this.lastMessage,
     required this.timestamp,
     this.messageCount = 0,
+    this.meta,
   });
 
   KConversationSummary copyWith({String? title}) => KConversationSummary(
@@ -43,6 +47,7 @@ class KConversationSummary {
         lastMessage: lastMessage,
         timestamp: timestamp,
         messageCount: messageCount,
+        meta: meta,
       );
 }
 
@@ -187,8 +192,14 @@ class KChatState extends ChangeNotifier {
       _messages = [..._messages, msg];
       notifyListeners();
 
-      // Refresh conversations if this was a new conversation
+      // If this was a new conversation, extract the backend-assigned
+      // conversation ID from meta and set it as active.
       if (_activeConversationId == null) {
+        final newId = msg.meta?['conversationId'] as String?;
+        if (newId != null) {
+          _activeConversationId = newId;
+          notifyListeners();
+        }
         loadConversations();
       }
     });

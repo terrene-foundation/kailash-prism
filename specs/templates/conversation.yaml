@@ -2,19 +2,52 @@
 # AI chat interface with conversation history, message stream, and auxiliary panels.
 # See docs/specs/06-page-templates.md section 6.2.7 for the full specification.
 
-version: "0.1.0"
+version: "0.2.0"
 
 template:
   name: Conversation
   description: >
     AI chat interface with conversation history, message stream,
-    and auxiliary panels.
+    and auxiliary panels. Supports two modes: wired (adapter-driven
+    turnkey) and manual (consumer-composed).
   use_cases:
     - AI assistant
     - Support chat
     - Customer service
     - Knowledge base Q&A
     - Code generation assistant
+    - HR advisory (arbor pilot — validated 2026-04-14)
+
+  modes:
+    wired:
+      description: >
+        Pass a ChatAdapter and the template internally composes
+        ConversationSidebar, ChatEngine, and useChatState/KChatState.
+      required_props:
+        - adapter  # ChatAdapter / KChatAdapter implementation
+      optional_props:
+        - renderMeta        # Domain badges per conversation (e.g. risk tier)
+        - renderMessageActions  # Per-message actions (e.g. feedback, escalation)
+        - avatars           # User/assistant avatars
+        - features          # Feature toggles (citations, toolCalls, etc.)
+        - input             # Input config (placeholder, maxLength)
+        - renderContent     # Override chat content entirely
+        - renderSidebar     # Override sidebar entirely
+        - onMessageSent     # Side-effect callback after send
+        - onConversationChange  # Callback when active conversation changes
+      auto_wraps:
+        - LayoutProvider    # Detects if missing, wraps automatically
+    manual:
+      description: >
+        Pass conversationList + content as ReactNode/Widget for
+        full control. No internal state management.
+      required_props:
+        - content
+      optional_props:
+        - conversationList
+        - detailPanel
+        - listWidth
+        - detailWidth
 
   navigation:
     renders_inside: navigation-engine

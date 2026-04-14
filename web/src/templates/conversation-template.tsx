@@ -13,7 +13,7 @@
  */
 
 import { useState, useCallback, type ReactNode, type CSSProperties } from 'react';
-import { useLayout } from '../engines/layout.js';
+import { useLayout, useLayoutMaybe, LayoutProvider } from '../engines/layout.js';
 import { ChatEngine } from '../engines/ai-chat/chat-engine.js';
 import { ConversationSidebar } from '../engines/ai-chat/conversation-sidebar.js';
 import { useChatState } from '../engines/ai-chat/use-chat-state.js';
@@ -292,9 +292,25 @@ function WiredConversation({
   );
 }
 
+// --- Auto-wrap helper ---
+
+function WithLayout({ children }: { children: ReactNode }) {
+  const existing = useLayoutMaybe();
+  if (existing) return <>{children}</>;
+  return <LayoutProvider>{children}</LayoutProvider>;
+}
+
 // --- Main export ---
 
 export function ConversationTemplate(props: ConversationTemplateProps) {
+  return (
+    <WithLayout>
+      <ConversationTemplateInner {...props} />
+    </WithLayout>
+  );
+}
+
+function ConversationTemplateInner(props: ConversationTemplateProps) {
   if (props.adapter) {
     return <WiredConversation {...props} />;
   }

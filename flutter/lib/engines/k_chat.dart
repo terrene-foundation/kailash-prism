@@ -93,6 +93,9 @@ class KChatMessage {
   final String? parentId;
   final int? branchIndex;
 
+  /// Domain-specific metadata (e.g. risk tier, confidence score).
+  final Map<String, Object?>? meta;
+
   const KChatMessage({
     required this.id,
     required this.type,
@@ -104,6 +107,7 @@ class KChatMessage {
     this.toolResult,
     this.parentId,
     this.branchIndex,
+    this.meta,
   });
 }
 

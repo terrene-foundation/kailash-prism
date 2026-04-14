@@ -529,6 +529,11 @@ export function useLayout(): LayoutContextValue {
   return ctx;
 }
 
+/** Returns the layout context or null if no LayoutProvider wraps this tree. */
+export function useLayoutMaybe(): LayoutContextValue | null {
+  return useContext(LayoutContext);
+}
+
 /** Resolve a responsive value for the current breakpoint */
 export function useResponsive<T>(value: T | ResponsiveValue<T>, fallback: T): T {
   const { breakpoint } = useLayout();
