@@ -198,6 +198,90 @@ void main() {
     });
   });
 
+  group('KWiredConversationTemplate', () {
+    testWidgets('renders sidebar and chat engine from adapter', (tester) async {
+      final adapter = _TestChatAdapter();
+      await pumpAt(tester, KWiredConversationTemplate(adapter: adapter));
+      await tester.pumpAndSettle();
+
+      // Sidebar shows conversation titles from adapter
+      expect(find.text('First chat'), findsOneWidget);
+      expect(find.text('Second chat'), findsOneWidget);
+
+      // Chat engine shows empty state (no conversation selected)
+      expect(find.text('Start a conversation'), findsOneWidget);
+    });
+
+    testWidgets('renders detail panel alongside wired content', (tester) async {
+      final adapter = _TestChatAdapter();
+      await pumpAt(
+        tester,
+        KWiredConversationTemplate(
+          adapter: adapter,
+          detailPanel: const Text('citation panel'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('citation panel'), findsOneWidget);
+    });
+
+    testWidgets('accepts metaBuilder for domain badges', (tester) async {
+      final adapter = _TestChatAdapter();
+      await pumpAt(
+        tester,
+        KWiredConversationTemplate(
+          adapter: adapter,
+          metaBuilder: (conv) => Text('badge-${conv.id}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('badge-c1'), findsOneWidget);
+      expect(find.text('badge-c2'), findsOneWidget);
+    });
+
+    testWidgets('accepts contentBuilder override', (tester) async {
+      final adapter = _TestChatAdapter();
+      await pumpAt(
+        tester,
+        KWiredConversationTemplate(
+          adapter: adapter,
+          contentBuilder: (state) =>
+              Text('custom content: ${state.conversations.length} convs'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('custom content: 2 convs'), findsOneWidget);
+    });
+
+    testWidgets('accepts sidebarBuilder override', (tester) async {
+      final adapter = _TestChatAdapter();
+      await pumpAt(
+        tester,
+        KWiredConversationTemplate(
+          adapter: adapter,
+          sidebarBuilder: (state) =>
+              Text('custom sidebar: ${state.conversations.length}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('custom sidebar: 2'), findsOneWidget);
+    });
+
+    testWidgets('hides sidebar on mobile', (tester) async {
+      final adapter = _TestChatAdapter();
+      await pumpAt(
+        tester,
+        KWiredConversationTemplate(adapter: adapter),
+        size: mobileSize,
+      );
+      await tester.pumpAndSettle();
+      // Sidebar conversations should not be visible on mobile
+      expect(find.text('First chat'), findsNothing);
+      // Chat engine still visible
+      expect(find.text('Start a conversation'), findsOneWidget);
+    });
+  });
+
   group('KSplitTemplate', () {
     testWidgets('renders both panels on desktop', (tester) async {
       await pumpAt(
@@ -345,4 +429,62 @@ void main() {
       expect(find.text('Help'), findsOneWidget);
     });
   });
+}
+
+/// Test adapter returning predictable conversation and message data.
+class _TestChatAdapter extends KChatAdapter {
+  @override
+  Future<List<KConversationSummary>> listConversations() async => [
+        KConversationSummary(
+          id: 'c1',
+          title: 'First chat',
+          timestamp: DateTime.now(),
+          messageCount: 2,
+        ),
+        KConversationSummary(
+          id: 'c2',
+          title: 'Second chat',
+          timestamp: DateTime.now().subtract(const Duration(hours: 1)),
+          messageCount: 5,
+        ),
+      ];
+
+  @override
+  Future<List<KChatMessage>> loadMessages(String conversationId) async => [
+        KChatMessage(
+          id: 'm1',
+          type: KMessageType.user,
+          content: 'Hello',
+          timestamp: DateTime.now(),
+          sender: KMessageSender.user,
+        ),
+        KChatMessage(
+          id: 'm2',
+          type: KMessageType.assistant,
+          content: 'Hi there!',
+          timestamp: DateTime.now(),
+          sender: KMessageSender.assistant,
+        ),
+      ];
+
+  @override
+  KChatStreamHandle sendMessage(String? conversationId, String content) =>
+      _NoopStreamHandle();
+
+  @override
+  Future<void> deleteConversation(String id) async {}
+
+  @override
+  Future<void> renameConversation(String id, String title) async {}
+}
+
+class _NoopStreamHandle extends KChatStreamHandle {
+  @override
+  void onToken(void Function(String token) callback) {}
+  @override
+  void onComplete(void Function(KChatMessage message) callback) {}
+  @override
+  void onError(void Function(Object error) callback) {}
+  @override
+  void abort() {}
 }
