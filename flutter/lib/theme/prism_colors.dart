@@ -42,6 +42,9 @@ abstract final class PrismColors {
   static const statusSuccess = Color(0xFF16A34A);
   static const statusWarning = Color(0xFFD97706);
   static const statusInfo = Color(0xFF2563EB);
+  static const textTertiary = gray400;
+  static const primary = interactivePrimary;
+  static const surfaceActive = Color(0xFFEFF6FF);
 
   // Dark mode overrides
   static const darkInteractivePrimary = Color(0xFF60A5FA);

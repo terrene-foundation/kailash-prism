@@ -38,3 +38,4 @@ export 'engines/k_navigation.dart';
 export 'engines/k_data_table.dart';
 export 'engines/k_form.dart';
 export 'engines/k_chat.dart';
+export 'engines/k_chat_sidebar.dart';
