@@ -1,0 +1,257 @@
+source_repo: kailash-prism
+codify_date: "2026-04-12"
+codify_session: "Gate 1 initial review — kailash-prism onboarding diff against loom globals"
+status: distributed
+reviewed_at: "2026-04-12"
+distributed_date: "2026-04-12"
+sdk_version: null
+coc_version: "1.0.3"
+
+# Initial review of kailash-prism BUILD repo. This BUILD had never been
+# codified nor synced before, so the "changes" here are the result of a
+# cold diff between kailash-prism/.claude/ and loom/.claude/ globals.
+# The prism BUILD was seeded from an older populate (commit d262e3f) on
+# top of a TS/Dart/Rust adaptation pass (commit 4c51f0b). Some diffs are
+# legitimate prism-specific language adaptations (classified variant-prism);
+# others are stale content regressions from the seeding (classified skip,
+# Gate 2 will restore them from loom globals).
+
+changes:
+  # --- Rules: classified variant-prism ---
+
+  - file: rules/zero-tolerance.md
+    action: modified
+    suggested_tier: variant-prism
+    placed_at: variants/prism/rules/zero-tolerance.md
+    manifest_entry: "variants: rules/zero-tolerance.md.prism"
+    reason: |
+      Prism is TypeScript/Dart/Rust (web/flutter/tauri-rs). Rule 2 stub
+      patterns (throw new Error, UnimplementedError, todo!()), Rule 3
+      empty-catch patterns (.catch(() => {}), on Exception catch), Rule 5
+      version locations (web/package.json, flutter/pubspec.yaml,
+      tauri-rs/Cargo.toml), and the Rule 1 verify command (npx vitest run
+      / flutter test / cargo test) are all language-specific. Promoting
+      to global would leak TS/Dart/Rust idioms into py/rs/rb USE templates.
+      Upstream Rule 1a (Scanner-Surface Symmetry), Rule 3a (Typed Delegate
+      Guards), and Extended Examples are preserved in the variant (prism
+      BUILD file had stale-dropped them; the variant re-adds them adapted
+      to TS/Dart).
+    diff_lines: "+70 -60"
+
+  - file: rules/agents.md
+    action: modified
+    suggested_tier: variant-prism
+    placed_at: variants/prism/rules/agents.md
+    manifest_entry: "variants: rules/agents.md.prism"
+    reason: |
+      Worktree isolation for compiling agents applies only to the tauri-rs
+      subdirectory on prism; web (TypeScript) and flutter (Dart) builds
+      have no lock contention and can run in parallel without worktrees.
+      This clarification is prism-specific (it describes prism's directory
+      topology) and would confuse Python/Rust BUILD readers if promoted to
+      global. Variant also re-adds react-specialist/flutter-specialist/
+      uiux-designer to the specialist delegation list for prism's FE work.
+      Upstream Specs Context in Delegation, full MUST gate enforcement
+      columns, and BLOCKED responses are preserved (prism BUILD file had
+      stale-dropped them).
+    diff_lines: "+30 -15"
+
+  - file: rules/testing.md
+    action: modified
+    suggested_tier: variant-prism
+    placed_at: variants/prism/rules/testing.md
+    manifest_entry: "variants: rules/testing.md.prism"
+    reason: |
+      Frontmatter paths rewritten for TS/Dart test discovery
+      (**/*.test.ts, **/*_test.dart, **/vitest.config.*,
+      **/playwright.config.*). Every example rewritten in vitest/flutter_test
+      syntax. Tier 2/3 commands are npx vitest / flutter test /
+      npx playwright test. Directory layouts reference web/src/__tests__
+      and flutter/test instead of tests/unit|integration|e2e. Cannot be
+      global — the paths frontmatter alone would stop the rule from
+      loading on any Python project. Upstream MUST clauses for Behavioral
+      Regression Tests and Verified Numerical Claims are preserved,
+      re-adapted to vitest/flutter.
+    diff_lines: "+100 -80"
+
+  - file: rules/independence.md
+    action: modified
+    suggested_tier: variant-prism
+    placed_at: variants/prism/rules/independence.md
+    manifest_entry: "variants: rules/independence.md.prism (new entry)"
+    reason: |
+      "Kailash Python SDK" → "Kailash Prism" throughout. "Python developers"
+      → "TypeScript/Dart/Rust developers". "PyPI" → "npm, pub.dev,
+      crates.io". "Python version of X" anti-example → "frontend version
+      of X". These are product-identity rewrites, not universal rule
+      changes — promoting would rename Kailash Python SDK in the py/rs/rb
+      USE templates.
+    diff_lines: "+8 -8"
+
+  - file: rules/security.md
+    action: modified
+    suggested_tier: variant-prism
+    placed_at: variants/prism/rules/security.md
+    manifest_entry: "variants: rules/security.md.prism (new entry)"
+    reason: |
+      Hardcoded-secrets examples rewritten in TypeScript/Dart/Rust.
+      Parameterized queries examples use Prisma/Drizzle/ORM idioms.
+      eval() MUST NOT clause enumerates new Function(userInput) and
+      child_process.exec(userInput). Prism-Specific Security section
+      replaces the Kailash-Specific (DataFlow/Nexus/Kaizen) section with
+      Next.js/React/Flutter/Tauri guidance. Upstream Credential Decode
+      Helpers section is preserved, re-adapted to TypeScript
+      (decodeUserinfoOrRaise via @kailash/prism-web/utils/url-credentials).
+    diff_lines: "+40 -35"
+
+  - file: rules/terrene-naming.md
+    action: modified
+    suggested_tier: variant-prism
+    placed_at: variants/prism/rules/terrene-naming.md
+    manifest_entry: "variants: rules/terrene-naming.md.prism (new entry)"
+    reason: |
+      "Kailash Python SDK is Foundation-owned" → "Kailash Prism is a
+      Terrene Foundation project". License Accuracy list adds "Kailash
+      Prism" alongside Kailash Python. Upstream four-standards canonical
+      list (CARE + EATP + CO + PACT) is preserved (prism BUILD file had
+      stale-dropped PACT; the variant re-adds it).
+    diff_lines: "+3 -2"
+
+  # --- Rules: classified global (additive merge) ---
+
+  - file: rules/git.md
+    action: modified
+    suggested_tier: global
+    placed_at: .claude/rules/git.md
+    reason: |
+      Added terrene-foundation/kailash-prism and
+      terrene-foundation/kailash-coc-claude-prism rows to the Branch
+      Protection table. These are real repos with the same admin-bypass
+      Full protection as the other BUILD/template repos; the information
+      is useful to every variant's users. Merged into the global table in
+      place. The BUILD file's other git.md diffs (dropped Issue Closure
+      Discipline, Pre-Commit Hook Workarounds, commit-bodies-answer-why
+      sections) are stale regressions from the seeding and are classified
+      skip — Gate 2 will restore them from the global.
+    diff_lines: "+2 -0"
+
+  # --- Rules: classified skip (content regressions, Gate 2 will restore) ---
+
+  - file: rules/zero-tolerance.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Same file listed above as variant-prism for its legitimate prism
+      adaptations. The dropped Rule 1a and Rule 3a sections in the prism
+      BUILD file are stale regressions (they post-date the d262e3f
+      populate). The variant-prism file re-adds them adapted to TS/Dart,
+      so the regression is absorbed by Gate 2 distribution of the variant.
+
+  - file: rules/agents.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Same file listed above as variant-prism. The dropped "Specs Context
+      in Delegation" section, full MUST gate enforcement columns, and
+      BLOCKED responses in the prism BUILD file are stale regressions
+      re-added in the variant-prism file.
+
+  - file: rules/terrene-naming.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Same file listed above as variant-prism. The dropped PACT mention
+      in the canonical-standards list is a stale regression re-added in
+      the variant-prism file.
+
+  - file: rules/git.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Same file listed above as global (for the prism-repos row addition).
+      The other dropped sections (Issue Closure Discipline, Pre-Commit
+      Hook Workarounds, commit-body "why" guidance) are stale regressions
+      from pre-0052-DISCOVERY seeding. Gate 2 will restore them from the
+      global.
+
+  - file: commands/analyze.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Prism BUILD version drops Step 5 "Create specs/" from the analysis
+      phase. This is a stale regression — kailash-prism actually has
+      specs/ content (per commit 98e9bec), and the specs-authority
+      protocol applies to prism just as it does to py/rs. Gate 2 will
+      restore the global.
+
+  - file: commands/codify.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Prism BUILD version drops the BUILD-vs-USE repo distinction section
+      and references docs/specs/ instead of docs/00-authority/. Stale
+      regression; Gate 2 will restore the global.
+
+  - file: commands/implement.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Prism BUILD version drops the spec/plan/journal re-read protocol
+      and the brief-modification-after-specs stop condition. Stale
+      regression; Gate 2 will restore the global.
+
+  - file: commands/redteam.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Prism BUILD version drops specs-to-code verification, cross-spec
+      consistency checks, and brief-to-spec coverage checks. The one
+      prism-specific change (pytest → vitest / flutter test) is already
+      covered by the global's "or your project's equivalent test
+      enumeration command" escape hatch, so no variant is needed.
+      Gate 2 will restore the global.
+
+  - file: commands/todos.md
+    action: skip-regression
+    suggested_tier: skip
+    reason: |
+      Prism BUILD version drops the specs/_index.md read-gate and the
+      "each todo MUST reference which spec file(s) it implements"
+      requirement. Stale regression; Gate 2 will restore the global.
+
+# Files in prism BUILD that match loom globals exactly (no action needed):
+#   rules/agent-reasoning.md, artifact-flow.md, autonomous-execution.md,
+#   cc-artifacts.md, communication.md, dataflow-identifier-safety.md,
+#   dependencies.md, deploy-hygiene.md, documentation.md,
+#   facade-manager-detection.md, framework-first.md, observability.md,
+#   orphan-detection.md, patterns.md, refactor-invariants.md,
+#   rule-authoring.md, schema-migration.md, specs-authority.md,
+#   tenant-isolation.md, and all agents/skills/guides subdirs.
+#
+# Files only in loom globals (not yet in prism BUILD) — Gate 2 will add:
+#   rules/connection-pool.md, cross-sdk-inspection.md, dataflow-pool.md,
+#   deployment.md, e2e-god-mode.md, eatp.md, env-models.md,
+#   infrastructure-sql.md, journal.md, pact-governance.md,
+#   python-environment.md, trust-plane-security.md.
+#   These flow naturally from the tier membership in sync-manifest.yaml;
+#   no review action required.
+
+cross_sdk_alignment:
+  - change: "git.md — add prism repos to Branch Protection table"
+    needs_variant_adaptation: false
+    note: |
+      Pure additive change. py/rs/rb variants do not override git.md, so
+      the updated global reaches all USE templates identically. No variant
+      work required.
+
+manifest_updates:
+  additions:
+    - "variants: rules/independence.md (new entry, prism only)"
+    - "variants: rules/security.md (new entry, prism only)"
+    - "variants: rules/terrene-naming.md (new entry, prism only)"
+  reclassifications:
+    - "variants: rules/agents.md — added prism key"
+    - "variants: rules/testing.md — added prism key"
+    - "variants: rules/zero-tolerance.md — added prism key"
+  removals: []
+  variant_only_prism_entries_added: []

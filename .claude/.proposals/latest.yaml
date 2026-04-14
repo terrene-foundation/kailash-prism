@@ -1,0 +1,143 @@
+source_repo: kailash-prism
+codify_date: "2026-04-14"
+codify_session: "feat(prism): Phase 2 — ConversationTemplate wired mode + arbor pilot"
+sdk_version: "0.1.0"
+coc_version: "1.0.3"
+
+changes:
+  # --- New engine features (Phase 2) ---
+
+  - file: web/src/engines/ai-chat/types.ts
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Added meta field to ChatMessage and ConversationSummary types for
+      domain-specific metadata (risk tier, confidence score, etc.).
+      Added renderMessageActions slot to ChatEngineConfig for per-message
+      action buttons (feedback, escalation). Fixed all optional props
+      to include | undefined for exactOptionalPropertyTypes compliance.
+    diff_lines: "+30 -10"
+
+  - file: web/src/engines/ai-chat/use-chat-state.ts
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      New conversation ID propagation: extracts meta.conversationId from
+      onComplete message and sets it as activeConversationId, fixing the
+      race where refreshConversations arrives before state update.
+    diff_lines: "+8 -3"
+
+  - file: web/src/engines/ai-chat/conversation-sidebar.tsx
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Phase 2: ConversationSidebar with date grouping, search, inline
+      rename, delete confirmation, collapsed mode, renderMeta slot for
+      domain-specific badges.
+    diff_lines: "+571 -0"
+
+  - file: web/src/engines/ai-chat/chat-engine.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Added renderMessageActions slot — renders custom action buttons
+      per message (feedback thumbs, escalation, risk badge).
+    diff_lines: "+10 -5"
+
+  - file: web/src/templates/conversation-template.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Major refactor: ConversationTemplate now supports wired mode (pass
+      ChatAdapter, template internally composes ChatEngine +
+      ConversationSidebar + useChatState). Auto-wraps LayoutProvider if
+      not present. Manual mode (backwards-compatible) preserved.
+    diff_lines: "+250 -30"
+
+  - file: web/src/engines/layout.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Added useLayoutMaybe() for safe context detection (returns null if
+      no LayoutProvider wraps the tree). Used by ConversationTemplate to
+      auto-wrap. Fixed unused import + null-safe array destructuring.
+    diff_lines: "+10 -3"
+
+  # --- Flutter parity ---
+
+  - file: flutter/lib/engines/k_chat.dart
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Added meta field to KChatMessage (Map<String, Object?>?) matching
+      web's Record<string, unknown>.
+    diff_lines: "+4 -0"
+
+  - file: flutter/lib/engines/k_chat_sidebar.dart
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Added meta field to KConversationSummary. Fixed KChatState to
+      propagate conversationId from meta on new conversation complete.
+    diff_lines: "+13 -5"
+
+  - file: flutter/lib/templates/k_templates.dart
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Added KWiredConversationTemplate: Flutter equivalent of wired mode.
+      Composes KConversationSidebar + KChatEngine + KChatState internally.
+      Supports metaBuilder, contentBuilder, sidebarBuilder overrides.
+    diff_lines: "+218 -30"
+
+  # --- Spec updates ---
+
+  - file: docs/specs/05-engine-specifications.md
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Updated § 5.6 AI Chat Engine with: meta field on ChatMessage,
+      ChatAdapter interface, ConversationSummary type, useChatState/
+      KChatState documentation, ConversationTemplate wired mode,
+      renderMessageActions composition slot.
+    diff_lines: "+52 -0"
+
+  - file: specs/templates/conversation.yaml
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Bumped to 0.2.0. Added wired/manual mode documentation with
+      required/optional props and auto-wraps section. Added arbor
+      advisory as validated use case.
+    diff_lines: "+37 -2"
+
+  # --- TS strict-mode fixes ---
+
+  - file: web/src/engines/ai-chat/chat-input.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      exactOptionalPropertyTypes compliance — optional callback props
+      now accept | undefined.
+    diff_lines: "+4 -4"
+
+  - file: web/src/engines/ai-chat/chat-message.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Removed unused imports (useCallback, ToolCallStep). Fixed
+      exactOptionalPropertyTypes on ChatMessageBubbleProps.
+    diff_lines: "+4 -4"
+
+  # --- Red team findings ---
+
+  - file: workspaces/fe-codegen-platform/04-validate/redteam-arbor-pilot.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Red team findings from arbor advisory pilot: 3 HIGH, 3 MEDIUM,
+      3 LOW findings. Documents adapter pattern assessment and
+      production parity gaps.
+    diff_lines: "+52 -0"
+
+status: pending_review
