@@ -52,6 +52,8 @@ export interface ChatMessage {
   toolResult?: ToolResultData;
   parentId?: string;
   branchIndex?: number;
+  /** Domain-specific metadata (e.g. risk tier, confidence score) */
+  meta?: Record<string, unknown> | undefined;
 }
 
 // --- Action plan ---
@@ -100,6 +102,8 @@ export interface ConversationSummary {
   lastMessage?: string;
   timestamp: number;
   messageCount: number;
+  /** Domain-specific metadata (e.g. risk tier, category) */
+  meta?: Record<string, unknown> | undefined;
 }
 
 // --- Chat adapter (transport-agnostic) ---
@@ -205,6 +209,9 @@ export interface ChatEngineConfig {
     actionPlans?: boolean;
     suggestions?: boolean;
   } | undefined;
+
+  /** Render custom action buttons per message (e.g. feedback, escalation) */
+  renderMessageActions?: ((message: ChatMessage) => ReactNode) | undefined;
 
   /** Callbacks */
   onSend?: ((message: { content: string; attachments?: File[]; source?: string }) => void) | undefined;

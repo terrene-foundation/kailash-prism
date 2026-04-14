@@ -63,6 +63,7 @@ export function ChatEngine({
   input = {},
   avatars,
   features = {},
+  renderMessageActions,
   onSend,
   onActionPlanResponse,
   onCitationClick,
@@ -149,19 +150,21 @@ export function ChatEngine({
             }
 
             return (
-              <ChatMessageBubble
-                key={message.id}
-                message={message}
-                avatar={
-                  message.sender === 'user'
-                    ? avatars?.user
-                    : message.sender === 'assistant'
-                      ? avatars?.assistant
-                      : undefined
-                }
-                onCitationClick={showCitations ? onCitationClick : undefined}
-                onRetry={onRetry}
-              />
+              <div key={message.id}>
+                <ChatMessageBubble
+                  message={message}
+                  avatar={
+                    message.sender === 'user'
+                      ? avatars?.user
+                      : message.sender === 'assistant'
+                        ? avatars?.assistant
+                        : undefined
+                  }
+                  onCitationClick={showCitations ? onCitationClick : undefined}
+                  onRetry={onRetry}
+                />
+                {renderMessageActions && renderMessageActions(message)}
+              </div>
             );
           })}
 

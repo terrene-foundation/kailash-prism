@@ -101,6 +101,9 @@ export interface ConversationTemplateWiredProps extends LayoutProps {
   /** Suggestion chips */
   suggestions?: SuggestionChip[];
 
+  /** Render custom action buttons per message (e.g. feedback, escalation) */
+  renderMessageActions?: (message: ChatMessage) => ReactNode;
+
   /** Callbacks for advanced consumers */
   onActionPlanResponse?: (response: { stepIndex: number; action: ActionPlanAction; modification?: string }) => void;
   onCitationClick?: (citation: Citation) => void;
@@ -181,6 +184,7 @@ function WiredConversation({
   toolCallSteps,
   actionPlan,
   suggestions,
+  renderMessageActions,
   onActionPlanResponse,
   onCitationClick,
   onSuggestionClick,
@@ -261,6 +265,7 @@ function WiredConversation({
       avatars={avatars}
       features={features}
       onSend={handleSend}
+      renderMessageActions={renderMessageActions}
       onActionPlanResponse={onActionPlanResponse}
       onCitationClick={onCitationClick}
       onSuggestionClick={onSuggestionClick}
