@@ -2,11 +2,20 @@
 # Source: docs/specs/03-component-contracts.md § 3.4.4
 # Data entry form with validation, submission handling, and error reporting.
 
-version: "0.1.0"
+version: "0.2.0"
 
 name: Form
 category: organism
 description: "Data entry form with validation, submission handling, and error reporting."
+
+changelog:
+  - version: "0.2.0"
+    date: "2026-04-14"
+    changes:
+      - "FEAT: FieldDef.render?: (ctx: FieldRenderContext) => ReactNode — custom field renderer that preserves label/help/error wrapper."
+      - "FEAT: FormConfig.renderActions?: (state) => ReactNode — replace default submit+reset button row."
+      - "FEAT: FormConfig.submitDisabledWhen?: (state) => boolean — predicate-based submit disable."
+      - "FEAT: FormConfig.classNames — per-element className overrides (form, section, field, label, input, error, helpText, actions, submitButton, resetButton). Inline --prism-* style fallback skipped when override supplied."
 
 composed_of:
   atoms:
@@ -46,6 +55,21 @@ props:
     required: false
     default: null
     description: "Additional CSS class for composition"
+  - name: renderActions
+    type: "((state: FormActionsState) => ReactNode) | undefined"
+    required: false
+    default: null
+    description: "Custom action row (since 0.2.0). Replaces default submit+reset. Receives submit() and reset() callbacks plus form state."
+  - name: submitDisabledWhen
+    type: "((state) => boolean) | undefined"
+    required: false
+    default: null
+    description: "Predicate returning true when submit should be disabled (since 0.2.0). Combined with the built-in 'disabled while submitting' rule."
+  - name: classNames
+    type: "FormClassNames | undefined"
+    required: false
+    default: null
+    description: "Per-element className overrides (since 0.2.0): form, section, field, label, input, error, helpText, actions, submitButton, resetButton."
 
 states:
   initial: pristine

@@ -3,6 +3,7 @@
  * Spec: docs/specs/05-engine-specifications.md § 5.2
  */
 
+import type { ReactNode } from 'react';
 import { type ZodSchema } from 'zod';
 
 // --- Public types ---
@@ -43,6 +44,37 @@ export interface FieldValidationRule {
   message: string;
 }
 
+/**
+ * Context passed to a `FieldDef.render` custom renderer.
+ *
+ * Supplied when a consumer wants to replace the built-in field renderer for a
+ * specific field (e.g. a currency input with a `$` prefix, a combobox, an
+ * inline badge picker). The context exposes the same surface the built-in
+ * renderer uses so the custom path does not need to reach into form internals.
+ */
+export interface FieldRenderContext<TValue = unknown> {
+  /** Current field value (as held in Form state). */
+  value: TValue;
+  /** Update the field value — use inside input onChange handlers. */
+  onChange: (next: TValue) => void;
+  /** Mark the field as touched — use on input blur. */
+  onBlur: () => void;
+  /** Validation error message for this field, if any. */
+  error: string | undefined;
+  /** Whether the field has been touched (blurred at least once). */
+  touched: boolean;
+  /** Whether the field is disabled (form submitting, field-level disable). */
+  disabled: boolean;
+  /** Full values object — use to compute dependent field state. */
+  values: Record<string, unknown>;
+  /** The FieldDef itself — useful for reading label/placeholder/etc. */
+  field: FieldDef;
+  /** Stable DOM id for the input element (accessibility). */
+  inputId: string;
+  /** Space-separated list of described-by IDs (help text + error). */
+  describedBy: string | undefined;
+}
+
 export interface FieldDef {
   name: string;
   type: FieldType;
@@ -65,6 +97,14 @@ export interface FieldDef {
   step?: number;
   rows?: number;
   maxLength?: number;
+  /**
+   * Custom renderer. When provided, replaces the built-in field renderer for
+   * this field. Receives the current value, onChange callback, field state
+   * (error, touched), and the full values object via a `FieldRenderContext`.
+   * The built-in label / help text / error wrapper still renders around the
+   * custom input so visual rhythm stays consistent across fields.
+   */
+  render?: (ctx: FieldRenderContext) => ReactNode;
 }
 
 export interface SectionDef {
@@ -75,6 +115,64 @@ export interface SectionDef {
 }
 
 export type FormStatus = 'idle' | 'validating' | 'submitting' | 'success' | 'error';
+
+/**
+ * State snapshot passed to `renderActions` and `submitDisabledWhen`.
+ *
+ * Equivalent to the internal `FormState` but with the action callbacks the
+ * consumer needs to invoke (`submit`, `reset`) exposed explicitly so the
+ * consumer doesn't have to reach into the form's internals.
+ */
+export interface FormActionsState {
+  /** Current form status (idle, validating, submitting, success, error). */
+  status: FormStatus;
+  /** Full values object. */
+  values: Record<string, unknown>;
+  /** Current validation errors keyed by field name. */
+  errors: Record<string, string>;
+  /** Which fields have been touched. */
+  touched: Record<string, boolean>;
+  /** Submission error message (if `status === 'error'`). */
+  submitError: string | null;
+  /** Whether the submit button should be disabled (see `submitDisabledWhen`). */
+  submitDisabled: boolean;
+  /** Trigger a submit programmatically. */
+  submit: () => void;
+  /** Trigger a reset programmatically. */
+  reset: () => void;
+}
+
+/**
+ * Per-element className overrides for branded form styling.
+ *
+ * When supplied, each override is applied to the corresponding element in
+ * place of the built-in inline style fallback. Consumers who apply a value
+ * here can rely on the engine NOT also emitting its default `--prism-*`
+ * inline styles for that element, so their Tailwind / CSS rules win without
+ * specificity fights.
+ */
+export interface FormClassNames {
+  /** Applied to the `<form>` element. */
+  form?: string;
+  /** Applied to each section wrapper (`<fieldset>`). */
+  section?: string;
+  /** Applied to each field group (`<div role="group">`). */
+  field?: string;
+  /** Applied to each field `<label>`. */
+  label?: string;
+  /** Applied to inputs (`<input>`, `<select>`, `<textarea>`). */
+  input?: string;
+  /** Applied to the error `<span>` rendered under a field. */
+  error?: string;
+  /** Applied to the help-text `<span>` rendered under a field. */
+  helpText?: string;
+  /** Applied to the actions `<div>` holding submit / reset buttons. */
+  actions?: string;
+  /** Applied to the submit `<button>`. */
+  submitButton?: string;
+  /** Applied to the reset `<button>`. */
+  resetButton?: string;
+}
 
 export interface FormConfig {
   fields: FieldDef[];
@@ -92,6 +190,27 @@ export interface FormConfig {
   layout?: 'single-column' | 'two-column';
   className?: string | undefined;
   'aria-label'?: string | undefined;
+  /**
+   * Render the form's action row (submit / reset / anything else) in place of
+   * the built-in submit+reset buttons. Receives the full form state plus the
+   * `submit` and `reset` handlers so consumers can build custom action UI
+   * (sticky mobile footer, external "Reset" alongside submit, multi-step
+   * wizard controls) without wrapping the whole form.
+   */
+  renderActions?: (state: FormActionsState) => ReactNode;
+  /**
+   * Compute whether the submit button should be disabled given the current
+   * form state. Runs in addition to the built-in "disabled while submitting"
+   * behaviour — if either rule says disable, the button is disabled. Useful
+   * for "submit disabled until form is valid" patterns.
+   */
+  submitDisabledWhen?: (state: Omit<FormActionsState, 'submitDisabled' | 'submit' | 'reset'>) => boolean;
+  /**
+   * Per-element className overrides for branded styling. See `FormClassNames`.
+   * When an override is present, the corresponding inline style fallback is
+   * skipped so consumer CSS wins without specificity fights.
+   */
+  classNames?: FormClassNames;
 }
 
 // --- Internal state ---

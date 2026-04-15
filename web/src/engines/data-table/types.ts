@@ -7,9 +7,16 @@ import type { ReactNode } from 'react';
 
 // --- Row type ---
 
-/** Generic row type — consumers provide their own shape */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type DataTableRow = Record<string, unknown>;
+/**
+ * Generic row type — consumers provide their own shape.
+ *
+ * The engine only requires rows to be object-shaped. Consumers with typed
+ * interfaces (e.g. `interface PayslipRow { id: number; gross: number }`) can
+ * pass them directly without adding an `[key: string]: unknown` index
+ * signature. The engine coerces row field access internally via a typed
+ * assertion at the boundary so consumers retain the strong typing of `T`.
+ */
+export type DataTableRow = object;
 
 // --- Column definition ---
 
@@ -30,8 +37,19 @@ export interface ColumnDef<T extends DataTableRow> {
   filterType?: 'text' | 'select' | 'number' | 'boolean';
   /** Options for select filter type */
   filterOptions?: string[];
-  /** Custom cell renderer */
-  render?: (value: unknown, row: T) => ReactNode;
+  /**
+   * Custom cell renderer.
+   *
+   * `value` is typed as `T[keyof T] | undefined` so a renderer receives the
+   * statically-typed field value rather than an opaque `unknown`. This
+   * eliminates the `Number(value as unknown)` coercion pattern at call sites
+   * where the column's `field` already names a specific typed property on T.
+   *
+   * Breaking change in 0.2.0: callbacks previously typed `(value: unknown, row: T)`
+   * remain assignable (a function accepting `unknown` can handle any narrower
+   * type) but new callbacks can take advantage of the tighter typing.
+   */
+  render?: (value: T[keyof T] | undefined, row: T) => ReactNode;
   /** Text alignment. Default: "left" */
   align?: 'left' | 'center' | 'right';
 }
@@ -99,14 +117,26 @@ export interface BulkAction<T extends DataTableRow> {
 // --- Data source ---
 
 /**
- * Static data: plain array.
- * Server-side: callback returning paginated data.
+ * Static data: plain array — the engine sorts / filters / paginates client-side.
+ * Server-side: a `ServerDataSource` whose `fetchData(params)` is invoked by the
+ * engine on mount and on every page / sort / filter / search change. The engine
+ * owns the `loading` / `error` lifecycle for server sources automatically.
  */
 export type DataSource<T extends DataTableRow> =
   | T[]
   | ServerDataSource<T>;
 
 export interface ServerDataSource<T extends DataTableRow> {
+  /**
+   * Called by `useDataTable` whenever pagination / sort / filter / global
+   * search state changes. Must return the current page of rows plus the
+   * total count so the pagination footer can render page counts correctly.
+   *
+   * The engine uses an `AbortController` to cancel in-flight requests when
+   * the query params change — implementations MAY observe `params.signal` and
+   * abort the underlying fetch; stale results from cancelled requests are
+   * discarded by the engine regardless.
+   */
   fetchData: (params: ServerFetchParams) => Promise<ServerFetchResult<T>>;
 }
 
@@ -116,6 +146,12 @@ export interface ServerFetchParams {
   sort: SortState[];
   filters: Record<string, string>;
   globalSearch: string;
+  /**
+   * Optional abort signal from the engine. Firing when query params change,
+   * so adapters that forward to `fetch()` can honour cancellation. Stale
+   * results from aborted requests are discarded by the engine regardless.
+   */
+  signal?: AbortSignal;
 }
 
 export interface ServerFetchResult<T extends DataTableRow> {
@@ -174,6 +210,15 @@ export interface DataTableConfig<T extends DataTableRow> {
   expandable?: boolean;
   /** Render function for expanded row content */
   expandContent?: (row: T) => ReactNode;
+  /**
+   * Stable row-id extractor. Returned value is used as the React key for each
+   * row AND as the identity in the selection/expansion sets. If omitted, the
+   * engine falls back to `row['id']` (when present) and then to the row index.
+   *
+   * Supply this when the primary key field is not named `id` (e.g.
+   * `payslip_id`, `document_uuid`) or when the row id is a composite.
+   */
+  getRowId?: (row: T, index: number) => string;
 }
 
 // --- Internal resolved state ---

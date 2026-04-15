@@ -2,11 +2,21 @@
 # Source: docs/specs/03-component-contracts.md § 3.4.3
 # Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll.
 
-version: "0.1.0"
+version: "0.2.0"
 
 name: DataTable
 category: organism
 description: "Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll."
+
+changelog:
+  - version: "0.2.0"
+    date: "2026-04-14"
+    changes:
+      - "BREAKING: ColumnDef.render signature tightened from (value: unknown, row: T) to (value: T[keyof T] | undefined, row: T)."
+      - "BREAKING: DataTableRow relaxed from Record<string, unknown> to object; typed row interfaces no longer need an index signature."
+      - "FIX: ServerDataSource.fetchData is now invoked by useDataTable on mount and on every page/sort/filter/search change. Auto-managed serverLoading / serverError / retryServerFetch state exposed on the hook."
+      - "FEAT: DataTableConfig.getRowId?: (row, index) => string config hook. Defaults fall back to row['id'] then index."
+      - "FEAT: ServerFetchParams.signal?: AbortSignal — adapters that forward to fetch() can honour cancellation."
 
 composed_of:
   atoms:
@@ -24,10 +34,15 @@ props:
     default: null
     description: "Column definitions including header label, accessor, width, and sortability"
   - name: data
-    type: "T[]"
+    type: "T[] | ServerDataSource<T>"
     required: true
     default: null
-    description: "Array of row data objects"
+    description: "Array of row data objects (client-side processing) OR a ServerDataSource whose fetchData is invoked on every state change (since 0.2.0). The engine auto-manages loading/error for server sources."
+  - name: getRowId
+    type: "((row: T, index: number) => string) | undefined"
+    required: false
+    default: null
+    description: "Stable row-id extractor (since 0.2.0). Fallback: row['id'] then index. Use for non-id primary keys (payslip_id, document_uuid, composite)."
   - name: loading
     type: boolean
     required: false
@@ -189,3 +204,97 @@ tokens:
     - data-table.cell.padding
     - data-table.default.radius
   inherits_from: null
+
+# Proposed adapter contract (full spec: docs/specs/05-engine-specifications.md § 5.1.1)
+# Status: PROPOSED by M-05. Ships in M-06. Replaces ServerDataSource (deprecated
+# M-06, removed in 0.2.0 minor release).
+proposed_adapter:
+  name: DataTableAdapter
+  version_introduced: "0.2.0-pending"
+  supersedes: ServerDataSource
+  authority: "docs/specs/05-engine-specifications.md § 5.1.1"
+  migration_findings:
+    - "workspaces/fe-codegen-platform/04-validate/migration-m02-findings.md"
+    - "workspaces/fe-codegen-platform/04-validate/migration-m03-findings.md"
+
+  type_parameters:
+    - name: T
+      description: "Row type. No constraint beyond `object` (pending M-04 BLOCKING-3 fix)."
+    - name: TId
+      default: string
+      description: "Row identity type returned by getRowId."
+
+  methods:
+    # --- Required (3) ---
+    - name: getRowId
+      signature: "(row: T) => TId"
+      required: true
+      purpose: "Stable row identity; replaces hardcoded row['id'] lookup."
+
+    - name: capabilities
+      signature: "() => DataTableCapabilities"
+      required: true
+      purpose: "Declare which query ops the backend supports natively; engine falls back client-side for the rest."
+
+    - name: fetchPage
+      signature: "(query: DataTableQuery) => Promise<DataTablePage<T>>"
+      required: true
+      purpose: "Fetch one page. Engine drives all state changes through this method."
+
+    # --- Optional (6) ---
+    - name: onRowActivate
+      signature: "(row: T) => Promise<void> | void"
+      required: false
+      purpose: "Row click / keyboard activation handler."
+
+    - name: rowActions
+      signature: "ReadonlyArray<DataTableRowAction<T, TId>>"
+      required: false
+      purpose: "Static per-row action buttons with predicate visibility/enablement."
+
+    - name: bulkActions
+      signature: "ReadonlyArray<DataTableBulkAction<T, TId>>"
+      required: false
+      purpose: "Multi-row selection actions."
+
+    - name: filterDimensions
+      signature: "ReadonlyArray<FilterDimension>"
+      required: false
+      purpose: "Faceted filter declarations with static or async-loaded options."
+
+    - name: subscribe
+      signature: "(onChange: () => void) => () => void"
+      required: false
+      purpose: "Coarse live-update signal; engine refetches on every onChange."
+
+    - name: invalidate
+      signature: "() => Promise<void> | void"
+      required: false
+      purpose: "Clear adapter caches after mutations; engine calls after rowAction/bulkAction success."
+
+  support_types:
+    - DataTableCapabilities
+    - DataTableQuery
+    - DataTableSort
+    - DataTablePage
+    - DataTableRowAction
+    - DataTableBulkAction
+    - FilterDimension
+    - FilterDimensionOption
+
+  design_decisions:
+    one_adapter_or_mixins: "one interface with optional methods"
+    capabilities_vs_auto_detection: "explicit capabilities() — engine owns client-side fallback"
+    rowActions_shape: "static array with visible/disabled predicates"
+    filterDimensions_location: "on DataTableAdapter, not a sibling FilterAdapter"
+    serverDataSource_deprecation: "one-release window: deprecate M-06, remove 0.2.0"
+    row_type_constraint: "getRowId owns identity; no mapRow; relies on M-04 relaxing DataTableRow to `object`"
+    subscribe_granularity: "coarse (refetch signal) not fine-grained deltas"
+    pagination_split: "single interface, paginationMode capability flag distinguishes offset vs cursor"
+
+  loc_savings_estimate:
+    m02_baseline_loc: 604
+    m02_adapter_loc: 172
+    m03_baseline_loc: 715
+    m03_adapter_loc: 309
+    combined_savings_pct: 58
