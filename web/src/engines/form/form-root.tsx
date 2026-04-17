@@ -8,10 +8,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useId,
   useMemo,
   useReducer,
   useRef,
+  useState,
   type FormEvent,
 } from 'react';
 import { type ZodError } from 'zod';
@@ -52,6 +54,40 @@ export function useFormContext(): FormContextValue {
   return ctx;
 }
 
+// --- Environment detection ---
+
+/**
+ * Return true when the bundle was built for production. We read from the
+ * ambient globalThis rather than `process.env` directly so the code compiles
+ * in both node (tests) and browser (bundler-replaced) environments without
+ * needing @types/node on the web package.
+ */
+function isProductionBuild(): boolean {
+  const g = globalThis as { process?: { env?: { NODE_ENV?: string } } };
+  return g.process?.env?.NODE_ENV === 'production';
+}
+
+// --- Error sanitation ---
+
+/**
+ * Max length for a submit-error banner message. Adapter errors propagated
+ * verbatim can include stack traces or attacker-controlled echo payloads;
+ * truncating + stripping control characters keeps the live region
+ * screen-reader-safe and prevents log-injection into aria-live regions.
+ */
+const SUBMIT_ERROR_MAX_LENGTH = 500;
+
+function sanitizeSubmitError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : 'Submission failed';
+  // Strip ASCII control characters except ordinary whitespace. Prevents
+  // newline / carriage-return / NUL from disturbing screen reader
+  // announcement and log aggregator pipelines.
+  // eslint-disable-next-line no-control-regex
+  const stripped = raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  if (stripped.length <= SUBMIT_ERROR_MAX_LENGTH) return stripped;
+  return stripped.slice(0, SUBMIT_ERROR_MAX_LENGTH - 1) + '\u2026';
+}
+
 // --- Feedback banner ---
 
 const FEEDBACK_TOKENS: Record<'error' | 'success', { bg: string; border: string; color: string }> = {
@@ -77,6 +113,7 @@ export function Form({
   sections,
   validation,
   onSubmit,
+  adapter,
   onReset,
   initialValues,
   submitLabel = 'Submit',
@@ -89,17 +126,89 @@ export function Form({
   submitDisabledWhen,
   classNames,
 }: FormConfig) {
+  if (!onSubmit && !adapter) {
+    throw new Error(
+      '<Form> requires either `onSubmit` or `adapter`. ' +
+      'Pass `adapter` for forms with a post-submit result display, or `onSubmit` for fire-and-forget submissions.',
+    );
+  }
+
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const liveRegionRef = useRef<HTMLDivElement>(null);
+  // Track mounted state so post-await branches in handleSubmit / adapter
+  // callbacks bail out on unmount instead of dispatching on a stale
+  // reducer or writing to a detached DOM node.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // One-shot guard against the dev warning so inline-adapter consumers
+  // (common pattern: `<Form adapter={new MyAdapter()} />`) don't emit a
+  // warning per parent render. We only want one warning per component
+  // instance, ever.
+  const warnedBothPathsRef = useRef(false);
+  useEffect(() => {
+    if (onSubmit && adapter && !isProductionBuild() && !warnedBothPathsRef.current) {
+      warnedBothPathsRef.current = true;
+      console.warn(
+        '[Form] Both `onSubmit` and `adapter` were provided. The adapter wins; `onSubmit` is ignored. ' +
+        'Remove one to silence this warning.',
+      );
+    }
+  }, [onSubmit, adapter]);
+
+  // Adapter-seeded initial values. Resolved EXACTLY ONCE per component
+  // instance, regardless of how many times the consumer reconstructs the
+  // adapter object (`<Form adapter={new MyAdapter()} />` on every render).
+  // This is a CRITICAL invariant — without the one-shot ref, an inline
+  // adapter fires `initialValues()` on every parent render, potentially
+  // producing an unbounded backend request loop.
+  const [adapterSeed, setAdapterSeed] = useState<Record<string, unknown> | null>(null);
+  const [adapterSeeded, setAdapterSeeded] = useState<boolean>(!adapter?.initialValues);
+  const initialValuesRequestedRef = useRef(false);
+
+  useEffect(() => {
+    if (initialValuesRequestedRef.current) return;
+    if (!adapter?.initialValues) return;
+    initialValuesRequestedRef.current = true;
+    let cancelled = false;
+    Promise.resolve(adapter.initialValues()).then(
+      seed => {
+        if (cancelled) return;
+        setAdapterSeed(seed);
+        setAdapterSeeded(true);
+      },
+      (err: unknown) => {
+        // Form still renders with field defaults so the user has a usable
+        // input surface — but we MUST emit a dev signal so the draft-load
+        // failure isn't invisible (rules/zero-tolerance.md Rule 3).
+        if (cancelled) return;
+        setAdapterSeeded(true);
+        if (!isProductionBuild()) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error('[Form] adapter.initialValues() failed; falling back to field defaults.', message);
+        }
+      },
+    );
+    return () => { cancelled = true; };
+  }, [adapter]);
 
   const defaultValues = useMemo(() => {
     const vals: Record<string, unknown> = {};
     for (const f of fields) {
-      vals[f.name] = initialValues?.[f.name] ?? f.defaultValue ?? (f.type === 'checkbox' || f.type === 'toggle' ? false : '');
+      vals[f.name] =
+        initialValues?.[f.name]
+          ?? adapterSeed?.[f.name]
+          ?? f.defaultValue
+          ?? (f.type === 'checkbox' || f.type === 'toggle' ? false : '');
     }
     return vals;
-  }, [fields, initialValues]);
+  }, [fields, initialValues, adapterSeed]);
 
   const defaultCollapsed = useMemo(() => {
     const collapsed: Record<string, boolean> = {};
@@ -120,7 +229,22 @@ export function Form({
     status: 'idle' as const,
     submitError: null,
     collapsedSections: defaultCollapsed,
+    submission: null,
   } satisfies FormState);
+
+  // Re-seed values if the adapter resolves initialValues asynchronously after
+  // the reducer's initial state was constructed. Only runs once the adapter
+  // has actually reported a seed, so fields the user has already typed into
+  // are NOT clobbered by a late-arriving default (the RESET action rebuilds
+  // from defaultValues which now includes the adapterSeed).
+  const seedApplied = useRef(false);
+  useEffect(() => {
+    if (seedApplied.current) return;
+    if (!adapter?.initialValues) return;
+    if (!adapterSeeded || adapterSeed === null) return;
+    seedApplied.current = true;
+    dispatch({ type: 'RESET', values: defaultValues, collapsedSections: defaultCollapsed });
+  }, [adapter, adapterSeeded, adapterSeed, defaultValues, defaultCollapsed]);
 
   const validationMode = validation?.mode ?? 'onBlur';
 
@@ -227,7 +351,17 @@ export function Form({
     dispatch({ type: 'SET_ERRORS', errors: {} });
     dispatch({ type: 'SET_STATUS', status: 'submitting' });
     dispatch({ type: 'SET_SUBMIT_ERROR', error: null });
+    // DD-F3: we do NOT clear state.submission here. If the new submit
+    // succeeds, the success branch overwrites it; if it fails, the previous
+    // cached result stays visible so the user can see what they had before
+    // retrying.
 
+    // IMPORTANT: `submissionValues` is a pre-await snapshot of
+    // visible-fields at the moment submit began. The post-await branches
+    // below MUST NOT re-read `state.values` — the reducer has processed
+    // multiple dispatches in the meantime and the closure's `state.values`
+    // is stale. Future refactors that need the current values must re-read
+    // via a ref or pass through the reducer, not the closure.
     const submissionValues: Record<string, unknown> = {};
     for (const f of fields) {
       if (visibleFields.has(f.name)) {
@@ -235,26 +369,60 @@ export function Form({
       }
     }
 
+    // Unmount guard: the component can be unmounted mid-submit (slow
+    // payroll endpoints, user navigates away). `isMountedRef` is flipped
+    // false in an unmount-effect; the post-await branches bail out when
+    // it's false so we never dispatch on a stale reducer or write to a
+    // detached DOM node.
     try {
-      await onSubmit(submissionValues);
-      dispatch({ type: 'SET_STATUS', status: 'success' });
-      if (liveRegionRef.current) {
-        liveRegionRef.current.textContent = 'Form submitted successfully';
+      if (adapter) {
+        // Adapter path: run async cross-field validation, then submit, then
+        // cache {values, result} for the post-submit render slot.
+        if (adapter.validate) {
+          const adapterErrors = await adapter.validate(submissionValues);
+          if (!isMountedRef.current) return;
+          if (adapterErrors && Object.keys(adapterErrors).length > 0) {
+            dispatch({ type: 'SET_ERRORS', errors: adapterErrors });
+            dispatch({ type: 'SET_STATUS', status: 'error' });
+            if (liveRegionRef.current) {
+              const n = Object.keys(adapterErrors).length;
+              liveRegionRef.current.textContent =
+                `${n} validation error${n > 1 ? 's' : ''} found`;
+            }
+            return;
+          }
+        }
+        const result = await adapter.submit(submissionValues);
+        if (!isMountedRef.current) return;
+        dispatch({ type: 'SET_SUBMISSION', submission: { values: submissionValues, result } });
+        dispatch({ type: 'SET_STATUS', status: 'success' });
+        if (liveRegionRef.current) {
+          liveRegionRef.current.textContent = 'Form submitted successfully';
+        }
+      } else if (onSubmit) {
+        await onSubmit(submissionValues);
+        if (!isMountedRef.current) return;
+        dispatch({ type: 'SET_STATUS', status: 'success' });
+        if (liveRegionRef.current) {
+          liveRegionRef.current.textContent = 'Form submitted successfully';
+        }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Submission failed';
+      if (!isMountedRef.current) return;
+      const message = sanitizeSubmitError(err);
       dispatch({ type: 'SET_SUBMIT_ERROR', error: message });
       dispatch({ type: 'SET_STATUS', status: 'error' });
       if (liveRegionRef.current) {
         liveRegionRef.current.textContent = `Submission failed: ${message}`;
       }
     }
-  }, [fields, visibleFields, validateAll, onSubmit, state.values]);
+  }, [fields, visibleFields, validateAll, onSubmit, adapter, state.values]);
 
   const handleReset = useCallback(() => {
     dispatch({ type: 'RESET', values: defaultValues, collapsedSections: defaultCollapsed });
+    adapter?.onReset?.();
     onReset?.();
-  }, [defaultValues, defaultCollapsed, onReset]);
+  }, [defaultValues, defaultCollapsed, adapter, onReset]);
 
   const fieldGroups = useMemo(() => {
     const groups: { section: SectionDef | null; fields: FieldDef[] }[] = [];
@@ -441,6 +609,22 @@ export function Form({
           );
         })()}
       </form>
+
+      {/*
+        Post-submit result slot. Rendered outside the <form> so consumer result
+        widgets aren't treated as form content (avoids accidental submit on
+        Enter inside the result). Only fires when an adapter with
+        renderResult is present AND a submission is cached.
+      */}
+      {adapter?.renderResult && state.submission !== null && (
+        <div
+          role="region"
+          aria-label="Form result"
+          data-testid="prism-form-result"
+        >
+          {adapter.renderResult(state.submission.values, state.submission.result)}
+        </div>
+      )}
 
       <style>{`
         @media (max-width: 1023px) {

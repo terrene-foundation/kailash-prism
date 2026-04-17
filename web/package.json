@@ -1,6 +1,6 @@
 {
   "name": "@kailash/prism-web",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Kailash Prism web engine — React, Next.js, and Tauri components and engines",
   "type": "module",
   "main": "dist/index.js",
