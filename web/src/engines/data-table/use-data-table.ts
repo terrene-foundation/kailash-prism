@@ -10,11 +10,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  DataTableBulkAction,
   DataTableConfig,
   DataTableRow,
-  ServerDataSource,
+  DataTableRowAction,
   SortState,
 } from './types.js';
+import { resolveDataSource } from './adapter.js';
 
 export interface UseDataTableResult<T extends DataTableRow> {
   /** Rows to display on the current page */
@@ -69,17 +71,38 @@ export interface UseDataTableResult<T extends DataTableRow> {
   expandedIds: Set<string>;
   /** Toggle expand/collapse of a row */
   handleToggleExpand: (index: number) => void;
-}
-
-function isServerDataSource<T extends DataTableRow>(
-  data: DataTableConfig<T>['data'],
-): data is ServerDataSource<T> {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    !Array.isArray(data) &&
-    typeof (data as ServerDataSource<T>).fetchData === 'function'
-  );
+  /**
+   * Row-activation handler resolved from the adapter (or undefined when no
+   * adapter is provided). Consumed by DataTableBody to run on row click
+   * when the click did not originate inside a rowActions button.
+   */
+  onRowActivate?: (row: T) => Promise<void> | void;
+  /**
+   * Merged per-row actions — adapter-declared first, then any config-level
+   * actions (reserved for future extension). Consumed by DataTableBody to
+   * render the trailing actions column.
+   */
+  rowActions: ReadonlyArray<DataTableRowAction<T>>;
+  /**
+   * Merged bulk actions — adapter-declared first, then `config.bulkActions`.
+   * Consumed by the bulk-action toolbar.
+   */
+  adapterBulkActions: ReadonlyArray<DataTableBulkAction<T>>;
+  /**
+   * Invoke a row action. The engine calls `onExecute(row, id)`, awaits it,
+   * calls `adapter.invalidate?.()` on success, and triggers a refetch of
+   * the current page. Rejections are surfaced to the caller.
+   */
+  executeRowAction: (
+    action: DataTableRowAction<T>,
+    row: T,
+    rowIndex: number,
+  ) => Promise<void>;
+  /**
+   * Invoke a bulk action over the currently selected rows. Same lifecycle
+   * as `executeRowAction` — await, invalidate, refetch.
+   */
+  executeBulkAction: (action: DataTableBulkAction<T>) => Promise<void>;
 }
 
 export function useDataTable<T extends DataTableRow>(
@@ -99,9 +122,27 @@ export function useDataTable<T extends DataTableRow>(
   } = config;
 
   // --- Data-source classification ---
-  const serverSource = isServerDataSource(data) ? data : null;
-  const isClientSide = serverSource === null;
-  const clientData = Array.isArray(data) ? data : [];
+  // `resolveDataSource` lifts every accepted shape (plain array,
+  // DataTableAdapter, legacy ServerDataSource) into either
+  // `{adapter: DataTableAdapter, clientData: []}` or
+  // `{adapter: null, clientData: T[]}`. The legacy ServerDataSource path is
+  // shimmed to a DataTableAdapter via `adaptLegacy` so the hook body only
+  // handles two cases: array OR adapter.
+  const { adapter, clientData } = useMemo(
+    () => resolveDataSource<T>(data),
+    [data],
+  );
+  const isClientSide = adapter === null;
+
+  // Read capabilities once at mount. Adapter contract: capabilities() is
+  // NOT called per render — an adapter that needs to change capabilities
+  // must be replaced with a new instance. We stabilize via adapter identity
+  // so a memoized adapter produces a stable capabilities object.
+  const capabilities = useMemo(
+    () => adapter?.capabilities() ?? {},
+    [adapter],
+  );
+  void capabilities; // reserved for client-side fallback gating in 0.4.0
 
   // --- Sorting state ---
   const [sorts, setSorts] = useState<SortState[]>(() => {
@@ -137,29 +178,43 @@ export function useDataTable<T extends DataTableRow>(
   const [retryTick, setRetryTick] = useState(0);
 
   // --- Row ID resolution ---
-  // Prefer consumer-supplied getRowId, then row['id'], then index fallback.
+  // Precedence: adapter.getRowId > config.getRowId > row['id'] > index.
+  // The adapter form takes precedence because it's part of the adapter's
+  // typed contract; config.getRowId is a pre-adapter shim kept for the
+  // array-data path. `row['id']` is the last-resort fallback for objects
+  // that happen to carry an `id` field.
   const configGetRowId = config.getRowId;
   const getRowId = useCallback(
     (row: T, index: number): string => {
+      if (adapter) {
+        const aid = adapter.getRowId(row);
+        // Treat null / undefined / empty-string as "no id" so adapters
+        // that return '' on a missing field (legacy shim pattern) fall
+        // through to the engine's default instead of collapsing every
+        // empty-id row into the same selection key.
+        if (aid != null && String(aid) !== '') return String(aid);
+      }
       if (configGetRowId) return configGetRowId(row, index);
       const asRecord = row as Record<string, unknown>;
       const id = asRecord['id'];
       if (id != null) return String(id);
       return String(index);
     },
-    [configGetRowId],
+    [adapter, configGetRowId],
   );
 
-  // --- Server-side fetch effect ---
+  // --- Server-side fetch effect (adapter path) ---
+  // Monotonic sequence discards stale results from superseded requests.
+  // AbortController signals cancellation to adapters that honor it.
   useEffect(() => {
-    if (serverSource === null) return;
+    if (adapter === null) return;
     const seq = ++fetchSeqRef.current;
     const controller = new AbortController();
     setServerLoading(true);
     setServerError(null);
     const paginationEnabled = pagination?.enabled !== false;
-    void serverSource
-      .fetchData({
+    void adapter
+      .fetchPage({
         page,
         pageSize,
         sort: sorts,
@@ -170,11 +225,11 @@ export function useDataTable<T extends DataTableRow>(
       .then((result) => {
         // Discard stale results from a superseded request.
         if (seq !== fetchSeqRef.current) return;
-        setServerRows(result.items);
+        setServerRows([...result.rows]);
         setServerTotal(
           typeof result.totalCount === 'number' && result.totalCount >= 0
             ? result.totalCount
-            : result.items.length,
+            : result.rows.length,
         );
         setServerLoading(false);
         // Clamp page if the underlying total shrank below the current page.
@@ -194,19 +249,21 @@ export function useDataTable<T extends DataTableRow>(
         if (err instanceof Error && err.name === 'AbortError') {
           return;
         }
-        const message = err instanceof Error ? err.message : String(err);
-        setServerError(message);
+        const raw = err instanceof Error ? err.message : String(err);
+        // Bound the error banner length so adapter errors with embedded
+        // stack traces don't render multi-page error surfaces.
+        setServerError(raw.slice(0, 500));
         setServerLoading(false);
       });
     return () => {
       controller.abort();
     };
-  }, [serverSource, page, pageSize, sorts, filters, globalSearch, retryTick, pagination?.enabled]);
+  }, [adapter, page, pageSize, sorts, filters, globalSearch, retryTick, pagination?.enabled]);
 
   const retryServerFetch = useCallback(() => {
-    if (serverSource === null) return;
+    if (adapter === null) return;
     setRetryTick((t) => t + 1);
-  }, [serverSource]);
+  }, [adapter]);
 
   // --- Client-side processing ---
 
@@ -437,6 +494,72 @@ export function useDataTable<T extends DataTableRow>(
     [displayRows, getRowId],
   );
 
+  // --- Adapter action bridges ---
+  //
+  // `executeRowAction` / `executeBulkAction` are the canonical paths from a
+  // user clicking an action button or bulk-action button to the adapter's
+  // `onExecute` callback running, followed (on success) by a cache
+  // invalidation and a page refetch.
+  //
+  // Error handling: `onExecute` rejections propagate to the caller — the
+  // engine does NOT swallow them. Consumers that want centralised error
+  // UI should await these and show their own toast / banner.
+
+  const rowActions: ReadonlyArray<DataTableRowAction<T>> = adapter?.rowActions ?? [];
+  const adapterBulkActions: ReadonlyArray<DataTableBulkAction<T>> = adapter?.bulkActions ?? [];
+  const adapterOnRowActivate = adapter?.onRowActivate;
+
+  const executeRowAction = useCallback(
+    async (action: DataTableRowAction<T>, row: T, rowIndex: number): Promise<void> => {
+      if (!action.onExecute) return;
+      const id = getRowId(row, rowIndex);
+      await action.onExecute(row, id);
+      // Invalidate adapter caches (if any) then refetch so the UI reflects
+      // whatever the action mutated server-side. If invalidate() itself
+      // rejects we STILL refetch — the action's side effect already
+      // landed, and leaving the UI with stale rows + no error signal is
+      // worse than showing an error banner after the refetch completes.
+      if (adapter?.invalidate) {
+        try {
+          await adapter.invalidate();
+        } catch (err) {
+          // Surface via serverError so operators see invalidate failures
+          // instead of silent rotting caches.
+          const message = err instanceof Error ? err.message : String(err);
+          setServerError(message.slice(0, 500));
+        }
+      }
+      if (adapter) {
+        setRetryTick((t) => t + 1);
+      }
+    },
+    [adapter, getRowId],
+  );
+
+  const executeBulkAction = useCallback(
+    async (action: DataTableBulkAction<T>): Promise<void> => {
+      if (selectedRows.length === 0) return;
+      const ids = selectedRows.map((row, i) => getRowId(row, i));
+      await action.onExecute(selectedRows, ids);
+      if (adapter?.invalidate) {
+        try {
+          await adapter.invalidate();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          setServerError(message.slice(0, 500));
+        }
+      }
+      if (adapter) {
+        setRetryTick((t) => t + 1);
+      }
+      // Clear selection after bulk action completes — the mutated rows
+      // may no longer exist or may match different criteria after refetch.
+      setSelectedIds(new Set());
+      onSelectionChange?.([]);
+    },
+    [adapter, selectedRows, getRowId, onSelectionChange],
+  );
+
   return {
     displayRows,
     totalCount,
@@ -464,5 +587,10 @@ export function useDataTable<T extends DataTableRow>(
     getRowId,
     expandedIds,
     handleToggleExpand,
+    ...(adapterOnRowActivate !== undefined ? { onRowActivate: adapterOnRowActivate } : {}),
+    rowActions,
+    adapterBulkActions,
+    executeRowAction,
+    executeBulkAction,
   };
 }
