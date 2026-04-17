@@ -50,9 +50,12 @@ new consumer writes a `DataTableAdapter` directly.
 - Deleted `web/src/__tests__/regression/server-data-source-wiring.test.ts`
   in the SAME PR as the API removal (orphan-detection Rule 4 — test
   files that import removed symbols become collection-time orphans).
-- Deleted 4 adaptLegacy-specific cases from `data-table-adapter.test.tsx`.
-- Adapter test suite: 20 cases (down from 24 in 0.2.2); full suite:
-  264 tests (down from 270).
+- Deleted 3 adaptLegacy-specific cases from `data-table-adapter.test.tsx`;
+  added 1 `isDataTableAdapter` discrimination test. Net: 22 cases in the
+  adapter suite (down from 24 in 0.2.2).
+- Full suite: 264 tests across 11 test files (down from 270 across 12
+  test files in 0.2.2 — the removed regression test file accounted for
+  the file-count delta, plus 6 net tests removed).
 
 ### Not breaking
 

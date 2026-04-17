@@ -707,15 +707,15 @@ A separate `FilterAdapter` was considered to keep `DataTableAdapter` slim. Rejec
 
 The implementation MAY split internal state management (`useFilterDimensions(adapter)` hook separate from `useDataTable(config)` hook) for code organisation, but the EXTERNAL interface stays unified.
 
-#### DD-5: Deprecation plan for `ServerDataSource`
+#### DD-5: Deprecation plan for `ServerDataSource` (executed)
 
-**Decision: ONE-RELEASE DEPRECATION WINDOW.** See "Relationship to ServerDataSource" above for the full plan. Summary:
+**Decision: TWO-RELEASE DEPRECATION WINDOW.** Completed in 0.3.0. See "Relationship to ServerDataSource" above for the full historical narrative. Executed summary:
 
-- M-04 wires the orphan so existing consumers get correct behavior.
-- M-06 ships `DataTableAdapter`, accepts both shapes via union, marks `ServerDataSource` `@deprecated`, ships migration cheatsheet.
-- Next minor (0.2.0) removes `ServerDataSource` entirely.
+- **0.2.0 (M-04)**: wired the orphan so existing consumers got correct behavior.
+- **0.2.2 (M-06 / Shard 2)**: shipped `DataTableAdapter`, accepted all three shapes via union, marked `ServerDataSource` `@deprecated`, shipped migration cheatsheet.
+- **0.3.0 (Shard 3)**: removed `ServerDataSource` and the internal shim entirely.
 
-A pure same-release delete was considered but rejected: it would force any consumer who wrote against M-04's wired `ServerDataSource` to immediately rewrite. The one-release window is the smallest defensible deprecation given `rules/orphan-detection.md` MUST Rule 3 and the pre-1.0 status.
+A pure same-release delete was considered but rejected: it would have forced any consumer who wrote against M-04's wired `ServerDataSource` to immediately rewrite. The two-release window (0.2.2 deprecation → 0.3.0 removal) was the smallest defensible deprecation given `rules/orphan-detection.md` MUST Rule 3 and Prism's pre-1.0 status.
 
 A `@deprecated`-only path (mark deprecated, never delete) was rejected because `rules/orphan-detection.md` is explicit: "Removed = Deleted, Not Deprecated. Deprecation banners are easy to miss; consumers continue importing the symbol and silently shipping insecure code."
 

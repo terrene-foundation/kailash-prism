@@ -221,13 +221,13 @@ tokens:
     - data-table.default.radius
   inherits_from: null
 
-# Proposed adapter contract (full spec: docs/specs/05-engine-specifications.md § 5.1.1)
-# Status: PROPOSED by M-05. Ships in M-06. Replaces ServerDataSource (deprecated
-# M-06, removed in 0.2.0 minor release).
-proposed_adapter:
+# Adapter contract (full spec: docs/specs/05-engine-specifications.md § 5.1.1)
+# Status: SHIPPED in 0.2.2 (7 of 9 methods — filterDimensions + subscribe
+# reserved for 0.4.0). ServerDataSource removed in 0.3.0.
+adapter:
   name: DataTableAdapter
-  version_introduced: "0.2.0-pending"
-  supersedes: ServerDataSource
+  version_introduced: "0.2.2"
+  supersedes: ServerDataSource  # removed in 0.3.0
   authority: "docs/specs/05-engine-specifications.md § 5.1.1"
   migration_findings:
     - "workspaces/fe-codegen-platform/04-validate/migration-m02-findings.md"
