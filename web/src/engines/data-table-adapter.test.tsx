@@ -361,6 +361,91 @@ describe('DataTableAdapter', () => {
       // Resolution through adapter shim — not the same object.
       expect(resolved.adapter).not.toBe(legacy as unknown);
     });
+
+    it('adaptLegacy assigns stable synthetic ids to rows with missing id field', () => {
+      const legacy: ServerDataSource<{ title: string }> = {
+        fetchData: async () => ({ items: [], totalCount: 0 }),
+      };
+      const adapter = adaptLegacy(legacy);
+      // Two rows with identical content but different object identities
+      // MUST get distinct synthetic ids, preventing the "all null-id rows
+      // collapse into one selection key" bug.
+      const r1 = { title: 'Same' };
+      const r2 = { title: 'Same' };
+      const id1 = adapter.getRowId(r1);
+      const id2 = adapter.getRowId(r2);
+      expect(id1).not.toBe(id2);
+      // Same row yields the same id across multiple calls (stability).
+      expect(adapter.getRowId(r1)).toBe(id1);
+    });
+  });
+
+  describe('security: action href sanitization', () => {
+    it('rewrites javascript: hrefs to #', async () => {
+      const adapter = makeAdapter({
+        rowActions: [{
+          id: 'link',
+          label: 'Link',
+          // Attacker-controlled href (e.g. sourced from backend data).
+          href: () => 'javascript:alert(1)',
+        }],
+      });
+
+      render(<DataTable columns={columns} data={adapter} />);
+      await waitFor(() => expect(screen.getByText('Contract')).toBeDefined());
+      const link = screen.getAllByRole('link', { name: 'Link' })[0]!;
+      expect(link.getAttribute('href')).toBe('#');
+    });
+
+    it('rewrites whitespace-padded javascript: hrefs to #', async () => {
+      const adapter = makeAdapter({
+        rowActions: [{
+          id: 'link',
+          label: 'Link',
+          href: () => '  javascript:alert(1)',
+        }],
+      });
+
+      render(<DataTable columns={columns} data={adapter} />);
+      await waitFor(() => expect(screen.getByText('Contract')).toBeDefined());
+      const link = screen.getAllByRole('link', { name: 'Link' })[0]!;
+      expect(link.getAttribute('href')).toBe('#');
+    });
+
+    it('rewrites data: hrefs to #', async () => {
+      const adapter = makeAdapter({
+        rowActions: [{
+          id: 'link',
+          label: 'Link',
+          href: () => 'data:text/html,<script>alert(1)</script>',
+        }],
+      });
+
+      render(<DataTable columns={columns} data={adapter} />);
+      await waitFor(() => expect(screen.getByText('Contract')).toBeDefined());
+      const link = screen.getAllByRole('link', { name: 'Link' })[0]!;
+      expect(link.getAttribute('href')).toBe('#');
+    });
+
+    it('allows http/https/mailto/tel/relative/anchor schemes', async () => {
+      const hrefs = [
+        'https://example.com',
+        'http://example.com',
+        'mailto:user@example.com',
+        'tel:+15551234',
+        '/internal/path',
+        '#anchor',
+        '?query=1',
+      ];
+      for (const expected of hrefs) {
+        const adapter = makeAdapter({
+          rowActions: [{ id: 'link', label: 'Link', href: () => expected }],
+        });
+        const { unmount } = render(<DataTable columns={columns} data={adapter} />);
+        await waitFor(() => expect(screen.getAllByRole('link')[0]!.getAttribute('href')).toBe(expected));
+        unmount();
+      }
+    });
   });
 
   describe('fetch lifecycle', () => {

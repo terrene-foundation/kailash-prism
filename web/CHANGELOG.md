@@ -47,6 +47,22 @@ invalidation.
   `resolveDataSource(data)`. Consumers migrating incrementally can lift
   their ServerDataSource manually via `adaptLegacy(source)` before the
   0.3.0 removal.
+- **D12 (safety)**: Engine sanitizes `action.href(row, id)` return values
+  before rendering as `<a href=...>`. Allowed schemes: `http:`, `https:`,
+  `mailto:`, `tel:`, relative paths (`/`, `?`, `#`). All other schemes
+  (including `javascript:`, `data:`, and whitespace-padded variants)
+  rewrite to `#` so a compromised backend field flowing through
+  `href: row => row.externalUrl` cannot trigger click-to-XSS.
+- **D13 (safety)**: `adaptLegacy` assigns stable synthetic row ids via a
+  per-shim WeakMap when `row['id']` is null/undefined. Legacy rows without
+  an `id` field no longer collapse to the same selection key — each row
+  object gets a distinct synthetic id that survives re-fetches as long as
+  the row object identity is preserved.
+- **D14 (safety)**: `adapter.invalidate()` rejections are caught and
+  surfaced through `serverError` (bounded to 500 chars). The refetch
+  still fires so the UI never strands with stale rows + no error signal.
+  `adapter.fetchPage` errors are also truncated to 500 chars before
+  entering the error banner.
 
 ### Migration notes
 

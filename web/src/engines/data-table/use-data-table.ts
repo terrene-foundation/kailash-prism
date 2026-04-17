@@ -188,7 +188,11 @@ export function useDataTable<T extends DataTableRow>(
     (row: T, index: number): string => {
       if (adapter) {
         const aid = adapter.getRowId(row);
-        if (aid != null) return String(aid);
+        // Treat null / undefined / empty-string as "no id" so adapters
+        // that return '' on a missing field (legacy shim pattern) fall
+        // through to the engine's default instead of collapsing every
+        // empty-id row into the same selection key.
+        if (aid != null && String(aid) !== '') return String(aid);
       }
       if (configGetRowId) return configGetRowId(row, index);
       const asRecord = row as Record<string, unknown>;
@@ -245,8 +249,10 @@ export function useDataTable<T extends DataTableRow>(
         if (err instanceof Error && err.name === 'AbortError') {
           return;
         }
-        const message = err instanceof Error ? err.message : String(err);
-        setServerError(message);
+        const raw = err instanceof Error ? err.message : String(err);
+        // Bound the error banner length so adapter errors with embedded
+        // stack traces don't render multi-page error surfaces.
+        setServerError(raw.slice(0, 500));
         setServerLoading(false);
       });
     return () => {
@@ -508,10 +514,20 @@ export function useDataTable<T extends DataTableRow>(
       if (!action.onExecute) return;
       const id = getRowId(row, rowIndex);
       await action.onExecute(row, id);
-      // Invalidate adapter caches (if any) and refetch so the UI reflects
-      // whatever the action mutated server-side.
+      // Invalidate adapter caches (if any) then refetch so the UI reflects
+      // whatever the action mutated server-side. If invalidate() itself
+      // rejects we STILL refetch — the action's side effect already
+      // landed, and leaving the UI with stale rows + no error signal is
+      // worse than showing an error banner after the refetch completes.
       if (adapter?.invalidate) {
-        await adapter.invalidate();
+        try {
+          await adapter.invalidate();
+        } catch (err) {
+          // Surface via serverError so operators see invalidate failures
+          // instead of silent rotting caches.
+          const message = err instanceof Error ? err.message : String(err);
+          setServerError(message.slice(0, 500));
+        }
       }
       if (adapter) {
         setRetryTick((t) => t + 1);
@@ -526,7 +542,12 @@ export function useDataTable<T extends DataTableRow>(
       const ids = selectedRows.map((row, i) => getRowId(row, i));
       await action.onExecute(selectedRows, ids);
       if (adapter?.invalidate) {
-        await adapter.invalidate();
+        try {
+          await adapter.invalidate();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          setServerError(message.slice(0, 500));
+        }
       }
       if (adapter) {
         setRetryTick((t) => t + 1);

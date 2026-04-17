@@ -71,10 +71,27 @@ export function isServerDataSource<T extends DataTableRow>(
 export function adaptLegacy<T extends DataTableRow>(
   source: ServerDataSource<T>,
 ): DataTableAdapter<T> {
+  // Per-shim WeakMap assigning stable synthetic ids to rows whose `id`
+  // field is null/undefined. Returning an empty string or a shared
+  // sentinel (e.g. 'unknown') would collide every null-id row into the
+  // same selection key — a bulk-delete on one null-id row would target
+  // every null-id row. The WeakMap key is the row object identity, so
+  // two rows with identical fields but different object identities still
+  // get distinct synthetic ids (which is what the 0.2.x behavior gave
+  // when the engine fell back to row index).
+  const syntheticIds = new WeakMap<object, string>();
+  let syntheticCounter = 0;
   return {
     getRowId: (row: T): string => {
       const id = (row as Record<string, unknown>)['id'];
-      return id != null ? String(id) : '';
+      if (id != null) return String(id);
+      // Row has no id — assign a stable synthetic one. WeakMap doesn't
+      // prevent GC of the row object, so there's no leak.
+      const existing = syntheticIds.get(row as object);
+      if (existing !== undefined) return existing;
+      const synthetic = `__legacy_${String(syntheticCounter++)}__`;
+      syntheticIds.set(row as object, synthetic);
+      return synthetic;
     },
     capabilities: () => ({
       // Legacy sources declared nothing explicit, so the safest default is
