@@ -387,6 +387,39 @@ export interface DataTableConfig<T extends DataTableRow> {
   'aria-label'?: string;
   /** Row height in px for virtual scrolling. Default: 48 */
   rowHeight?: number;
+  /**
+   * Display mode. Default: "table" (rows in a tabular grid). Set to
+   * "card-grid" to render each row as a Card in a responsive grid — the
+   * Card receives `title` from the first non-id column, `subtitle` from
+   * the second, and body+footer from the consumer's `renderCard`
+   * template. Adapter `rowActions` render in the card footer.
+   *
+   * Since 0.3.1.
+   */
+  display?: 'table' | 'card-grid';
+  /**
+   * Custom card renderer for `display="card-grid"`. Optional. When
+   * omitted, the engine uses a reasonable default: first column's value
+   * as title, second column's value as subtitle, remaining columns as
+   * key-value pairs in the body. Returning your own ReactNode fully
+   * replaces the card body (the engine still wraps it in the Card
+   * component and provides the footer slot for rowActions).
+   *
+   * Since 0.3.1.
+   */
+  renderCard?: (row: T, rowIndex: number) => ReactNode;
+  /**
+   * Column configuration for `display="card-grid"`. Passed to the
+   * underlying CardGrid organism.
+   *
+   * Since 0.3.1.
+   */
+  cardGridColumns?: {
+    mobile?: number;
+    tablet?: number;
+    desktop?: number;
+    wide?: number;
+  };
   /** Enable expandable rows. Default: false */
   expandable?: boolean;
   /** Render function for expanded row content */

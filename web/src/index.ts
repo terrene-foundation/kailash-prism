@@ -11,6 +11,7 @@ export {
   Badge,
   Avatar,
   Spinner,
+  Card,
   type ButtonProps,
   type ButtonVariant,
   type ButtonSize,
@@ -21,7 +22,16 @@ export {
   type AvatarSize,
   type SpinnerProps,
   type SpinnerSize,
+  type CardProps,
+  type CardVariant,
 } from './atoms/index.js';
+
+// Organisms
+export {
+  CardGrid,
+  type CardGridProps,
+  type ResponsiveColumns,
+} from './organisms/index.js';
 
 // Engines
 export {
