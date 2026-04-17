@@ -174,6 +174,69 @@ export interface FormClassNames {
   resetButton?: string;
 }
 
+/**
+ * FormAdapter<TValues, TResult> — bridges a Prism Form to a domain service.
+ *
+ * The parallel with `ChatAdapter` is exact: today the Form engine is a pure
+ * view driven by `onSubmit`, and every consumer re-implements the same
+ * `{values, result}` state machine around it. `FormAdapter` consolidates the
+ * contract so the Form can own submit orchestration, result caching, and
+ * the post-submit display lifecycle.
+ *
+ * Lifecycle:
+ *   1. Form mounts. If `adapter.initialValues` is defined, its return (or
+ *      resolved Promise) seeds initial state. Any `FormConfig.initialValues`
+ *      passed alongside is merged on top (explicit config wins).
+ *   2. User fills fields. Per-field `FieldValidationRule`s run as today.
+ *   3. On submit, Form calls `adapter.validate(values)` (if defined) for async
+ *      cross-field validation. Returned errors are surfaced inline and submit
+ *      is cancelled.
+ *   4. Form calls `adapter.submit(values)`:
+ *        - Success: Form stores `{values, result}` internally, sets
+ *          status='success', emits a success feedback banner, and — if
+ *          `adapter.renderResult` is defined — renders the result node below
+ *          the form.
+ *        - Failure: `adapter.submit` throws; Form surfaces the error via its
+ *          standard submit-error banner.
+ *   5. User edits after submit: Form's internal result state is cleared on
+ *      the first value change so the post-submit UI never drifts out of sync
+ *      with pending edits.
+ *   6. On reset, Form calls `adapter.onReset?.()` for the adapter to clear
+ *      its own caches/state.
+ *
+ * `FormAdapter` and `FormConfig.onSubmit` are mutually-exclusive submission
+ * paths; when both are provided the adapter wins and a development-mode
+ * warning fires (the engine never silently picks one over the other).
+ */
+export interface FormAdapter<
+  TValues extends Record<string, unknown> = Record<string, unknown>,
+  TResult = unknown,
+> {
+  /** Optional: seed initial values (e.g. load a draft from backend). */
+  initialValues?(): TValues | Promise<TValues>;
+
+  /**
+   * Optional async validation beyond per-field `FieldValidationRule`s.
+   * Returns a map of fieldName → message for any invalid fields. An empty
+   * object (or absent key) means valid. Called on submit BEFORE `submit()`.
+   */
+  validate?(values: TValues): Promise<Record<string, string>> | Record<string, string>;
+
+  /** Required. Perform the actual submit (API call, local computation). */
+  submit(values: TValues): Promise<TResult> | TResult;
+
+  /**
+   * Optional: render the result below the form. When defined, Form owns the
+   * "submitted" state internally and eliminates the boilerplate every
+   * consumer writes today. Return `null` to suppress (e.g. when the adapter
+   * navigated away on success).
+   */
+  renderResult?(values: TValues, result: TResult): ReactNode;
+
+  /** Optional: clear adapter caches / state on form reset. */
+  onReset?(): void;
+}
+
 export interface FormConfig {
   fields: FieldDef[];
   sections?: SectionDef[] | undefined;
@@ -181,7 +244,22 @@ export interface FormConfig {
     mode?: 'onBlur' | 'onSubmit';
     schema?: ZodSchema;
   } | undefined;
-  onSubmit: (values: Record<string, unknown>) => void | Promise<void>;
+  /**
+   * Fire-and-forget submit handler. Required unless `adapter` is provided —
+   * when `adapter` is present, `adapter.submit` supersedes `onSubmit` and
+   * this field may be omitted. If both are supplied the adapter wins and a
+   * dev-mode warning fires.
+   */
+  onSubmit?: (values: Record<string, unknown>) => void | Promise<void>;
+  /**
+   * Domain adapter that owns submit orchestration, optional async validation,
+   * and optional result rendering. See `FormAdapter`. Use an adapter when the
+   * form has a post-submit result to display (calculators, "generate"
+   * endpoints, etc.) — the engine will cache `{values, result}` internally
+   * and render it below the form without the consumer writing any state
+   * machine.
+   */
+  adapter?: FormAdapter;
   onReset?: (() => void) | undefined;
   initialValues?: Record<string, unknown> | undefined;
   submitLabel?: string | undefined;
@@ -215,6 +293,15 @@ export interface FormConfig {
 
 // --- Internal state ---
 
+/**
+ * Captured result from the most recent successful adapter submit. Stored on
+ * `FormState.submission`; cleared on the next field edit and on reset.
+ */
+export interface FormSubmission {
+  values: Record<string, unknown>;
+  result: unknown;
+}
+
 export interface FormState {
   values: Record<string, unknown>;
   errors: Record<string, string>;
@@ -222,6 +309,11 @@ export interface FormState {
   status: FormStatus;
   submitError: string | null;
   collapsedSections: Record<string, boolean>;
+  /**
+   * Most recent successful adapter submit, or `null`. Only populated when a
+   * `FormAdapter` is in use — `onSubmit` callers never see this field change.
+   */
+  submission: FormSubmission | null;
 }
 
 export type FormAction =
@@ -232,6 +324,7 @@ export type FormAction =
   | { type: 'TOUCH'; field: string }
   | { type: 'SET_STATUS'; status: FormStatus }
   | { type: 'SET_SUBMIT_ERROR'; error: string | null }
+  | { type: 'SET_SUBMISSION'; submission: FormSubmission | null }
   | { type: 'RESET'; values: Record<string, unknown>; collapsedSections: Record<string, boolean> }
   | { type: 'TOGGLE_SECTION'; section: string };
 
@@ -242,6 +335,10 @@ export function formReducer(state: FormState, action: FormAction): FormState {
         ...state,
         values: { ...state.values, [action.field]: action.value },
         status: state.status === 'error' || state.status === 'success' ? 'idle' : state.status,
+        // Editing after a successful adapter submit invalidates the cached
+        // result — dropping it prevents the post-submit UI from drifting out
+        // of sync with pending edits.
+        submission: state.submission !== null && state.status === 'success' ? null : state.submission,
       };
     case 'SET_ERROR':
       return { ...state, errors: { ...state.errors, [action.field]: action.error } };
@@ -259,6 +356,8 @@ export function formReducer(state: FormState, action: FormAction): FormState {
       return { ...state, status: action.status };
     case 'SET_SUBMIT_ERROR':
       return { ...state, submitError: action.error };
+    case 'SET_SUBMISSION':
+      return { ...state, submission: action.submission };
     case 'RESET':
       return {
         values: action.values,
@@ -267,6 +366,7 @@ export function formReducer(state: FormState, action: FormAction): FormState {
         status: 'idle',
         submitError: null,
         collapsedSections: action.collapsedSections,
+        submission: null,
       };
     case 'TOGGLE_SECTION':
       return {

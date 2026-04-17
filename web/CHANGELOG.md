@@ -2,6 +2,51 @@
 
 All notable changes to the Prism web engine package are documented here.
 
+## 0.2.1 — 2026-04-18 — FormAdapter (Shard 1 of 0.3.0 wave)
+
+Adds the `FormAdapter<TValues, TResult>` interface, closing the M-01
+BLOCKING-2 finding. Forms with a post-submit result display (calculators,
+"generate" endpoints, any request/response shape) no longer require the
+consumer to re-implement the `{values, result}` state machine around
+`onSubmit`. Non-breaking — `onSubmit` remains supported.
+
+### Form engine
+
+- **F5 (feat)**: `FormAdapter<TValues, TResult>` interface exported from
+  `@kailash/prism-web`. Five methods: `initialValues?()`, `validate?()`,
+  `submit()`, `renderResult?()`, `onReset?()`. Parallel to `ChatAdapter` —
+  one interface, optional methods express capability.
+- **F6 (feat)**: `FormConfig.adapter?: FormAdapter` accepts a domain
+  adapter. When present, Form calls `adapter.initialValues?()` on mount
+  to seed defaults, runs `adapter.validate?()` as async cross-field
+  validation, invokes `adapter.submit()` on submission, caches the
+  `{values, result}` internally, and renders `adapter.renderResult?()`
+  below the form. Editing after a successful submit clears the cached
+  result automatically.
+- **F7 (feat)**: `FormConfig.onSubmit` is now optional. Forms MUST supply
+  either `onSubmit` OR `adapter`; passing neither throws a dev-mode
+  Error with actionable message. Passing both emits a dev-mode
+  `console.warn` and the adapter wins (adapter path is never silently
+  skipped).
+
+### Migration notes
+
+- Existing `onSubmit`-only forms continue to work with zero source
+  changes. The three TypeScript compatibility impacts:
+  1. `FormConfig.onSubmit` narrowed from required to optional; callers
+     that destructure `onSubmit` from a `FormConfig` will get
+     `((values) => void | Promise<void>) | undefined` instead of the
+     required form. This is source-compatible for every construct-site
+     in the wild.
+  2. `FormState.submission: FormSubmission | null` is a new state field.
+     Tests that snapshot the full state object MUST add `submission:
+     null` to their expected shape; typed consumers of `FormState` will
+     see the new field in autocomplete but existing code compiles.
+  3. The `SET_SUBMISSION` reducer action is new. Consumers that
+     pattern-match on `FormAction` via `switch` without a `default`
+     clause MUST add a handler — TypeScript's exhaustiveness checker
+     flags the gap.
+
 ## 0.2.0 — 2026-04-14 — M-04 arbor pilot remediation
 
 Remediation pass for three parallel arbor migrations (M-01 calculators,

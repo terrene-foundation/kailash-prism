@@ -2,13 +2,20 @@
 # Source: docs/specs/03-component-contracts.md § 3.4.4
 # Data entry form with validation, submission handling, and error reporting.
 
-version: "0.2.0"
+version: "0.2.1"
 
 name: Form
 category: organism
 description: "Data entry form with validation, submission handling, and error reporting."
 
 changelog:
+  - version: "0.2.1"
+    date: "2026-04-18"
+    changes:
+      - "FEAT: FormAdapter<TValues, TResult> interface — bridges Form to domain service. Methods: initialValues?(), validate?(), submit(), renderResult?(), onReset?()."
+      - "FEAT: FormConfig.adapter?: FormAdapter — when present, adapter owns submit orchestration, result caching, and post-submit render slot. Replaces the {values, result} state machine every consumer re-implements today (M-01 BLOCKING-2)."
+      - "FEAT: FormConfig.onSubmit is now optional — Form requires EITHER onSubmit OR adapter. Passing both emits a dev-mode warn and the adapter wins; passing neither throws a clear Error at mount."
+      - "STATE: FormState.submission: FormSubmission | null — most recent successful adapter submit. Cleared on edit (post-success) and on reset."
   - version: "0.2.0"
     date: "2026-04-14"
     changes:
@@ -27,9 +34,14 @@ composed_of:
 props:
   - name: onSubmit
     type: "(values: Record<string, any>) => void"
-    required: true
+    required: false
     default: null
-    description: "Callback fired with form values when validation passes and form submits"
+    description: "Fire-and-forget submit handler. Required unless `adapter` is provided (since 0.2.1). If both are supplied, adapter wins and a dev-mode warn fires."
+  - name: adapter
+    type: "FormAdapter<TValues, TResult> | undefined"
+    required: false
+    default: null
+    description: "Domain adapter (since 0.2.1). When present, owns submit orchestration, initial-value seeding, async validation, and post-submit result rendering. Use for request/response forms (calculators, generate endpoints)."
   - name: onReset
     type: "() => void"
     required: false
