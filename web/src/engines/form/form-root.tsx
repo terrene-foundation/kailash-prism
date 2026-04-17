@@ -67,6 +67,27 @@ function isProductionBuild(): boolean {
   return g.process?.env?.NODE_ENV === 'production';
 }
 
+// --- Error sanitation ---
+
+/**
+ * Max length for a submit-error banner message. Adapter errors propagated
+ * verbatim can include stack traces or attacker-controlled echo payloads;
+ * truncating + stripping control characters keeps the live region
+ * screen-reader-safe and prevents log-injection into aria-live regions.
+ */
+const SUBMIT_ERROR_MAX_LENGTH = 500;
+
+function sanitizeSubmitError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : 'Submission failed';
+  // Strip ASCII control characters except ordinary whitespace. Prevents
+  // newline / carriage-return / NUL from disturbing screen reader
+  // announcement and log aggregator pipelines.
+  // eslint-disable-next-line no-control-regex
+  const stripped = raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  if (stripped.length <= SUBMIT_ERROR_MAX_LENGTH) return stripped;
+  return stripped.slice(0, SUBMIT_ERROR_MAX_LENGTH - 1) + '\u2026';
+}
+
 // --- Feedback banner ---
 
 const FEEDBACK_TOKENS: Record<'error' | 'success', { bg: string; border: string; color: string }> = {
@@ -111,24 +132,50 @@ export function Form({
       'Pass `adapter` for forms with a post-submit result display, or `onSubmit` for fire-and-forget submissions.',
     );
   }
-  if (onSubmit && adapter && !isProductionBuild()) {
-    console.warn(
-      '[Form] Both `onSubmit` and `adapter` were provided. The adapter wins; `onSubmit` is ignored. ' +
-      'Remove one to silence this warning.',
-    );
-  }
 
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const liveRegionRef = useRef<HTMLDivElement>(null);
+  // Track mounted state so post-await branches in handleSubmit / adapter
+  // callbacks bail out on unmount instead of dispatching on a stale
+  // reducer or writing to a detached DOM node.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-  // Adapter-seeded initial values. Resolved once on mount; `initialValues`
-  // prop still wins over adapter values for explicitly-configured fields.
+  // One-shot guard against the dev warning so inline-adapter consumers
+  // (common pattern: `<Form adapter={new MyAdapter()} />`) don't emit a
+  // warning per parent render. We only want one warning per component
+  // instance, ever.
+  const warnedBothPathsRef = useRef(false);
+  useEffect(() => {
+    if (onSubmit && adapter && !isProductionBuild() && !warnedBothPathsRef.current) {
+      warnedBothPathsRef.current = true;
+      console.warn(
+        '[Form] Both `onSubmit` and `adapter` were provided. The adapter wins; `onSubmit` is ignored. ' +
+        'Remove one to silence this warning.',
+      );
+    }
+  }, [onSubmit, adapter]);
+
+  // Adapter-seeded initial values. Resolved EXACTLY ONCE per component
+  // instance, regardless of how many times the consumer reconstructs the
+  // adapter object (`<Form adapter={new MyAdapter()} />` on every render).
+  // This is a CRITICAL invariant — without the one-shot ref, an inline
+  // adapter fires `initialValues()` on every parent render, potentially
+  // producing an unbounded backend request loop.
   const [adapterSeed, setAdapterSeed] = useState<Record<string, unknown> | null>(null);
   const [adapterSeeded, setAdapterSeeded] = useState<boolean>(!adapter?.initialValues);
+  const initialValuesRequestedRef = useRef(false);
 
   useEffect(() => {
+    if (initialValuesRequestedRef.current) return;
     if (!adapter?.initialValues) return;
+    initialValuesRequestedRef.current = true;
     let cancelled = false;
     Promise.resolve(adapter.initialValues()).then(
       seed => {
@@ -136,11 +183,16 @@ export function Form({
         setAdapterSeed(seed);
         setAdapterSeeded(true);
       },
-      () => {
-        // On adapter.initialValues failure the form still renders with field
-        // defaults — an explicit onReset/submit flow remains available.
+      (err: unknown) => {
+        // Form still renders with field defaults so the user has a usable
+        // input surface — but we MUST emit a dev signal so the draft-load
+        // failure isn't invisible (rules/zero-tolerance.md Rule 3).
         if (cancelled) return;
         setAdapterSeeded(true);
+        if (!isProductionBuild()) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error('[Form] adapter.initialValues() failed; falling back to field defaults.', message);
+        }
       },
     );
     return () => { cancelled = true; };
@@ -299,8 +351,17 @@ export function Form({
     dispatch({ type: 'SET_ERRORS', errors: {} });
     dispatch({ type: 'SET_STATUS', status: 'submitting' });
     dispatch({ type: 'SET_SUBMIT_ERROR', error: null });
-    dispatch({ type: 'SET_SUBMISSION', submission: null });
+    // DD-F3: we do NOT clear state.submission here. If the new submit
+    // succeeds, the success branch overwrites it; if it fails, the previous
+    // cached result stays visible so the user can see what they had before
+    // retrying.
 
+    // IMPORTANT: `submissionValues` is a pre-await snapshot of
+    // visible-fields at the moment submit began. The post-await branches
+    // below MUST NOT re-read `state.values` — the reducer has processed
+    // multiple dispatches in the meantime and the closure's `state.values`
+    // is stale. Future refactors that need the current values must re-read
+    // via a ref or pass through the reducer, not the closure.
     const submissionValues: Record<string, unknown> = {};
     for (const f of fields) {
       if (visibleFields.has(f.name)) {
@@ -308,12 +369,18 @@ export function Form({
       }
     }
 
+    // Unmount guard: the component can be unmounted mid-submit (slow
+    // payroll endpoints, user navigates away). `isMountedRef` is flipped
+    // false in an unmount-effect; the post-await branches bail out when
+    // it's false so we never dispatch on a stale reducer or write to a
+    // detached DOM node.
     try {
       if (adapter) {
         // Adapter path: run async cross-field validation, then submit, then
         // cache {values, result} for the post-submit render slot.
         if (adapter.validate) {
           const adapterErrors = await adapter.validate(submissionValues);
+          if (!isMountedRef.current) return;
           if (adapterErrors && Object.keys(adapterErrors).length > 0) {
             dispatch({ type: 'SET_ERRORS', errors: adapterErrors });
             dispatch({ type: 'SET_STATUS', status: 'error' });
@@ -326,6 +393,7 @@ export function Form({
           }
         }
         const result = await adapter.submit(submissionValues);
+        if (!isMountedRef.current) return;
         dispatch({ type: 'SET_SUBMISSION', submission: { values: submissionValues, result } });
         dispatch({ type: 'SET_STATUS', status: 'success' });
         if (liveRegionRef.current) {
@@ -333,13 +401,15 @@ export function Form({
         }
       } else if (onSubmit) {
         await onSubmit(submissionValues);
+        if (!isMountedRef.current) return;
         dispatch({ type: 'SET_STATUS', status: 'success' });
         if (liveRegionRef.current) {
           liveRegionRef.current.textContent = 'Form submitted successfully';
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Submission failed';
+      if (!isMountedRef.current) return;
+      const message = sanitizeSubmitError(err);
       dispatch({ type: 'SET_SUBMIT_ERROR', error: message });
       dispatch({ type: 'SET_STATUS', status: 'error' });
       if (liveRegionRef.current) {

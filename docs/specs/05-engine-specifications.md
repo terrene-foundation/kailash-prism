@@ -1114,15 +1114,16 @@ interface FormAdapter<
 3. On submit, Form calls `adapter.validate(values)` (if defined) for async cross-field validation. Returned errors are surfaced inline and submit is cancelled.
 4. Form calls `adapter.submit(values)`:
    - **Success**: Form caches `{values, result}` internally, sets status='success', emits the success feedback banner, and — if `adapter.renderResult` is defined — renders the result node below the form inside a `<div role="region" aria-label="Form result">`.
-   - **Failure**: `adapter.submit` throws; Form surfaces the error via its standard submit-error banner. Adapter errors are re-thrown verbatim — per `rules/security.md`, consumer code is expected to wrap user-facing messages in a sanitizer (e.g. `sanitizeErrorMessage`).
-5. User edits after submit: Form's internal result state is cleared on the first value change so the post-submit UI never drifts out of sync with pending edits.
-6. On reset (button click or programmatic `reset()`), Form calls `adapter.onReset?.()` for the adapter to clear its own caches/state. The cached submission is cleared automatically.
+   - **Failure**: `adapter.submit` throws; Form surfaces the error via its standard submit-error banner. Engine sanitizes the error message: strips ASCII control characters (prevents aria-live log-injection) and truncates to 500 characters with a trailing ellipsis. Consumers can still pre-sanitize with a `sanitizeErrorMessage` helper (see `rules/security.md`) for domain-specific redaction, but the engine-side sanitizer guarantees baseline safety.
+5. User edits after submit: Form's internal result state is cleared on the first value change so the post-submit UI never drifts out of sync with pending edits. This applies to ALL `SET_VALUE` dispatches, not just user-typed ones — programmatic `setValue` from a custom renderer after a successful submit clears the cache too (see DD-F3).
+6. On reset (button click or programmatic `reset()` via `renderActions`), Form calls `adapter.onReset?.()` for the adapter to clear its own caches/state. The cached submission is cleared automatically.
+7. **Unmount safety**: if the component unmounts while `adapter.submit` / `adapter.validate` is in flight, the post-await branches bail out before dispatching on the stale reducer or writing to the detached DOM. No React "state update on unmounted component" warnings; no DOM leaks.
 
 ### Design Decisions
 
 #### DD-F1: Adapter OR onSubmit — mutually exclusive submission paths
 
-Passing both `onSubmit` and `adapter` is a configuration error. The adapter wins AND a dev-mode `console.warn` fires. Rationale: without the warn, the engine silently picks one and the bug surfaces as "my onSubmit isn't being called." The warn makes the precedence visible to the consumer at first render.
+Passing both `onSubmit` and `adapter` is a configuration error. The adapter wins AND a dev-mode `console.warn` fires **at most once per Form instance** (guarded by a `useRef` so inline-adapter parents that re-render N times don't produce N warnings). Rationale: without the warn, the engine silently picks one and the bug surfaces as "my onSubmit isn't being called." The warn makes the precedence visible to the consumer at first render.
 
 Passing neither throws a clear `Error` at mount with the actionable message: `<Form> requires either 'onSubmit' or 'adapter'. Pass 'adapter' for forms with a post-submit result display, or 'onSubmit' for fire-and-forget submissions.` This is a dev-time failure, not a runtime one — consumers catch it on first unit test.
 
@@ -1132,11 +1133,17 @@ Considered: add `FormConfig.renderResult?(submission) => ReactNode` alongside `o
 
 #### DD-F3: Cached submission clears on edit, not on submit-error
 
-When the user edits after a successful submit, the cached result clears immediately (the `SET_VALUE` reducer drops `state.submission` if `status === 'success'`). When the user submits and the adapter throws, the previous cached result stays visible — so the user can see what they had before retrying. Only a NEW successful submit overwrites the cache.
+When ANY `SET_VALUE` dispatch happens after `status === 'success'`, the cached result clears immediately — whether the dispatch came from user typing, blur, a custom renderer's programmatic `setValue`, or an imperative call through `useFormContext().setValue`. The reducer does not (and cannot) distinguish the source of a value change.
+
+When the user submits and the adapter throws, the previous cached result stays visible — so the user can see what they had before retrying. Only a NEW successful submit overwrites the cache. The engine does NOT clear the cache at the start of a new submit; the clear happens exclusively inside the success branch and inside the edit-after-success path above.
+
+Consumers that want to re-hydrate form fields from a submitted result (e.g. "apply these computed values back into the inputs as read-only previews") MUST accept that doing so clears the cached result. If the workflow needs both (re-hydrated fields AND a visible result), store the result in the adapter class and re-read it from `renderResult` rather than relying on the cached submission.
 
 #### DD-F4: `adapter.initialValues` errors fall back to defaults, don't block render
 
-If `adapter.initialValues()` rejects, the form still renders using field defaults. An error in backend draft-loading MUST NOT prevent the user from filling the form from scratch. This matches `rules/zero-tolerance.md` Rule 3 (no silent fallbacks) by rendering with a loud dev-time warning path (through an error boundary if installed) while keeping the form usable.
+If `adapter.initialValues()` rejects, the form still renders using field defaults. An error in backend draft-loading MUST NOT prevent the user from filling the form from scratch. This matches `rules/zero-tolerance.md` Rule 3 (no silent fallbacks) by emitting a dev-mode `console.error('[Form] adapter.initialValues() failed; falling back to field defaults.', message)` so the draft-load failure is visible in the dev console — and leaving the form in a usable state for the user.
+
+`adapter.initialValues()` is resolved EXACTLY ONCE per component instance. A `useRef` guard prevents inline-adapter consumers (`<Form adapter={new MyAdapter()} />` constructing a fresh object on every parent render) from producing an unbounded backend request loop. The effect dependency array includes `adapter`, but the one-shot ref ensures the resolver fires at most once.
 
 #### DD-F5: No generics on FormConfig itself
 
