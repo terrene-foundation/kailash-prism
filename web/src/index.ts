@@ -74,6 +74,8 @@ export {
 export {
   DataTable,
   useDataTable,
+  isDataTableAdapter,
+  resolveDataSource,
   type DataTableConfig,
   type DataTableRow,
   type ColumnDef,
@@ -83,10 +85,14 @@ export {
   type SelectionConfig,
   type BulkAction,
   type DataSource,
-  type ServerDataSource,
-  type ServerFetchParams,
-  type ServerFetchResult,
   type SortState,
+  type DataTableAdapter,
+  type DataTableCapabilities,
+  type DataTableQuery,
+  type DataTablePage,
+  type DataTableSort,
+  type DataTableRowAction,
+  type DataTableBulkAction,
 } from './engines/data-table/index.js';
 
 export {

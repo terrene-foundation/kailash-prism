@@ -2,13 +2,19 @@
 # Source: docs/specs/03-component-contracts.md § 3.4.3
 # Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll.
 
-version: "0.2.2"
+version: "0.3.0"
 
 name: DataTable
 category: organism
 description: "Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll."
 
 changelog:
+  - version: "0.3.0"
+    date: "2026-04-18"
+    changes:
+      - "BREAKING: ServerDataSource<T>, ServerFetchParams, ServerFetchResult, adaptLegacy(), isServerDataSource() removed from the public surface. DataSource<T> is now T[] | DataTableAdapter<T> only."
+      - "Migration: rename fetchData → fetchPage; items → rows. Add getRowId + capabilities. See 0.2.2 cheatsheet."
+      - "Deleted regression test web/src/__tests__/regression/server-data-source-wiring.test.ts in the same commit (orphan-detection Rule 4)."
   - version: "0.2.2"
     date: "2026-04-18"
     changes:
@@ -44,10 +50,10 @@ props:
     default: null
     description: "Column definitions including header label, accessor, width, and sortability"
   - name: data
-    type: "T[] | DataTableAdapter<T> | ServerDataSource<T>"
+    type: "T[] | DataTableAdapter<T>"
     required: true
     default: null
-    description: "Array of row data objects (client-side), a DataTableAdapter<T> (since 0.2.2) OR the deprecated ServerDataSource<T>. The adapter form is the canonical contract; ServerDataSource is shimmed internally and removed in 0.3.0."
+    description: "Array of row data objects (client-side) OR a DataTableAdapter<T> (since 0.2.2). ServerDataSource<T> was removed in 0.3.0 — see 0.2.2 CHANGELOG for migration."
   - name: getRowId
     type: "((row: T, index: number) => string) | undefined"
     required: false
@@ -215,13 +221,13 @@ tokens:
     - data-table.default.radius
   inherits_from: null
 
-# Proposed adapter contract (full spec: docs/specs/05-engine-specifications.md § 5.1.1)
-# Status: PROPOSED by M-05. Ships in M-06. Replaces ServerDataSource (deprecated
-# M-06, removed in 0.2.0 minor release).
-proposed_adapter:
+# Adapter contract (full spec: docs/specs/05-engine-specifications.md § 5.1.1)
+# Status: SHIPPED in 0.2.2 (7 of 9 methods — filterDimensions + subscribe
+# reserved for 0.4.0). ServerDataSource removed in 0.3.0.
+adapter:
   name: DataTableAdapter
-  version_introduced: "0.2.0-pending"
-  supersedes: ServerDataSource
+  version_introduced: "0.2.2"
+  supersedes: ServerDataSource  # removed in 0.3.0
   authority: "docs/specs/05-engine-specifications.md § 5.1.1"
   migration_findings:
     - "workspaces/fe-codegen-platform/04-validate/migration-m02-findings.md"

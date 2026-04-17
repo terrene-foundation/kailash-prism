@@ -75,14 +75,12 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
 
   const state = useDataTable(props);
 
-  // Detect whether data is a server-driven source (either the new
-  // `DataTableAdapter` or the deprecated `ServerDataSource`) so the engine
-  // can auto-manage the loading / error surface without the consumer
-  // having to wire up both `loading`/`error` and the server fetch manually.
+  // Detect whether data is an adapter (vs plain array) so the engine can
+  // auto-manage the loading / error surface without the consumer having
+  // to wire up both `loading`/`error` and the server fetch manually.
   //
-  // Discrimination: anything non-array-shaped is treated as server-driven;
-  // the hook's `resolveDataSource` has already normalised both shapes into
-  // a single adapter path and exposed serverLoading / serverError.
+  // Discrimination: anything non-array-shaped is treated as adapter-driven;
+  // the hook's `resolveDataSource` surfaces serverLoading / serverError.
   const isServerSource =
     typeof props.data === 'object' &&
     props.data !== null &&

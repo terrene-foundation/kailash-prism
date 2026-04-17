@@ -636,33 +636,23 @@ Each method's inclusion is justified by a concrete LOC saving from the M-02 or M
 - **`filterDimensions` has no chat analogue.** Chat doesn't faceted-filter messages; tables routinely do.
 - **Cursor pagination is a first-class capability.** Chat conversations are typically loaded in one `loadMessages(conversationId)` call, then appended via streaming. Tables routinely page through 10K-row datasets and need both offset and cursor strategies. The capability flag + `nextCursor` field cover both without two interfaces.
 
-### Relationship to ServerDataSource
+### Relationship to ServerDataSource (historical — completed in 0.3.0)
 
-**Decision: REPLACE, with a one-release deprecation window.**
+**Status**: COMPLETED. `ServerDataSource<T>`, `ServerFetchParams`, `ServerFetchResult`, `adaptLegacy()`, and `isServerDataSource()` were removed from the public surface in 0.3.0 per the migration plan below. `DataTableConfig.data: T[] | DataTableAdapter<T>`.
 
-`ServerDataSource<T>` (`web/src/engines/data-table/types.ts:109-124`) is an orphan API as documented in M-02 §"BLOCKING-1" (L271-272) and M-03 §"BLOCKING-1" (L446-473). It is declared on `DataTableConfig.data`'s union but `useDataTable` never calls `fetchData`. The type surface is misleading and consumers who pass a `ServerDataSource` get a silently empty table.
+Origin: `ServerDataSource<T>` shipped in 0.1.x as an orphan API (declared on `DataTableConfig.data`'s union but `useDataTable` never invoked `fetchData`). M-02 §"BLOCKING-1" (L271-272) and M-03 §"BLOCKING-1" (L446-473) independently surfaced this. Both migrations agreed: delete and replace.
 
-Both M-02 (L294: "Delete `ServerDataSource` and replace it with `DataTableAdapter` in one sweep — the type surface is misleading otherwise") and M-03 (L568-571: "without it the entire type-level ServerDataSource contract is vapor") agreed. This spec adopts that recommendation with a controlled migration path:
+**Migration path (executed across three releases):**
 
-**Migration plan** (executed by M-04 + M-06, defended below):
+1. **0.2.0 (M-04, engine wiring fix):** Wired `ServerDataSource.fetchData` into `useDataTable` so the existing API actually ran. Unblocked consumers who had already written a `ServerDataSource`, without changing the type surface.
 
-1. **M-04 (engine wiring fix):** Wire `ServerDataSource.fetchData` into `useDataTable` so the existing API works for the first time. This unblocks any consumer who already wrote a `ServerDataSource` while M-05/M-06 design and ship `DataTableAdapter`. The wiring is small (~50 LOC) and lives behind the existing union type, so no consumer code changes.
+2. **0.2.2 (M-06 / Shard 2, adapter introduction):** Added `DataTableAdapter<T>` as a THIRD accepted shape on `DataTableConfig.data`. Engine internally adapted `ServerDataSource` → `DataTableAdapter` via a thin shim (`adaptLegacy`). All new code paths inside the engine consumed the adapter shape; the union was purely a public-API compatibility layer. `ServerDataSource` marked `@deprecated`.
 
-2. **M-06 (adapter introduction, same release):** Add `DataTableAdapter<T>` as a SECOND accepted shape on `DataTableConfig.data`:
+3. **0.3.0 (Shard 3, removal):** `ServerDataSource`, `ServerFetchParams`, `ServerFetchResult`, `adaptLegacy`, `isServerDataSource` removed from the public surface. The internal shim deleted. `DataTableConfig.data: T[] | DataTableAdapter<T>`. Regression test `web/src/__tests__/regression/server-data-source-wiring.test.ts` deleted in the SAME commit (orphan-detection Rule 4 — test files importing removed symbols become collection-time orphans).
 
-   ```typescript
-   data: T[] | ServerDataSource<T> | DataTableAdapter<T>
-   ```
+Consumers who need the 30-LOC `adaptLegacy` helper in a one-off migration can copy it from git history: `git show 8489bc9:web/src/engines/data-table/adapter.ts`.
 
-   Engine internally adapts `ServerDataSource` → `DataTableAdapter` via a thin shim (`function adaptLegacy<T>(src: ServerDataSource<T>): DataTableAdapter<T>`). All new code paths inside the engine consume the adapter shape; the union is purely a public-API compatibility layer.
-
-3. **M-06 release notes + `@deprecated` JSDoc on `ServerDataSource`:** The interface is marked deprecated in the same release as the adapter ships. JSDoc points to the adapter as the replacement and links to a migration cheatsheet.
-
-4. **Next minor release after M-06 (e.g. 0.2.0):** `ServerDataSource` is REMOVED from the public surface. The internal shim is also removed. `DataTableConfig.data: T[] | DataTableAdapter<T>`. This is a breaking change but Prism is pre-1.0 (`web/package.json` is 0.x); minor releases may break public API per semver-pre-1.0 conventions.
-
-This satisfies `rules/orphan-detection.md` MUST Rule 3 ("Removed = Deleted, Not Deprecated") with a one-release window for the deprecation tag — defensible because (a) Prism is pre-1.0, (b) the deprecation comes paired with the actual fix, not a vapor warning, (c) the orphan was never functional so no real consumer can be "depending on the broken behavior" the way M-04's wiring fix would make it appear to (a fresh M-04 consumer might write code against `ServerDataSource` between M-04 ship and M-06 ship; the shim ensures their code keeps working through 0.x).
-
-`ServerFetchParams` and `ServerFetchResult` follow the same lifecycle: deprecated in M-06 (mapped to `DataTableQuery` / `DataTablePage<T>`), removed in 0.2.0.
+This satisfied `rules/orphan-detection.md` MUST Rule 3 ("Removed = Deleted, Not Deprecated") with a two-release deprecation window (0.2.2 → 0.3.0) — defensible because (a) Prism is pre-1.0 so minor releases may break public API, (b) the deprecation came paired with a working replacement, not a vapor warning, (c) the adaptLegacy shim kept 0.2.x consumer code working until their one-shot migration commit.
 
 ### Design Decisions
 
@@ -717,15 +707,15 @@ A separate `FilterAdapter` was considered to keep `DataTableAdapter` slim. Rejec
 
 The implementation MAY split internal state management (`useFilterDimensions(adapter)` hook separate from `useDataTable(config)` hook) for code organisation, but the EXTERNAL interface stays unified.
 
-#### DD-5: Deprecation plan for `ServerDataSource`
+#### DD-5: Deprecation plan for `ServerDataSource` (executed)
 
-**Decision: ONE-RELEASE DEPRECATION WINDOW.** See "Relationship to ServerDataSource" above for the full plan. Summary:
+**Decision: TWO-RELEASE DEPRECATION WINDOW.** Completed in 0.3.0. See "Relationship to ServerDataSource" above for the full historical narrative. Executed summary:
 
-- M-04 wires the orphan so existing consumers get correct behavior.
-- M-06 ships `DataTableAdapter`, accepts both shapes via union, marks `ServerDataSource` `@deprecated`, ships migration cheatsheet.
-- Next minor (0.2.0) removes `ServerDataSource` entirely.
+- **0.2.0 (M-04)**: wired the orphan so existing consumers got correct behavior.
+- **0.2.2 (M-06 / Shard 2)**: shipped `DataTableAdapter`, accepted all three shapes via union, marked `ServerDataSource` `@deprecated`, shipped migration cheatsheet.
+- **0.3.0 (Shard 3)**: removed `ServerDataSource` and the internal shim entirely.
 
-A pure same-release delete was considered but rejected: it would force any consumer who wrote against M-04's wired `ServerDataSource` to immediately rewrite. The one-release window is the smallest defensible deprecation given `rules/orphan-detection.md` MUST Rule 3 and the pre-1.0 status.
+A pure same-release delete was considered but rejected: it would have forced any consumer who wrote against M-04's wired `ServerDataSource` to immediately rewrite. The two-release window (0.2.2 deprecation → 0.3.0 removal) was the smallest defensible deprecation given `rules/orphan-detection.md` MUST Rule 3 and Prism's pre-1.0 status.
 
 A `@deprecated`-only path (mark deprecated, never delete) was rejected because `rules/orphan-detection.md` is explicit: "Removed = Deleted, Not Deprecated. Deprecation banners are easy to miss; consumers continue importing the symbol and silently shipping insecure code."
 
