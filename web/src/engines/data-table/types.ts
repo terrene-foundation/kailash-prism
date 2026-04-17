@@ -117,63 +117,25 @@ export interface BulkAction<T extends DataTableRow> {
 // --- Data source ---
 
 /**
- * Three accepted shapes for `DataTableConfig.data`:
+ * Two accepted shapes for `DataTableConfig.data` (since 0.3.0):
  *
  * - **Plain array** — engine sorts / filters / paginates client-side.
- * - **`ServerDataSource<T>`** — DEPRECATED. Legacy shape from 0.2.x. Internally
- *   shimmed to `DataTableAdapter` via `adaptLegacy`; removed in 0.3.0.
- *   Consumers MUST migrate to `DataTableAdapter`.
- * - **`DataTableAdapter<T>`** — the canonical adapter contract (since 0.2.2).
+ * - **`DataTableAdapter<T>`** — the canonical adapter contract.
  *   Owns getRowId, capability declaration, paging / filtering / sorting /
  *   row activation / row actions / bulk actions / cache invalidation.
  *
- * The engine internally lifts all three shapes to `DataTableAdapter` so the
- * hook's body only handles the adapter form.
+ * `ServerDataSource<T>` was removed in 0.3.0. Consumers migrating from
+ * 0.2.x should use the migration cheatsheet from the 0.2.2 CHANGELOG —
+ * the only move is to add `getRowId` and `capabilities` methods alongside
+ * a renamed `fetchPage` (was `fetchData`). The shim `adaptLegacy` that
+ * existed in 0.2.2 is also removed; if you need a drop-in lift, copy
+ * its ~30 LOC from git history (commit 8489bc9) into your code.
  */
 export type DataSource<T extends DataTableRow> =
   | T[]
-  | ServerDataSource<T>
   | DataTableAdapter<T>;
 
-/**
- * @deprecated Use `DataTableAdapter` instead. `ServerDataSource` will be
- * removed in 0.3.0 — the interface was orphaned through 0.1.x (see
- * M-02/M-03 BLOCKING-1) and is superseded by the typed adapter contract.
- */
-export interface ServerDataSource<T extends DataTableRow> {
-  /**
-   * Called by `useDataTable` whenever pagination / sort / filter / global
-   * search state changes. Must return the current page of rows plus the
-   * total count so the pagination footer can render page counts correctly.
-   *
-   * The engine uses an `AbortController` to cancel in-flight requests when
-   * the query params change — implementations MAY observe `params.signal` and
-   * abort the underlying fetch; stale results from cancelled requests are
-   * discarded by the engine regardless.
-   */
-  fetchData: (params: ServerFetchParams) => Promise<ServerFetchResult<T>>;
-}
-
-export interface ServerFetchParams {
-  page: number;
-  pageSize: number;
-  sort: SortState[];
-  filters: Record<string, string>;
-  globalSearch: string;
-  /**
-   * Optional abort signal from the engine. Firing when query params change,
-   * so adapters that forward to `fetch()` can honour cancellation. Stale
-   * results from aborted requests are discarded by the engine regardless.
-   */
-  signal?: AbortSignal;
-}
-
-export interface ServerFetchResult<T extends DataTableRow> {
-  items: T[];
-  totalCount: number;
-}
-
-// --- DataTableAdapter (canonical, since 0.2.2) ---
+// --- DataTableAdapter (canonical) ---
 
 /**
  * Capabilities an adapter declares to the engine, read once at mount.

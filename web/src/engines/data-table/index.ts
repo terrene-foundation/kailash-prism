@@ -13,9 +13,6 @@ export type {
   SelectionConfig,
   BulkAction,
   DataSource,
-  ServerDataSource,
-  ServerFetchParams,
-  ServerFetchResult,
   SortState,
   DataTableAdapter,
   DataTableCapabilities,
@@ -27,9 +24,7 @@ export type {
 } from './types.js';
 
 export {
-  adaptLegacy,
   isDataTableAdapter,
-  isServerDataSource,
   resolveDataSource,
 } from './adapter.js';
 

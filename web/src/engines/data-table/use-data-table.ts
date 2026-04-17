@@ -2,10 +2,11 @@
  * useDataTable — Core state management hook for the DataTable engine
  *
  * Manages sorting, filtering, pagination, and selection state.
- * Handles both client-side (array) and server-side (`ServerDataSource`) data
- * sources. For server sources, the hook calls `data.fetchData(params)` on
- * mount and on every state change, tracks its own loading / error lifecycle,
- * and uses an AbortController to cancel in-flight requests when params change.
+ * Handles both client-side (array) and adapter-driven (`DataTableAdapter`)
+ * data sources. For adapter sources, the hook calls `adapter.fetchPage(query)`
+ * on mount and on every state change, tracks its own loading / error
+ * lifecycle, and uses an AbortController to cancel in-flight requests when
+ * params change.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -123,11 +124,9 @@ export function useDataTable<T extends DataTableRow>(
 
   // --- Data-source classification ---
   // `resolveDataSource` lifts every accepted shape (plain array,
-  // DataTableAdapter, legacy ServerDataSource) into either
-  // `{adapter: DataTableAdapter, clientData: []}` or
-  // `{adapter: null, clientData: T[]}`. The legacy ServerDataSource path is
-  // shimmed to a DataTableAdapter via `adaptLegacy` so the hook body only
-  // handles two cases: array OR adapter.
+  // DataTableAdapter) into either `{adapter: DataTableAdapter, clientData: []}`
+  // or `{adapter: null, clientData: T[]}`. The hook body only handles
+  // two cases: array OR adapter.
   const { adapter, clientData } = useMemo(
     () => resolveDataSource<T>(data),
     [data],

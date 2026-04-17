@@ -1,6 +1,6 @@
 /**
- * DataTableAdapter tests — interface contract, adaptLegacy shim, hook
- * wiring, row actions, bulk actions, onRowActivate, invalidate.
+ * DataTableAdapter tests — interface contract, hook wiring, row actions,
+ * bulk actions, onRowActivate, invalidate.
  *
  * Spec: docs/specs/05-engine-specifications.md § 5.1.1
  */
@@ -16,9 +16,8 @@ import {
   type DataTableQuery,
   type DataTableRowAction,
   type DataTableBulkAction,
-  type ServerDataSource,
 } from './data-table.js';
-import { adaptLegacy, isDataTableAdapter, isServerDataSource, resolveDataSource } from './data-table.js';
+import { isDataTableAdapter, resolveDataSource } from './data-table.js';
 
 interface Doc {
   id: number;
@@ -309,74 +308,22 @@ describe('DataTableAdapter', () => {
     });
   });
 
-  describe('adaptLegacy shim', () => {
-    it('lifts a ServerDataSource into a DataTableAdapter', async () => {
-      const fetchData = vi.fn().mockResolvedValue({ items: sampleDocs, totalCount: 2 });
-      const legacySource: ServerDataSource<Doc> = { fetchData };
-      const adapter = adaptLegacy(legacySource);
-
-      expect(isDataTableAdapter<Doc>(adapter)).toBe(true);
-      expect(isServerDataSource<Doc>(adapter)).toBe(false);
-
-      const page = await adapter.fetchPage({
-        page: 0,
-        pageSize: 25,
-        sort: [{ field: 'title', direction: 'asc' }],
-        filters: { status: 'active' },
-        globalSearch: 'con',
-      });
-
-      expect(fetchData).toHaveBeenCalledWith(expect.objectContaining({
-        page: 0,
-        pageSize: 25,
-        sort: [{ field: 'title', direction: 'asc' }],
-        filters: { status: 'active' },
-        globalSearch: 'con',
-      }));
-      expect(page.rows).toEqual(sampleDocs);
-      expect(page.totalCount).toBe(2);
-    });
-
-    it('legacy ServerDataSource still works via the hook (end-to-end)', async () => {
-      const fetchData = vi.fn().mockResolvedValue({ items: sampleDocs, totalCount: 2 });
-      const legacy: ServerDataSource<Doc> = { fetchData };
-
-      render(<DataTable columns={columns} data={legacy} />);
-      await waitFor(() => {
-        expect(screen.getByText('Contract')).toBeDefined();
-      });
-      expect(fetchData).toHaveBeenCalled();
-    });
-
-    it('resolveDataSource classifies array / adapter / legacy correctly', () => {
+  describe('resolveDataSource', () => {
+    it('classifies array vs adapter correctly', () => {
       expect(resolveDataSource<Doc>([]).adapter).toBeNull();
       expect(resolveDataSource<Doc>([]).clientData).toEqual([]);
 
       const adapter = makeAdapter();
       expect(resolveDataSource<Doc>(adapter).adapter).toBe(adapter);
-
-      const legacy: ServerDataSource<Doc> = { fetchData: async () => ({ items: [], totalCount: 0 }) };
-      const resolved = resolveDataSource<Doc>(legacy);
-      expect(resolved.adapter).not.toBeNull();
-      // Resolution through adapter shim — not the same object.
-      expect(resolved.adapter).not.toBe(legacy as unknown);
+      expect(resolveDataSource<Doc>(adapter).clientData).toEqual([]);
     });
 
-    it('adaptLegacy assigns stable synthetic ids to rows with missing id field', () => {
-      const legacy: ServerDataSource<{ title: string }> = {
-        fetchData: async () => ({ items: [], totalCount: 0 }),
-      };
-      const adapter = adaptLegacy(legacy);
-      // Two rows with identical content but different object identities
-      // MUST get distinct synthetic ids, preventing the "all null-id rows
-      // collapse into one selection key" bug.
-      const r1 = { title: 'Same' };
-      const r2 = { title: 'Same' };
-      const id1 = adapter.getRowId(r1);
-      const id2 = adapter.getRowId(r2);
-      expect(id1).not.toBe(id2);
-      // Same row yields the same id across multiple calls (stability).
-      expect(adapter.getRowId(r1)).toBe(id1);
+    it('isDataTableAdapter discriminates adapter from plain objects', () => {
+      expect(isDataTableAdapter<Doc>(makeAdapter())).toBe(true);
+      expect(isDataTableAdapter<Doc>([])).toBe(false);
+      expect(isDataTableAdapter<Doc>(null)).toBe(false);
+      expect(isDataTableAdapter<Doc>({ random: 'object' })).toBe(false);
+      expect(isDataTableAdapter<Doc>({ getRowId: () => '1' })).toBe(false); // missing capabilities + fetchPage
     });
   });
 

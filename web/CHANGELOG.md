@@ -2,6 +2,65 @@
 
 All notable changes to the Prism web engine package are documented here.
 
+## 0.3.0 — 2026-04-18 — ServerDataSource removed (Shard 3 of 0.3.0 wave)
+
+BREAKING: `ServerDataSource<T>`, `ServerFetchParams`, `ServerFetchResult`,
+`adaptLegacy()`, and `isServerDataSource()` are removed from the public
+surface. `DataTableConfig.data` now accepts only `T[] | DataTableAdapter<T>`.
+
+### Why remove
+
+`ServerDataSource` shipped in 0.1.x as a public type whose `fetchData`
+method was never invoked by the engine (the M-02 / M-03 orphan finding).
+0.2.0 wired the method as a stopgap. 0.2.2 introduced the canonical
+`DataTableAdapter` and kept `ServerDataSource` as a deprecated shimmed
+shape. 0.3.0 finishes the deprecation — Prism is pre-1.0, and per the
+migration plan in `docs/specs/05-engine-specifications.md` § 5.1.1, minor
+releases may break public API.
+
+### Migration
+
+The 0.2.2 CHANGELOG cheatsheet applies verbatim:
+```diff
+- const dataSource: ServerDataSource<Doc> = {
+-   fetchData: async (params) => { /* ... */ return { items, totalCount }; },
+- };
++ const adapter: DataTableAdapter<Doc> = {
++   getRowId: (row) => String(row.id),
++   capabilities: () => ({ serverPagination: true, globalSearch: true }),
++   fetchPage: async (query) => { /* ... */ return { rows, totalCount }; },
++ };
+```
+
+Field-name changes: `items` → `rows` (on the return shape); `fetchData`
+→ `fetchPage` (method name). `params.sort` / `params.filters` /
+`params.globalSearch` fields are unchanged. The engine's `getRowId`
+fallback (`row['id']` → index) still applies when the adapter returns
+null/undefined/empty, so forgetting to wire `getRowId` degrades gracefully
+rather than breaking.
+
+Consumers who need the `adaptLegacy()` shim in one-off migrations can
+copy the 30-LOC helper from git history (`git show 8489bc9:web/src/engines/data-table/adapter.ts`)
+into their own code. Having engine-side code path diverge from external
+code path was the whole reason the shim existed — at this point every
+new consumer writes a `DataTableAdapter` directly.
+
+### Test suite
+
+- Deleted `web/src/__tests__/regression/server-data-source-wiring.test.ts`
+  in the SAME PR as the API removal (orphan-detection Rule 4 — test
+  files that import removed symbols become collection-time orphans).
+- Deleted 4 adaptLegacy-specific cases from `data-table-adapter.test.tsx`.
+- Adapter test suite: 20 cases (down from 24 in 0.2.2); full suite:
+  264 tests (down from 270).
+
+### Not breaking
+
+- Plain array data (`T[]`) — unchanged.
+- `DataTableAdapter<T>` — unchanged from 0.2.2.
+- Every component / engine besides DataTable — unchanged.
+- Hook result shape (`useDataTable()`) — unchanged from 0.2.2.
+
 ## 0.2.2 — 2026-04-18 — DataTableAdapter (Shard 2 of 0.3.0 wave)
 
 Adds the `DataTableAdapter<T, TId>` interface + `adaptLegacy` shim, closing
