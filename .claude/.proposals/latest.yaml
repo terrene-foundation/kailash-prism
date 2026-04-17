@@ -140,4 +140,196 @@ changes:
       production parity gaps.
     diff_lines: "+52 -0"
 
+  # --- Wave 2 (2026-04-14): arbor calculators + payslips + documents migration ---
+  # Three parallel migrations landed under Prism 0.2.0. Surfaced blocking
+  # gaps in Form + DataTable engines; all fixed in same wave via M-04.
+  # Convergence: 5 HIGH red-team findings fixed, 2 deferred (policy decisions
+  # needed: tarball distribution, backend authz).
+
+  - file: web/package.json
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      @kailash/prism-web 0.1.0 → 0.2.0. Breaking change on
+      ColumnDef.render typing (tightened from unknown to T[keyof T] | undefined).
+      Prior arbor routes unaffected due to TS parameter contravariance.
+    diff_lines: "+1 -1"
+
+  - file: web/CHANGELOG.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      New CHANGELOG tracking 0.2.0 release with D1-D4 DataTable fixes
+      and F1-F4 Form fixes surfaced by arbor wave-2 migration.
+    diff_lines: "+N"
+
+  - file: web/src/engines/data-table/use-data-table.ts
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      D1: wire ServerDataSource.fetchData into the engine. Previously
+      declared in types but never invoked — a Rule 2 zero-tolerance
+      orphan that both M-02 (payslips) and M-03 (documents) migrations
+      independently discovered. Now calls fetchData on mount and on
+      every query-state change, with AbortController for race safety
+      and surfaced loading/error states.
+      D2: getRowId config hook replaces hardcoded row['id'].
+    diff_lines: "+~110 -10"
+
+  - file: web/src/engines/data-table/types.ts
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      D3: ColumnDef.render typed as (value: T[keyof T] | undefined, row: T).
+      D4: DataTableRow constraint relaxed to `object` — removes the
+      index-signature tax on typed row interfaces.
+      New: getRowId on DataTableConfig.
+    diff_lines: "+~20 -5"
+
+  - file: web/src/engines/data-table/data-table-root.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: D1 surface — server-side fetch state threading.
+    diff_lines: "+~15 -2"
+
+  - file: web/src/__tests__/regression/server-data-source-wiring.test.ts
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      4-case Tier 1 regression test for D1 orphan fix: mount fetch,
+      param-change refetch, error surface, stale-response discard.
+      Addresses rules/zero-tolerance.md Rule 2 with behavioral test.
+    diff_lines: "+N"
+
+  - file: web/src/engines/form/form-types.ts
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      F1: FieldDef.render custom renderer escape hatch.
+      F2: FormConfig.renderActions slot replaces hardcoded submit
+      button placement.
+      F3: FormConfig.submitDisabledWhen predicate for conditional disable.
+      F4: FormConfig.classNames override map fixes M-01 BLOCKING-5
+      (off-brand form fields when Prism CSS vars aren't defined).
+    diff_lines: "+~60 -5"
+
+  - file: web/src/engines/form/form-root.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: F2 + F3 surfaces — renderActions slot and submitDisabledWhen predicate.
+    diff_lines: "+~50 -5"
+
+  - file: web/src/engines/form/form-fields.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: F1 + F4 surfaces — custom render dispatch and classNames override.
+    diff_lines: "+~65 -10"
+
+  - file: web/src/engines/ai-chat-sidebar.test.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Rule 1 zero-tolerance fix — 6 pre-existing act() warnings
+      wrapped in await act(async () => ...) + waitFor. Surfaced by
+      M-08 convergence red team.
+    diff_lines: "+~20 -10"
+
+  - file: docs/specs/05-engine-specifications.md
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Spec authority Rule 5 update for all D1-D4 and F1-F4 API additions.
+      Plus § 5.1.1 DataTableAdapter<T> (proposed, 9 methods) — design doc
+      from M-05 consolidating M-02 and M-03 findings. Implementation
+      deferred to next wave; § 5.1.1 marked "proposed" and does not
+      introduce any code surface.
+    diff_lines: "+~N"
+
+  - file: specs/components/data-table.yaml
+    action: modified
+    suggested_tier: coc-prism
+    reason: proposed_adapter block added; current ServerDataSource contract unchanged.
+    diff_lines: "+~30"
+
+  - file: specs/components/form.yaml
+    action: modified
+    suggested_tier: coc-prism
+    reason: F1-F4 API additions codified in YAML contract.
+    diff_lines: "+~25"
+
+  # --- Wave 2 findings (captured institutional knowledge) ---
+
+  - file: workspaces/fe-codegen-platform/04-validate/migration-m01-findings.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Arbor /calculators-prism migration: Form engine validation.
+      5 BLOCKING gaps (F1-F4 landed; FormAdapter deferred to next wave).
+      7 NON-BLOCKING gaps for /codify. Proposed FormAdapter interface
+      sketch (next-wave design target — analogous to ChatAdapter).
+      Appended: specs-authority Rule 6 deviation notes for parity drift.
+    diff_lines: "+~400"
+
+  - file: workspaces/fe-codegen-platform/04-validate/migration-m02-findings.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Arbor /my-payslips-prism migration: simple DataTable consumer.
+      3 BLOCKING + 6 NON-BLOCKING gaps. Proposed 7-method
+      DataTableAdapter (consolidated with M-03 into M-05 design).
+      Key finding: ServerDataSource was an orphan.
+    diff_lines: "+~300"
+
+  - file: workspaces/fe-codegen-platform/04-validate/migration-m03-findings.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Arbor /documents-prism migration: grid/list DataTable consumer.
+      3 BLOCKING + 6 NON-BLOCKING. Architectural recommendation:
+      DataTable stays tabular; composition with Grid + new Card atom +
+      CardGrid molecule is the right architecture for grid-mode
+      consumers. Card/CardGrid proposals for next wave.
+    diff_lines: "+~580"
+
+  - file: workspaces/fe-codegen-platform/04-validate/redteam-arbor-wave2.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Code review red team pass on wave 2: 3 HIGH / 7 MEDIUM / 7 LOW.
+      Key HIGH: classNames orphan (F4 shipped without consumer),
+      act() warnings Rule 1 violation, 5 silent parity drifts needing
+      Rule 6 acknowledgment. All HIGH resolved in M-08 convergence.
+    diff_lines: "+~N"
+
+  - file: workspaces/fe-codegen-platform/04-validate/redteam-arbor-wave2-security.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Security red team pass on wave 2: 0 CRITICAL / 4 HIGH /
+      8 MEDIUM / 3 LOW. Key HIGH: PII in console.info, raw err.message
+      echoed to UI, tarball integrity gap, documents API authz unverified.
+      PII + error echo fixed in M-08 convergence; tarball + authz
+      deferred pending policy decisions.
+    diff_lines: "+~N"
+
+  - file: workspaces/fe-codegen-platform/04-validate/redteam-arbor-wave2-convergence.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      M-08 convergence report: dispositions for all 7 HIGH findings
+      across both red-team passes. 5 FIXED, 2 DEFERRED with rationale
+      (S3 tarball distribution policy; S4 arbor backend authz audit).
+      219/219 tests pass, zero warnings, arbor builds clean.
+    diff_lines: "+~N"
+
+  - file: workspaces/fe-codegen-platform/04-validate/migration-integration-evidence.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      M-06 automated integration evidence: arbor Next.js production
+      build clean across all 55 pages including 4 new -prism routes.
+      Documents limits of automated coverage (live API + interactive
+      behavior require logged-in browser session).
+    diff_lines: "+~N"
+
 status: pending_review

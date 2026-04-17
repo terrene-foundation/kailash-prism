@@ -75,6 +75,20 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
 
   const state = useDataTable(props);
 
+  // Detect whether data is a ServerDataSource so the engine can auto-manage
+  // the loading / error surface without the consumer having to wire up both
+  // `loading`/`error` and the server fetch manually.
+  const isServerSource =
+    typeof props.data === 'object' &&
+    props.data !== null &&
+    !Array.isArray(props.data) &&
+    typeof (props.data as { fetchData?: unknown }).fetchData === 'function';
+  const effectiveLoading = isServerSource ? loading || state.serverLoading : loading;
+  const effectiveError = isServerSource ? error ?? state.serverError : error;
+  const effectiveRetry = isServerSource
+    ? (onRetry ?? state.retryServerFetch)
+    : onRetry;
+
   // --- Responsive: detect mobile ---
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -113,8 +127,8 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
   // --- Render ---
 
   // Determine table state
-  const isLoading = loading;
-  const hasError = error != null;
+  const isLoading = effectiveLoading;
+  const hasError = effectiveError != null;
   const isEmpty = !isLoading && !hasError && state.displayRows.length === 0;
   const hasData = !isLoading && !hasError && state.displayRows.length > 0;
 
@@ -205,8 +219,8 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
             {hasError && (
               <DataTableError
                 columnCount={columnCount}
-                error={error}
-                onRetry={onRetry}
+                error={effectiveError}
+                onRetry={effectiveRetry}
                 customContent={customErrorState}
               />
             )}

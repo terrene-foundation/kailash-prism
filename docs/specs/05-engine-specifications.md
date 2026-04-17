@@ -92,10 +92,17 @@ interface DataTableConfig {
   emptyState?: Component;       // Custom empty state. Default: EmptyState organism.
   loadingState?: Component;     // Custom loading state. Default: Skeleton rows.
   errorState?: Component;       // Custom error state. Default: AlertBanner.
+
+  // Row identity (since 0.2.0)
+  getRowId?: (row: Row, index: number) => string; // Stable id extractor. Fallback: row['id'] then index.
 }
 
-interface ColumnDef {
-  field: string;                // Data field key.
+// Since 0.2.0: DataTableRow relaxed from `Record<string, unknown>` to
+// `object` so typed interfaces without an `[key: string]: unknown` index
+// signature are accepted directly.
+
+interface ColumnDef<T extends object> {
+  field: string & keyof T;      // Data field key (typed).
   header: string;               // Display header text.
   width?: number | "auto";      // Column width in px. "auto" fills remaining space.
   minWidth?: number;            // Minimum width in px. Default: 80.
@@ -104,7 +111,7 @@ interface ColumnDef {
   filterable?: boolean;         // Default: true when filtering.enabled is true.
   filterType?: "text" | "select" | "date" | "dateRange" | "number" | "numberRange" | "boolean";
   filterOptions?: string[];     // For "select" filterType: list of options.
-  renderer?: (value: any, row: Row) => Component; // Custom cell renderer.
+  render?: (value: T[keyof T] | undefined, row: T) => Component; // Custom cell renderer. Since 0.2.0: `value` is typed as the field's value, not `unknown`.
   align?: "left" | "center" | "right"; // Default: "left".
   pinned?: "left" | "right" | null;    // Pin column to left or right edge.
   hidden?: boolean;             // Default: false. Initially hidden (user can toggle).
@@ -119,10 +126,26 @@ interface BulkAction {
   confirmMessage?: string;      // If set, shows confirmation dialog before executing.
 }
 
-type DataSource =
-  | Row[]                        // Static array
-  | { url: string; params?: Record<string, any> } // Server endpoint
-  | { query: () => Promise<{ rows: Row[]; totalCount: number }> }; // Custom fetcher
+type DataSource<T> =
+  | T[]                          // Static array — engine sorts/filters/paginates client-side
+  | ServerDataSource<T>;         // Since 0.2.0: wired end-to-end; `fetchData` is invoked on every state transition
+
+interface ServerDataSource<T> {
+  // Called by useDataTable on mount and whenever page/sort/filter/search changes.
+  // Returns one page plus the total count for pagination UI. AbortSignal is
+  // supplied on `params.signal` so adapters forwarding to fetch() can honour
+  // cancellation; stale responses are discarded by the engine regardless.
+  fetchData(params: ServerFetchParams): Promise<{ items: T[]; totalCount: number }>;
+}
+
+interface ServerFetchParams {
+  page: number;
+  pageSize: number;
+  sort: SortState[];
+  filters: Record<string, string>;
+  globalSearch: string;
+  signal?: AbortSignal; // Since 0.2.0
+}
 ```
 
 ### Internal State
@@ -232,6 +255,538 @@ interface MobileCardLayout {
 
 ---
 
+## 5.1.1 DataTableAdapter<T> (proposed for next wave)
+
+**Status**: PROPOSED (M-05). Implementation is M-06 wave. Lands AFTER M-04 wires `ServerDataSource.fetchData` so the adapter has a working call site. This sub-section is the canonical contract — both M-02 and M-03 sketches reduce to what is documented here.
+
+### Overview
+
+`DataTableAdapter<T, TId>` is a transport-agnostic bridge between a DataTable engine instance and a backend data source. It is to DataTable what `ChatAdapter` (§ 5.6) is to AI Chat: a small, plain-async interface that owns paging/filtering/sorting/row-actions and lets the engine treat any backend (REST, GraphQL, in-memory, fixture, SSE-pushed) uniformly.
+
+The adapter REPLACES `ServerDataSource<T>` (`web/src/engines/data-table/types.ts:109-124`) — the existing interface is an orphan (declared but never invoked, see "Motivation" below) and supersedes the `T[] | ServerDataSource<T>` union on `DataTableConfig.data`.
+
+A consumer constructs an adapter once and passes it to `DataTable` via `data={adapter}` (or `adapter={adapter}` — naming finalized at implementation; see Open Questions). The engine then drives every fetch, filter change, sort change, page change, row activation, row action, bulk action, and (if subscribed) live update through the adapter's typed methods.
+
+### Motivation
+
+Two parallel arbor migrations independently surfaced the same root finding and proposed near-identical adapter shapes:
+
+- M-02 `/my-payslips` (`workspaces/fe-codegen-platform/04-validate/migration-m02-findings.md:81-104, 135-269`) — a simple read-only list of payslip rows. Surfaced: `ServerDataSource.fetchData` is declared but never called (line 92), `getRowId` hardcodes `row['id']` (line 274), action columns require `field: "id"` faux-column hack (line 121), `__raw: Payslip` hack to carry unmapped fields (line 60).
+- M-03 `/documents` (`workspaces/fe-codegen-platform/04-validate/migration-m03-findings.md:120-127, 178-292, 446-510`) — a grid/list-toggle page with faceted filter. Surfaced the same orphan (lines 122-127), same action-column workaround (lines 169-174), plus a need for declarative filter dimensions with async option loaders (lines 277-291) and bulk actions tied to selection.
+
+Both migrations together produced **~1,140 LOC** of page+datasource code where ~30-50 LOC of adapter + ~50 LOC of page shell would have sufficed. The adapter's purpose is to collapse that ratio for every future list-shaped page in the Prism ecosystem.
+
+The orphan fix itself is M-04's job (`useDataTable` MUST call the data source on state change); this sub-section defines WHAT the adapter looks like, M-04 wires `ServerDataSource` (the old shape) and M-06 migrates to `DataTableAdapter` (the new shape) — see "Relationship to ServerDataSource" below.
+
+### Interface
+
+```typescript
+import type { ReactNode } from 'react';
+
+/**
+ * Transport-agnostic adapter for DataTable backends.
+ *
+ * Consumers implement this interface to connect Prism's DataTable engine to
+ * their specific data source (REST, GraphQL, in-memory array, file system,
+ * etc). The engine drives every state change through the adapter's methods
+ * and renders the result.
+ *
+ * Lifecycle:
+ *   1. Engine mounts, calls capabilities() once.
+ *   2. Engine calls fetchPage(initialQuery) and renders rows.
+ *   3. On user interaction (sort, filter, page, search), engine recomputes
+ *      query and calls fetchPage(query) again. Operations declared in
+ *      capabilities() are sent in the query; operations NOT declared are
+ *      performed client-side over the most recent fetchPage result.
+ *   4. On row click (or keyboard activation), engine calls onRowActivate(row)
+ *      if defined.
+ *   5. Per-row action buttons are rendered from rowActions(row).
+ *   6. Bulk action bar is rendered from bulkActions when selection > 0.
+ *   7. Faceted filter UI is generated from filterDimensions if present.
+ *   8. If subscribe() is provided, engine invokes it once and refetches
+ *      whenever the adapter signals a change. Engine disposes via the
+ *      returned cleanup on unmount.
+ *   9. After mutations (rowAction onExecute, bulkAction onExecute), engine
+ *      calls invalidate() if defined to bust adapter caches and refetch.
+ */
+export interface DataTableAdapter<T, TId = string> {
+  // --- Identity ---
+
+  /**
+   * Stable identity for a row. Required.
+   *
+   * Replaces the hardcoded `row['id']` lookup in useDataTable
+   * (web/src/engines/data-table/use-data-table.ts:108-113). The adapter
+   * owns identity so consumers with `payslip_id`, `document_uuid`, or
+   * composite keys can plug in without renaming fields in a view-model
+   * transform.
+   *
+   * Returned ids MUST be:
+   *   - stable across paginations (selection survives page change)
+   *   - unique across the entire result set (not just the current page)
+   *   - serialisable to string by the engine (`String(id)`) for DOM keys,
+   *     aria attributes, and selection-set membership
+   */
+  getRowId(row: T): TId;
+
+  // --- Capability declaration ---
+
+  /**
+   * Declare which query operations the backend supports natively. Required.
+   *
+   * Operations declared here are sent in the next fetchPage(query) call.
+   * Operations NOT declared are performed client-side by the engine over
+   * the most-recent fetchPage result. Returning an empty capabilities
+   * object is valid and means "I am a fixture/file backend; do everything
+   * client-side after a single fetchPage()".
+   *
+   * Capabilities are read ONCE at mount; an adapter that needs to change
+   * its capabilities at runtime MUST be replaced with a new instance.
+   */
+  capabilities(): DataTableCapabilities;
+
+  // --- Data fetch ---
+
+  /**
+   * Fetch one page of rows.
+   *
+   * `query` carries every dimension of the engine's current state. The
+   * adapter destructures what its `capabilities()` declared and ignores
+   * the rest. Engine guarantees that `query.sort` is non-empty only if
+   * `capabilities().sortableFields` is non-empty; same for filters,
+   * search, and pagination.
+   *
+   * Adapter MUST return total count whenever it knows it. For cursor-
+   * paginated backends that cannot cheaply count, return `totalCount: -1`
+   * and the engine renders "Load more" instead of a numbered pager (see
+   * Pagination Strategy below).
+   *
+   * fetchPage MAY throw or reject. Engine surfaces the error through its
+   * standard error state (see § 5.1 errorState); adapter MUST NOT catch
+   * its own errors and return empty pages.
+   *
+   * Long-running fetches SHOULD honor `query.signal` (AbortSignal) so the
+   * engine can cancel in-flight requests on rapid state changes.
+   */
+  fetchPage(query: DataTableQuery): Promise<DataTablePage<T>>;
+
+  // --- Row interactions ---
+
+  /**
+   * Row activation handler. Optional.
+   *
+   * Invoked on click, double-click (configurable), or Enter on a focused
+   * row. The adapter decides what activation means (open detail, download,
+   * navigate). Returning a Promise lets the engine display a per-row
+   * busy indicator until the promise settles.
+   *
+   * If both `onRowActivate` and `rowActions` are defined and a row action
+   * is clicked, the row action handler runs and `onRowActivate` does NOT
+   * (the engine internally calls `event.stopPropagation()` on action
+   * buttons). Consumers no longer need to write `e.stopPropagation()` by
+   * hand (M-02 friction).
+   */
+  onRowActivate?: (row: T) => Promise<void> | void;
+
+  /**
+   * Per-row action buttons. Optional.
+   *
+   * Static array with predicate-based per-row visibility/enablement.
+   * Engine renders these as a trailing actions column (table mode) or
+   * card footer slot (card-grid mode, when CardGrid is wired). Engine
+   * owns keyboard nav across the action group, aria grouping, and the
+   * disabled-state announcement.
+   *
+   * Static-with-predicates was chosen over per-row `(row) => Action[]`
+   * (see Design Decision 3) so the engine can build menu structure once
+   * and the renderer is purely a per-cell predicate evaluation. This
+   * also gives a stable focus order across rows.
+   */
+  rowActions?: ReadonlyArray<DataTableRowAction<T, TId>>;
+
+  /**
+   * Multi-row bulk actions. Optional.
+   *
+   * Engine renders a bulk-action toolbar when `selection.enabled` is true
+   * and at least one row is selected. The toolbar's enablement honors
+   * each action's `minSelection` / `maxSelection`. Migrating from
+   * `DataTableConfig.bulkActions` is non-breaking — the existing prop
+   * remains as an escape hatch for adapter-less callers (see Migration
+   * Path), but adapter-driven `bulkActions` takes precedence.
+   */
+  bulkActions?: ReadonlyArray<DataTableBulkAction<T, TId>>;
+
+  // --- Filter dimensions ---
+
+  /**
+   * Faceted filter dimensions the adapter understands. Optional.
+   *
+   * Drives the engine-rendered FilterBar (or replaces the consumer-written
+   * one). Each dimension declares its option source, which can be a static
+   * list OR an async loader so categories/tags/etc. can be derived from
+   * real data instead of hardcoded.
+   *
+   * Selected dimension values flow back through `query.dimensions` (a
+   * `Record<string, string>` keyed by dimension id), separate from
+   * `query.filters` (per-column filter inputs from the table header) and
+   * `query.globalSearch` (free-text search). The three are NOT merged so
+   * an adapter can route them to different backend params (e.g. dimensions
+   * → Algolia facets, filters → SQL WHERE, search → full-text).
+   */
+  filterDimensions?: ReadonlyArray<FilterDimension>;
+
+  // --- Live updates ---
+
+  /**
+   * Subscribe to backend changes. Optional.
+   *
+   * Engine calls subscribe(onChange) once after mount. Adapter opens its
+   * SSE/WebSocket/polling channel and invokes onChange() whenever the
+   * underlying data may have changed. Engine refetches by calling
+   * fetchPage with the current query.
+   *
+   * The signal is intentionally COARSE ("something changed, refetch") not
+   * fine-grained (`onRowUpdated` / `onRowInserted` / `onRowDeleted`). See
+   * Design Decision 7 for rationale. Adapters that want to push richer
+   * deltas can patch their internal cache and signal coarsely; the engine
+   * does not see the deltas.
+   *
+   * Returned function is the dispose handle. Engine calls it on unmount.
+   */
+  subscribe?: (onChange: () => void) => () => void;
+
+  // --- Cache invalidation ---
+
+  /**
+   * Invalidate adapter caches. Optional.
+   *
+   * Engine calls invalidate() after a successful rowAction or bulkAction
+   * onExecute, before the follow-up fetchPage(). Adapter clears its
+   * memoized pages, in-flight request dedup table, etc. Returning a
+   * Promise lets the engine wait for the invalidation to complete before
+   * refetching.
+   *
+   * If the adapter has no internal cache, leaving invalidate undefined is
+   * correct — engine simply refetches.
+   */
+  invalidate?: () => Promise<void> | void;
+}
+
+// --- Capabilities ---
+
+export interface DataTableCapabilities {
+  /** Fields the server can sort by. Empty/missing → engine sorts client-side. */
+  readonly sortableFields?: ReadonlyArray<string>;
+  /** Whether the server honors limit/offset (or page/pageSize) pagination. */
+  readonly serverPagination?: boolean;
+  /** Pagination model the server speaks. Default: "offset". */
+  readonly paginationMode?: 'offset' | 'cursor';
+  /** Per-column filterable fields. Empty/missing → engine filters client-side. */
+  readonly filterableFields?: ReadonlyArray<string>;
+  /** Whether the server supports a free-text search across fields. */
+  readonly globalSearch?: boolean;
+  /** Whether the server supports the dimensions declared in filterDimensions. */
+  readonly serverDimensions?: boolean;
+}
+
+// --- Query / page ---
+
+export interface DataTableQuery {
+  readonly page: number;                                   // 0-indexed
+  readonly pageSize: number;
+  readonly sort: ReadonlyArray<DataTableSort>;
+  readonly filters: Readonly<Record<string, string>>;      // per-column header filters
+  readonly globalSearch: string;
+  readonly dimensions: Readonly<Record<string, string>>;   // faceted filter values
+  /** Opaque cursor for keyset pagination. Present iff capabilities.paginationMode === "cursor". */
+  readonly cursor?: string;
+  /** AbortSignal for cancellation when the engine supersedes a request. */
+  readonly signal?: AbortSignal;
+}
+
+export interface DataTableSort {
+  readonly field: string;
+  readonly direction: 'asc' | 'desc';
+}
+
+export interface DataTablePage<T> {
+  readonly rows: ReadonlyArray<T>;
+  /**
+   * Total row count across all pages. Use `-1` to indicate "unknown" for
+   * cursor-paginated backends that cannot cheaply count; engine renders
+   * "Load more" instead of a numbered pager.
+   */
+  readonly totalCount: number;
+  /** Next-page cursor for keyset pagination. Required iff paginationMode === "cursor" and more pages exist. */
+  readonly nextCursor?: string;
+}
+
+// --- Row actions ---
+
+export interface DataTableRowAction<T, TId> {
+  /** Stable id — used for aria, keyboard focus order, and analytics. */
+  readonly id: string;
+  /** Display label. Required even for icon-only buttons (used as aria-label). */
+  readonly label: string;
+  /** Optional leading icon. */
+  readonly icon?: ReactNode;
+  /** Visual variant. Default: "ghost". */
+  readonly variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
+  /**
+   * Navigation target. Renders as an anchor; the engine wires accessible
+   * link semantics. Mutually exclusive with onExecute.
+   */
+  readonly href?: (row: T, id: TId) => string;
+  /**
+   * Imperative handler. Renders as a button. Returning a Promise puts
+   * the button into a busy state until it settles; engine calls
+   * adapter.invalidate() and refetches on success.
+   */
+  readonly onExecute?: (row: T, id: TId) => void | Promise<void>;
+  /** Hide on rows where the predicate returns false. */
+  readonly visible?: (row: T) => boolean;
+  /** Disable on rows where the predicate returns true. */
+  readonly disabled?: (row: T) => boolean;
+}
+
+// --- Bulk actions ---
+
+export interface DataTableBulkAction<T, TId> {
+  readonly id: string;
+  readonly label: string;
+  readonly icon?: ReactNode;
+  readonly variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
+  readonly onExecute: (rows: ReadonlyArray<T>, ids: ReadonlyArray<TId>) => void | Promise<void>;
+  /** Disable when fewer rows are selected. Default: 1. */
+  readonly minSelection?: number;
+  /** Disable when more rows are selected. Default: Infinity. */
+  readonly maxSelection?: number;
+}
+
+// --- Filter dimensions ---
+
+export interface FilterDimension {
+  /** Unique id; appears as the key in `query.dimensions`. */
+  readonly id: string;
+  /** Display label. */
+  readonly label: string;
+  /** "All" sentinel label; when selected, the dimension is omitted from query.dimensions. Default: "All". */
+  readonly allLabel?: string;
+  /**
+   * Option source. Static array OR async loader. The engine memoises the
+   * loader result for the lifetime of the adapter instance; call
+   * adapter.invalidate() to refresh.
+   */
+  readonly options: ReadonlyArray<FilterDimensionOption> | (() => Promise<ReadonlyArray<FilterDimensionOption>>);
+  /** UI hint. Engine picks a default based on N: chips ≤ 7, select 8–30, search > 30. */
+  readonly ui?: 'chips' | 'select' | 'search';
+  /** Whether multiple values can be selected simultaneously. Default: false. */
+  readonly multi?: boolean;
+}
+
+export interface FilterDimensionOption {
+  /** Value placed in `query.dimensions[dimensionId]`. */
+  readonly value: string;
+  /** Display label. Defaults to `value`. */
+  readonly label?: string;
+  /** Optional count badge. */
+  readonly count?: number;
+}
+```
+
+### Method Justifications
+
+Each method's inclusion is justified by a concrete LOC saving from the M-02 or M-03 migration, plus the failure mode it prevents.
+
+| Method               | Required? | M-02 evidence                           | M-03 evidence                          | LOC saved (est) | Failure mode prevented                                                                 |
+| -------------------- | --------- | --------------------------------------- | -------------------------------------- | --------------- | -------------------------------------------------------------------------------------- |
+| `getRowId`           | Required  | M-02 §"Renamed `payslip_id → id`" (L58) | M-03 §"No `id` field type safety" (L165) | ~8 LOC          | View-model rename hack; selection unstable across pages.                               |
+| `capabilities`       | Required  | M-02 §sketch §"capabilities" (L160-211) | (M-03 only fetches once, still benefits)| ~25 LOC         | Engine cannot decide client/server fallback; consumer hand-rolls sort inside fetcher.   |
+| `fetchPage`          | Required  | M-02 §sketch (L165-170, L246)           | M-03 §sketch (L201)                    | ~40 LOC         | Page state managed in consumer (`useState`/`useEffect`/`useCallback`) instead of engine.|
+| `onRowActivate`      | Optional  | M-02 §"Row-click vs action-button" (L116-124) | (not surfaced)                  | ~10 LOC         | `e.stopPropagation()` boilerplate; busy-state managed manually.                        |
+| `rowActions`         | Optional  | M-02 §"download column" (L121, L247)    | M-03 §"No DataTable action column" (L169) | ~25 LOC      | `field: "id"` faux-column; ad-hoc Link+Button styling; broken keyboard group nav.       |
+| `bulkActions`        | Optional  | (not surfaced)                          | M-03 §sketch (L218)                    | ~10 LOC         | Bulk shape lives on engine config, not adapter — diverges from rowActions shape.        |
+| `filterDimensions`   | Optional  | (not surfaced)                          | M-03 §sketch (L226), §faceted filter (L290-320) | ~80 LOC | Hardcoded category list; consumers re-implement chip-row + select UI per page.          |
+| `subscribe`          | Optional  | M-02 §sketch (L189-192)                 | (not surfaced; useful for live uploads)| ~0 LOC today    | No graceful path for SSE/WebSocket-driven refresh.                                      |
+| `invalidate`         | Optional  | (M-02's "refresh after download" implicit) | M-03 §sketch (L228)                | ~5 LOC          | Consumers manually re-trigger fetch after mutation.                                     |
+
+`mapRow` (proposed by M-02) was DROPPED — see Design Decision 6. Its LOC contribution is absorbed by the relaxed `DataTableRow` constraint that M-04's BLOCKING-3 fix introduces.
+
+### Comparison to ChatAdapter
+
+`ChatAdapter` (`web/src/engines/ai-chat/types.ts:128-144`) has 5 methods: `listConversations`, `loadMessages`, `sendMessage`, `deleteConversation`, `renameConversation`. `DataTableAdapter` has 9 (3 required + 6 optional).
+
+**Similarities preserved:**
+
+- **Plain async methods, not builders.** No `query.build().sort().filter()` chains; the adapter takes a single shape (`DataTableQuery`).
+- **One method per user concern.** `onRowActivate` matches "click row"; `rowActions` matches "buttons in the row"; `bulkActions` matches "bar above the table when N selected".
+- **Extension via implementation, not config flags.** Consumers extend `DataTableAdapter` the way `ArborAdvisoryAdapter implements ChatAdapter` does. No subclassing required, no decorators, no global registry.
+- **Transport-agnostic.** REST, GraphQL, SSE, WebSocket, in-memory fixture, FileSystem — every transport implements the same interface.
+
+**Intentional differences:**
+
+- **`capabilities()` exists on DataTableAdapter, not on ChatAdapter.** Chat operations are universal (every chat API can list conversations, load messages, send a message); table operations vary enormously (some backends sort server-side, some don't; some paginate by offset, some by cursor, some return everything in one call). Without `capabilities()` the engine cannot know whether to apply a client-side fallback after the adapter returns rows. This is the single biggest design difference.
+- **`rowActions` / `bulkActions` are arrays of declarative actions, not methods.** Chat operations are imperative ("delete this conversation"); table actions are templates that the engine renders into UI. The shape declares aria, keyboard order, and visibility once instead of forcing the engine to introspect a method's return type.
+- **`subscribe` is COARSE refetch, not per-message stream.** Chat has `ChatStreamHandle` for token-by-token streaming because that's the user's actual mental model. Table rows are not streamed token-by-token; the right granularity for "this row changed" is "refetch the page."
+- **`filterDimensions` has no chat analogue.** Chat doesn't faceted-filter messages; tables routinely do.
+- **Cursor pagination is a first-class capability.** Chat conversations are typically loaded in one `loadMessages(conversationId)` call, then appended via streaming. Tables routinely page through 10K-row datasets and need both offset and cursor strategies. The capability flag + `nextCursor` field cover both without two interfaces.
+
+### Relationship to ServerDataSource
+
+**Decision: REPLACE, with a one-release deprecation window.**
+
+`ServerDataSource<T>` (`web/src/engines/data-table/types.ts:109-124`) is an orphan API as documented in M-02 §"BLOCKING-1" (L271-272) and M-03 §"BLOCKING-1" (L446-473). It is declared on `DataTableConfig.data`'s union but `useDataTable` never calls `fetchData`. The type surface is misleading and consumers who pass a `ServerDataSource` get a silently empty table.
+
+Both M-02 (L294: "Delete `ServerDataSource` and replace it with `DataTableAdapter` in one sweep — the type surface is misleading otherwise") and M-03 (L568-571: "without it the entire type-level ServerDataSource contract is vapor") agreed. This spec adopts that recommendation with a controlled migration path:
+
+**Migration plan** (executed by M-04 + M-06, defended below):
+
+1. **M-04 (engine wiring fix):** Wire `ServerDataSource.fetchData` into `useDataTable` so the existing API works for the first time. This unblocks any consumer who already wrote a `ServerDataSource` while M-05/M-06 design and ship `DataTableAdapter`. The wiring is small (~50 LOC) and lives behind the existing union type, so no consumer code changes.
+
+2. **M-06 (adapter introduction, same release):** Add `DataTableAdapter<T>` as a SECOND accepted shape on `DataTableConfig.data`:
+
+   ```typescript
+   data: T[] | ServerDataSource<T> | DataTableAdapter<T>
+   ```
+
+   Engine internally adapts `ServerDataSource` → `DataTableAdapter` via a thin shim (`function adaptLegacy<T>(src: ServerDataSource<T>): DataTableAdapter<T>`). All new code paths inside the engine consume the adapter shape; the union is purely a public-API compatibility layer.
+
+3. **M-06 release notes + `@deprecated` JSDoc on `ServerDataSource`:** The interface is marked deprecated in the same release as the adapter ships. JSDoc points to the adapter as the replacement and links to a migration cheatsheet.
+
+4. **Next minor release after M-06 (e.g. 0.2.0):** `ServerDataSource` is REMOVED from the public surface. The internal shim is also removed. `DataTableConfig.data: T[] | DataTableAdapter<T>`. This is a breaking change but Prism is pre-1.0 (`web/package.json` is 0.x); minor releases may break public API per semver-pre-1.0 conventions.
+
+This satisfies `rules/orphan-detection.md` MUST Rule 3 ("Removed = Deleted, Not Deprecated") with a one-release window for the deprecation tag — defensible because (a) Prism is pre-1.0, (b) the deprecation comes paired with the actual fix, not a vapor warning, (c) the orphan was never functional so no real consumer can be "depending on the broken behavior" the way M-04's wiring fix would make it appear to (a fresh M-04 consumer might write code against `ServerDataSource` between M-04 ship and M-06 ship; the shim ensures their code keeps working through 0.x).
+
+`ServerFetchParams` and `ServerFetchResult` follow the same lifecycle: deprecated in M-06 (mapped to `DataTableQuery` / `DataTablePage<T>`), removed in 0.2.0.
+
+### Design Decisions
+
+The 8 questions raised by the M-05 brief, answered with rationale tied to the migration findings.
+
+#### DD-1: One adapter or composition (mixins)?
+
+**Decision: ONE interface with optional methods.**
+
+Considered: split `DataTableAdapter` (required core) from `FilterableAdapter`, `SubscribableAdapter`, `BulkActionableAdapter` mixins so a minimal adapter implements only `getRowId + capabilities + fetchPage`. Rejected for three reasons:
+
+1. **Discoverability.** A single interface in IDE autocomplete shows every capability. With mixins the consumer must know to look up `FilterableAdapter` separately.
+2. **TypeScript intersection ergonomics.** `DataTableAdapter<T> & FilterableMixin<T> & SubscribableMixin<T>` is uglier than optional methods on one interface and requires every consumer to spell out the intersection.
+3. **All optional methods are independent.** Mixins are useful when methods cluster (e.g. CRUD = create+read+update+delete travel together). Here `bulkActions`, `filterDimensions`, `subscribe`, `invalidate` are independent — declaring one does not imply the others. Optional fields express that more honestly than mixins.
+
+The `?` on optional methods is the entire enforcement layer; consumers pay nothing for capabilities they don't use, and `ChatAdapter` proves the pattern works at this scale (5 methods, all required; we have 3 required + 6 optional, similar density).
+
+#### DD-2: Capabilities vs auto-detection
+
+**Decision: EXPLICIT `capabilities()` declaration.**
+
+The alternative — engine always sends the full `DataTableQuery` and the adapter handles client/server split internally — was rejected because:
+
+1. **Fallback is the engine's job.** When the server can't sort, the engine has the rows in hand and can sort them. Pushing that responsibility into the adapter duplicates sort logic across every adapter implementation.
+2. **Engine cannot know it failed silently.** If the adapter ignores `query.sort` because the backend doesn't support it, the engine renders unsorted rows but the column header still shows the sort indicator. A user who sees "Name ↓" on rows that aren't actually sorted by name has no way to discover the bug. Capabilities make the contract auditable: the engine asks "do you sort?", the adapter says no, the engine sorts client-side and the indicator means what it says.
+3. **M-02 named this as the #1 saving.** L160-211 — explicit capabilities would have eliminated the hand-rolled sort inside `makePayslipsServerDataSource`.
+
+`capabilities()` is read once at mount. An adapter whose capabilities change at runtime (rare) is replaced with a new instance.
+
+#### DD-3: `rowActions` as array vs function
+
+**Decision: STATIC ARRAY with predicate-based per-row visibility/enablement** (M-03's shape).
+
+M-02 proposed `rowActions?: (row: T) => DataTableRowAction[]` (a function that returns a fresh array per row). M-03 proposed `rowActions?: ReadonlyArray<DataTableRowAction>` with `visible?(row)` and `disabled?(row)` predicates inside each action.
+
+The static array wins because:
+
+1. **Stable focus order.** With a function returning a fresh array per row, focus traversal between rows can land on different actions in different positions ("Download" is first on row 1 but "Share" is first on row 2 because the function returned them in different orders). Predicate-based hiding keeps the action *order* stable; only visibility flips.
+2. **Engine can pre-build menu structure.** Static actions let the engine compute the actions column width once instead of measuring per-row.
+3. **Aria grouping is honest.** Screen readers announce "actions group with 3 buttons; 1 disabled" once for the column. With per-row arrays the announcement varies by row, which is harder for users to predict.
+4. **The escape hatch is still available.** A consumer who genuinely needs row-specific actions (e.g. "Approve" only on rows in 'pending' state, "Reject" only on rows in 'pending' state, "Re-open" only on 'closed' rows) writes both actions and uses `visible: (row) => row.status === 'pending'` predicates. The static array handles this.
+
+#### DD-4: `filterDimensions` complexity — adapter or sibling `FilterAdapter`?
+
+**Decision: ON THE SAME `DataTableAdapter` as an optional field.**
+
+A separate `FilterAdapter` was considered to keep `DataTableAdapter` slim. Rejected because:
+
+1. **Filter values flow through `query.dimensions` into `fetchPage`.** Splitting filter dimensions onto a sibling adapter would force the consumer to either (a) hold a reference to the FilterAdapter inside the DataTableAdapter to consult its declared dimensions, or (b) duplicate the dimension declarations in two places. Both are worse than one method on one adapter.
+2. **The async option loader is the only "complexity."** Once you accept that filterDimensions is just `Array<{ id, label, options }>` with options optionally being a function — a shape no more complex than `bulkActions` — there is no architectural reason to split it.
+3. **M-03's analysis (L226-291) treats it as an adapter concern.** The migration that hit this friction wanted it on the same interface; respecting that is appropriate.
+
+The implementation MAY split internal state management (`useFilterDimensions(adapter)` hook separate from `useDataTable(config)` hook) for code organisation, but the EXTERNAL interface stays unified.
+
+#### DD-5: Deprecation plan for `ServerDataSource`
+
+**Decision: ONE-RELEASE DEPRECATION WINDOW.** See "Relationship to ServerDataSource" above for the full plan. Summary:
+
+- M-04 wires the orphan so existing consumers get correct behavior.
+- M-06 ships `DataTableAdapter`, accepts both shapes via union, marks `ServerDataSource` `@deprecated`, ships migration cheatsheet.
+- Next minor (0.2.0) removes `ServerDataSource` entirely.
+
+A pure same-release delete was considered but rejected: it would force any consumer who wrote against M-04's wired `ServerDataSource` to immediately rewrite. The one-release window is the smallest defensible deprecation given `rules/orphan-detection.md` MUST Rule 3 and the pre-1.0 status.
+
+A `@deprecated`-only path (mark deprecated, never delete) was rejected because `rules/orphan-detection.md` is explicit: "Removed = Deleted, Not Deprecated. Deprecation banners are easy to miss; consumers continue importing the symbol and silently shipping insecure code."
+
+#### DD-6: `DataTableRow` constraint interaction (and the dropped `mapRow`)
+
+**Decision: ADAPTER ENFORCES ID VIA `getRowId(row)`. NO `mapRow`. Rows can have any shape.**
+
+Once M-04 relaxes `DataTableRow = Record<string, unknown>` to `DataTableRow = object` (or removes the constraint entirely — see M-03 BLOCKING-3), the adapter no longer needs to bridge the row shape. The consumer's row type flows through unchanged.
+
+`getRowId(row)` is the SOLE source of identity. There is no convention that row shape must contain a literal `id` field. Rows with composite keys, no PK, or PK named anything (`payslip_id`, `document_uuid`, `slug`, `__synthetic_idx`) all work — `getRowId` returns whatever string identifies the row.
+
+`mapRow` (proposed by M-02 to handle the `Payslip → PayslipRow` transformation) is DROPPED. The transformation belongs in `fetchPage`'s implementation: the adapter fetches `Payslip[]` from the backend, maps to `PayslipRow[]` inside `fetchPage`, and returns. There's no need for a separate `mapRow` method when `fetchPage` already controls what shape comes out.
+
+This means M-02's `__raw: Payslip` hack disappears (the adapter returns the right shape directly), AND the `[key: string]: unknown` index signature on view-models disappears (M-04 BLOCKING-3 fix relaxes the constraint).
+
+#### DD-7: Streaming / live-update semantics
+
+**Decision: COARSE `subscribe(onChange)` only.**
+
+Considered: fine-grained `onRowUpdated(id, row)`, `onRowInserted(row)`, `onRowDeleted(id)` callbacks. Rejected because:
+
+1. **The engine has to refetch anyway.** Even if the adapter pushes a fine-grained delta, the engine cannot trust that the delta hasn't crossed a sort/filter boundary — a row that "updated" might now match a filter it didn't before, or sort to a different page. The only safe response to a delta is "consider the page invalid; refetch." Coarse and fine-grained are equivalent in observable behavior.
+2. **Delta protocols are backend-specific.** Fine-grained callbacks would push protocol assumptions into the interface (does inserting at position N mean offset shifts? what if inserting on a different page?). Coarse refetch is protocol-agnostic.
+3. **Adapter-side cache patching is fine.** An adapter that DOES receive fine-grained deltas (say, from a CRDT or a Redux-style store) can patch its internal cache and signal coarsely. The engine doesn't see the delta; the adapter benefits from it on the next refetch.
+4. **Symmetry with ChatAdapter.** Chat doesn't have fine-grained "this message changed" callbacks either; updates flow through the next loadMessages call.
+
+If a future consumer truly needs fine-grained updates (e.g. an in-grid live editor showing other users' cursors), that's a different engine, not a richer DataTableAdapter.
+
+#### DD-8: Page-size boundaries — offset vs cursor
+
+**Decision: ONE INTERFACE, capability flag distinguishes.**
+
+`capabilities().paginationMode: 'offset' | 'cursor'` declares which model. `DataTableQuery.cursor` is present iff `paginationMode === 'cursor'`. `DataTablePage.nextCursor` is required for cursor mode (when more pages exist), forbidden for offset.
+
+Two separate interfaces (`OffsetAdapter` vs `CursorAdapter`) were considered. Rejected because:
+
+1. **Engine still has to handle both.** Even with split interfaces, `useDataTable` would need to branch on adapter type to render the correct pager (numbered for offset, "Load more" for cursor). The capability flag does the same branching with fewer types.
+2. **Backends mix the modes.** Many real APIs offer offset for small datasets and cursor for large ones, sometimes on the same endpoint. A single adapter can declare its current mode and switch (by replacing the adapter instance).
+3. **`totalCount: -1` covers the "cursor without a count" case.** Cursor backends often can't cheaply count; the sentinel says "I don't know" without complicating the page shape.
+
+The pager UI behavior is documented in § 5.1 (existing Pagination spec) and updated to read `totalCount === -1` as the trigger for "Load more" rendering.
+
+### Open Questions (deferred to implementation)
+
+These are intentionally unresolved — the M-06 implementer should decide based on the actual code shape:
+
+- **Prop naming on `DataTableConfig`.** Is the union `data: T[] | DataTableAdapter<T>` or do we add `adapter?: DataTableAdapter<T>` as a separate field with `data` reserved for arrays? The latter is clearer at the type level but adds a config field; the former preserves the existing API. M-06 chooses based on TypeScript ergonomics in real consumer call sites.
+- **Should `capabilities()` be a property or a method?** A method allows adapters to compute capabilities lazily (e.g. probe the backend on first call); a property is simpler and matches `ChatAdapter`'s lack of equivalent. Default to method for symmetry with `getRowId(row)`; reconsider if no consumer needs lazy capabilities.
+- **AbortSignal threading.** `DataTableQuery.signal` is declared but the engine's exact cancellation strategy (debounce window, "discard stale results vs cancel in-flight") is an implementation detail. M-06 should benchmark and pick the strategy that minimises user-visible flicker on rapid filter changes.
+- **`rowActions` rendering when there are too many.** The engine MAY render the trailing N actions inside an overflow menu when the visible count exceeds a threshold; the threshold (3? 5?) and the menu component (Menu? Popover?) are implementation choices.
+- **Live-update debounce.** When `subscribe`'s `onChange` fires rapidly (a row updating 30 times per second), the engine should batch refetches. The batch window is an implementation detail.
+
+### Expected LOC Savings (rolled up from migration findings)
+
+| Wave | Baseline | Adapter-driven (estimated) | Savings |
+| ---- | -------- | -------------------------- | ------- |
+| M-02 `/my-payslips` (datasource + page + columns) | 418 + 186 = 604 LOC | ~30 (adapter) + ~50 (page shell) + 92 (columns unchanged) = 172 LOC | ~430 LOC (~71%) |
+| M-03 `/documents` (page + datasource + card) | 456 + 80 + 179 = 715 LOC | ~50 (adapter) + ~80 (page shell with view toggle) + 179 (card unchanged, until CardGrid molecule) = 309 LOC | ~410 LOC (~57%) |
+| **Combined** | **~1,140 LOC** | **~480 LOC** | **~660 LOC saved (~58%)** |
+
+These are upper bounds: actual savings depend on (a) M-04 BLOCKING fixes landing first, (b) the `Card` + `CardGrid` molecules from M-03 §"New Prism atoms/molecules needed" landing in a parallel wave, (c) the adapter's `filterDimensions` → engine-rendered `FilterBar` molecule landing.
+
+For new pages built directly against the adapter (no migration baseline), the expected per-page ratio is ~80 LOC of consumer code (adapter + page shell + columns) for a list-shaped page that would have taken ~400-600 LOC of bespoke React+useState+useEffect.
+
+---
+
 ## 5.2 Form Engine
 
 **Purpose**: Renders forms with validation, multi-step navigation, conditional field visibility, file uploads, and submission handling — fully configured from a field schema.
@@ -272,6 +827,45 @@ interface FormConfig {
   };
   confirmDiscard?: boolean;       // Default: true (shows "unsaved changes" dialog on navigate away)
   initialValues?: Record<string, any>;
+
+  // Custom action row (since 0.2.0). When present, replaces the default
+  // submit+reset button row. Receives the full form state plus submit() and
+  // reset() callbacks so consumers can build sticky mobile footers, external
+  // reset buttons, multi-step wizard controls, etc.
+  renderActions?: (state: FormActionsState) => Component;
+
+  // Predicate-based submit disable (since 0.2.0). Runs in addition to the
+  // built-in "disabled while submitting" rule — if either returns true,
+  // the submit button is disabled. Enables "disable until form is valid".
+  submitDisabledWhen?: (state: Omit<FormActionsState, "submitDisabled" | "submit" | "reset">) => boolean;
+
+  // Per-element className overrides for branded styling (since 0.2.0).
+  // When an override is present, the corresponding inline `--prism-*` style
+  // fallback is skipped so consumer CSS (Tailwind, CSS modules, anything)
+  // wins without specificity fights.
+  classNames?: {
+    form?: string;
+    section?: string;
+    field?: string;
+    label?: string;
+    input?: string;
+    error?: string;
+    helpText?: string;
+    actions?: string;
+    submitButton?: string;
+    resetButton?: string;
+  };
+}
+
+interface FormActionsState {
+  status: "idle" | "validating" | "submitting" | "success" | "error";
+  values: Record<string, unknown>;
+  errors: Record<string, string>;
+  touched: Record<string, boolean>;
+  submitError: string | null;
+  submitDisabled: boolean;
+  submit: () => void;
+  reset: () => void;
 }
 
 interface FieldDef {
@@ -306,6 +900,25 @@ interface FieldDef {
   step?: number;                  // For "number" type. Step increment.
   rows?: number;                  // For "textarea" type. Visible rows. Default: 3.
   maxLength?: number;             // Character limit.
+
+  // Custom renderer (since 0.2.0). When present, replaces the built-in
+  // field input while the label / help / error wrapper still renders
+  // around it. Use for domain-specific fields (currency input with a $
+  // prefix, combobox, inline badge picker, date range picker).
+  render?: (ctx: FieldRenderContext) => Component;
+}
+
+interface FieldRenderContext<TValue = unknown> {
+  value: TValue;
+  onChange: (next: TValue) => void;
+  onBlur: () => void;
+  error: string | undefined;
+  touched: boolean;
+  disabled: boolean;
+  values: Record<string, unknown>; // Full values — use to compute dependent state.
+  field: FieldDef;                  // The FieldDef itself.
+  inputId: string;                  // Stable DOM id for the input.
+  describedBy: string | undefined;  // aria-describedby id list (help + error).
 }
 
 type FieldType =

@@ -17,6 +17,7 @@ import {
 import { type ZodError } from 'zod';
 import {
   type FieldDef,
+  type FormActionsState,
   type SectionDef,
   type FormConfig,
   type FormStatus,
@@ -84,6 +85,9 @@ export function Form({
   layout = 'single-column',
   className,
   'aria-label': ariaLabel,
+  renderActions,
+  submitDisabledWhen,
+  classNames,
 }: FormConfig) {
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
@@ -305,9 +309,9 @@ export function Form({
         onSubmit={handleSubmit}
         onReset={handleReset}
         aria-label={ariaLabel ?? 'Form'}
-        className={className}
+        className={classNames?.form ?? className}
         noValidate
-        style={{
+        style={classNames?.form ? undefined : {
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--prism-form-gap, 24px)',
@@ -321,6 +325,7 @@ export function Form({
             section={group.section}
             collapsed={group.section ? state.collapsedSections[group.section.name] ?? false : false}
             onToggle={group.section ? () => dispatch({ type: 'TOGGLE_SECTION', section: group.section!.name }) : undefined}
+            className={classNames?.section}
           >
             <div
               style={{
@@ -340,12 +345,14 @@ export function Form({
                   <FieldRenderer
                     field={f}
                     value={state.values[f.name]}
+                    values={state.values}
                     error={state.errors[f.name]}
                     touched={state.touched[f.name] ?? false}
                     disabled={isSubmitting}
                     onChange={v => setValue(f.name, v)}
                     onBlur={() => touchField(f.name)}
                     idPrefix={formId}
+                    classNames={classNames}
                   />
                 </div>
               ))}
@@ -360,22 +367,79 @@ export function Form({
           <FormFeedback variant="success" role="status">Form submitted successfully</FormFeedback>
         )}
 
-        <div style={{ display: 'flex', gap: 'var(--prism-spacing-sm, 8px)', justifyContent: 'flex-end' }}>
-          {showReset && (
-            <button type="reset" disabled={isSubmitting} style={{
-              padding: 'var(--prism-form-field-padding, 8px 16px)', borderRadius: 'var(--prism-radius-md, 6px)',
-              border: '1px solid var(--prism-color-border-default, #d1d5db)', backgroundColor: 'transparent',
-              color: 'var(--prism-color-text-primary, inherit)', cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              fontSize: 'var(--prism-font-size-body, 14px)',
-            }}>{resetLabel}</button>
-          )}
-          <button type="submit" disabled={isSubmitting} aria-busy={isSubmitting} style={{
-            padding: 'var(--prism-form-field-padding, 8px 16px)', borderRadius: 'var(--prism-radius-md, 6px)',
-            border: 'none', backgroundColor: 'var(--prism-color-interactive-primary, #2563eb)',
-            color: 'var(--prism-color-text-on-primary, white)', cursor: isSubmitting ? 'not-allowed' : 'pointer',
-            fontSize: 'var(--prism-font-size-body, 14px)', opacity: isSubmitting ? 0.7 : 1,
-          }}>{isSubmitting ? 'Submitting...' : submitLabel}</button>
-        </div>
+        {(() => {
+          const baseStateForPredicate: Omit<FormActionsState, 'submitDisabled' | 'submit' | 'reset'> = {
+            status: state.status,
+            values: state.values,
+            errors: state.errors,
+            touched: state.touched,
+            submitError: state.submitError,
+          };
+          const predicateDisabled = submitDisabledWhen?.(baseStateForPredicate) ?? false;
+          const submitDisabled = isSubmitting || predicateDisabled;
+
+          if (renderActions) {
+            const actionsState: FormActionsState = {
+              ...baseStateForPredicate,
+              submitDisabled,
+              submit: () => {
+                if (formRef.current) {
+                  formRef.current.requestSubmit();
+                }
+              },
+              reset: handleReset,
+            };
+            const actionsClass = classNames?.actions;
+            return (
+              <div
+                className={actionsClass}
+                style={actionsClass ? undefined : { display: 'flex', gap: 'var(--prism-spacing-sm, 8px)', justifyContent: 'flex-end' }}
+              >
+                {renderActions(actionsState)}
+              </div>
+            );
+          }
+
+          const actionsClass = classNames?.actions;
+          const resetClass = classNames?.resetButton;
+          const submitClass = classNames?.submitButton;
+          return (
+            <div
+              className={actionsClass}
+              style={actionsClass ? undefined : { display: 'flex', gap: 'var(--prism-spacing-sm, 8px)', justifyContent: 'flex-end' }}
+            >
+              {showReset && (
+                <button
+                  type="reset"
+                  disabled={isSubmitting}
+                  className={resetClass}
+                  style={resetClass ? undefined : {
+                    padding: 'var(--prism-form-field-padding, 8px 16px)', borderRadius: 'var(--prism-radius-md, 6px)',
+                    border: '1px solid var(--prism-color-border-default, #d1d5db)', backgroundColor: 'transparent',
+                    color: 'var(--prism-color-text-primary, inherit)', cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                    fontSize: 'var(--prism-font-size-body, 14px)',
+                  }}
+                >
+                  {resetLabel}
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={submitDisabled}
+                aria-busy={isSubmitting}
+                className={submitClass}
+                style={submitClass ? undefined : {
+                  padding: 'var(--prism-form-field-padding, 8px 16px)', borderRadius: 'var(--prism-radius-md, 6px)',
+                  border: 'none', backgroundColor: 'var(--prism-color-interactive-primary, #2563eb)',
+                  color: 'var(--prism-color-text-on-primary, white)', cursor: submitDisabled ? 'not-allowed' : 'pointer',
+                  fontSize: 'var(--prism-font-size-body, 14px)', opacity: submitDisabled ? 0.7 : 1,
+                }}
+              >
+                {isSubmitting ? 'Submitting...' : submitLabel}
+              </button>
+            </div>
+          );
+        })()}
       </form>
 
       <style>{`

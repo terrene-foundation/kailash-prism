@@ -2,13 +2,17 @@
  * useDataTable — Core state management hook for the DataTable engine
  *
  * Manages sorting, filtering, pagination, and selection state.
- * Handles both client-side and server-side data sources.
+ * Handles both client-side (array) and server-side (`ServerDataSource`) data
+ * sources. For server sources, the hook calls `data.fetchData(params)` on
+ * mount and on every state change, tracks its own loading / error lifecycle,
+ * and uses an AbortController to cancel in-flight requests when params change.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   DataTableConfig,
   DataTableRow,
+  ServerDataSource,
   SortState,
 } from './types.js';
 
@@ -35,6 +39,12 @@ export interface UseDataTableResult<T extends DataTableRow> {
   allSelected: boolean;
   /** Whether some (but not all) visible rows are selected */
   someSelected: boolean;
+  /** Whether a server-side fetch is in flight (undefined for client-side data) */
+  serverLoading: boolean;
+  /** Error from the most recent server fetch, if any */
+  serverError: string | null;
+  /** Retry the most recent server fetch (no-op for client-side data) */
+  retryServerFetch: () => void;
   /** Handle single-column sort (replaces existing sorts) */
   handleSort: (field: string) => void;
   /** Handle multi-sort (shift-click — toggles the field in sort list) */
@@ -61,6 +71,17 @@ export interface UseDataTableResult<T extends DataTableRow> {
   handleToggleExpand: (index: number) => void;
 }
 
+function isServerDataSource<T extends DataTableRow>(
+  data: DataTableConfig<T>['data'],
+): data is ServerDataSource<T> {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    !Array.isArray(data) &&
+    typeof (data as ServerDataSource<T>).fetchData === 'function'
+  );
+}
+
 export function useDataTable<T extends DataTableRow>(
   config: DataTableConfig<T>,
 ): UseDataTableResult<T> {
@@ -77,9 +98,10 @@ export function useDataTable<T extends DataTableRow>(
     onSelectionChange,
   } = config;
 
-  // Is data a static array?
-  const isClientSide = Array.isArray(data);
-  const clientData = isClientSide ? data : [];
+  // --- Data-source classification ---
+  const serverSource = isServerDataSource(data) ? data : null;
+  const isClientSide = serverSource === null;
+  const clientData = Array.isArray(data) ? data : [];
 
   // --- Sorting state ---
   const [sorts, setSorts] = useState<SortState[]>(() => {
@@ -104,18 +126,92 @@ export function useDataTable<T extends DataTableRow>(
   // --- Expand state ---
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  // --- Server fetch state ---
+  const [serverRows, setServerRows] = useState<T[]>([]);
+  const [serverTotal, setServerTotal] = useState<number>(0);
+  const [serverLoading, setServerLoading] = useState<boolean>(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  // Monotonic request id — used to discard stale results from aborted fetches
+  const fetchSeqRef = useRef(0);
+  // Tick used to force a refetch on retry
+  const [retryTick, setRetryTick] = useState(0);
+
   // --- Row ID resolution ---
-  const getRowId = useCallback((row: T, index: number): string => {
-    // Prefer 'id' field if present, fall back to index
-    const id = row['id'];
-    if (id != null) return String(id);
-    return String(index);
-  }, []);
+  // Prefer consumer-supplied getRowId, then row['id'], then index fallback.
+  const configGetRowId = config.getRowId;
+  const getRowId = useCallback(
+    (row: T, index: number): string => {
+      if (configGetRowId) return configGetRowId(row, index);
+      const asRecord = row as Record<string, unknown>;
+      const id = asRecord['id'];
+      if (id != null) return String(id);
+      return String(index);
+    },
+    [configGetRowId],
+  );
+
+  // --- Server-side fetch effect ---
+  useEffect(() => {
+    if (serverSource === null) return;
+    const seq = ++fetchSeqRef.current;
+    const controller = new AbortController();
+    setServerLoading(true);
+    setServerError(null);
+    const paginationEnabled = pagination?.enabled !== false;
+    void serverSource
+      .fetchData({
+        page,
+        pageSize,
+        sort: sorts,
+        filters,
+        globalSearch,
+        signal: controller.signal,
+      })
+      .then((result) => {
+        // Discard stale results from a superseded request.
+        if (seq !== fetchSeqRef.current) return;
+        setServerRows(result.items);
+        setServerTotal(
+          typeof result.totalCount === 'number' && result.totalCount >= 0
+            ? result.totalCount
+            : result.items.length,
+        );
+        setServerLoading(false);
+        // Clamp page if the underlying total shrank below the current page.
+        if (
+          paginationEnabled &&
+          result.totalCount > 0 &&
+          page > 0 &&
+          page * pageSize >= result.totalCount
+        ) {
+          setPage(Math.max(0, Math.ceil(result.totalCount / pageSize) - 1));
+        }
+      })
+      .catch((err: unknown) => {
+        if (seq !== fetchSeqRef.current) return;
+        // AbortError from an in-flight cancellation is expected, not a user
+        // error. Leave the previous serverRows / serverError in place.
+        if (err instanceof Error && err.name === 'AbortError') {
+          return;
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        setServerError(message);
+        setServerLoading(false);
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [serverSource, page, pageSize, sorts, filters, globalSearch, retryTick, pagination?.enabled]);
+
+  const retryServerFetch = useCallback(() => {
+    if (serverSource === null) return;
+    setRetryTick((t) => t + 1);
+  }, [serverSource]);
 
   // --- Client-side processing ---
 
   const filteredData = useMemo(() => {
-    if (!isClientSide) return clientData;
+    if (!isClientSide) return [] as T[];
 
     let result = [...clientData];
 
@@ -124,7 +220,7 @@ export function useDataTable<T extends DataTableRow>(
       const query = globalSearch.toLowerCase();
       result = result.filter((row) =>
         columns.some((col) => {
-          const val = row[col.field];
+          const val = (row as Record<string, unknown>)[col.field];
           return val != null && String(val).toLowerCase().includes(query);
         }),
       );
@@ -135,7 +231,7 @@ export function useDataTable<T extends DataTableRow>(
     if (activeFilters.length > 0) {
       result = result.filter((row) =>
         activeFilters.every(([field, filterVal]) => {
-          const val = row[field];
+          const val = (row as Record<string, unknown>)[field];
           return val != null && String(val).toLowerCase().includes(filterVal.toLowerCase());
         }),
       );
@@ -149,8 +245,8 @@ export function useDataTable<T extends DataTableRow>(
 
     return [...filteredData].sort((a, b) => {
       for (const sort of sorts) {
-        const aVal = a[sort.field];
-        const bVal = b[sort.field];
+        const aVal = (a as Record<string, unknown>)[sort.field];
+        const bVal = (b as Record<string, unknown>)[sort.field];
 
         if (aVal == null && bVal == null) continue;
         if (aVal == null) return sort.direction === 'asc' ? -1 : 1;
@@ -175,16 +271,17 @@ export function useDataTable<T extends DataTableRow>(
     });
   }, [isClientSide, filteredData, sorts]);
 
-  const totalCount = isClientSide ? sortedData.length : 0;
-
   const paginationEnabled = pagination?.enabled !== false;
+
+  const totalCount = isClientSide ? sortedData.length : serverTotal;
+
   const displayRows = useMemo(() => {
-    if (!isClientSide) return clientData;
+    if (!isClientSide) return serverRows;
     if (!paginationEnabled) return sortedData;
 
     const start = page * pageSize;
     return sortedData.slice(start, start + pageSize);
-  }, [isClientSide, clientData, sortedData, paginationEnabled, page, pageSize]);
+  }, [isClientSide, serverRows, sortedData, paginationEnabled, page, pageSize]);
 
   // --- Selected row objects ---
   const selectedRows = useMemo(() => {
@@ -352,6 +449,9 @@ export function useDataTable<T extends DataTableRow>(
     selectedRows,
     allSelected,
     someSelected,
+    serverLoading,
+    serverError,
+    retryServerFetch,
     handleSort,
     handleMultiSort,
     handleFilterChange,

@@ -21,7 +21,7 @@ Arbor's advisory page (133 LOC bespoke → 55 LOC with Prism) successfully compi
 
 | # | Finding | Prism component | Status |
 |---|---------|----------------|--------|
-| M1 | Turbopack can't resolve `file:` symlinked packages — forced `npm pack` tarball workaround | DX / docs | Deferred — resolved when published to npm |
+| M1 | Turbopack can't resolve `file:` symlinked packages — forced `npm pack` tarball workaround | DX / docs | Permanent DX note — Prism is GitHub-only (not npm). Consumers use `npm pack` tarball or GitHub Packages registry. See session notes for Turbopack workaround. |
 | M2 | No `onSend` interception in wired mode that can modify the request (e.g., add `company_id`) | `conversation-template.tsx` | **FIXED** — added `sendContext` prop + `context` param on `ChatAdapter.sendMessage` |
 | M3 | `LayoutProvider` required but not obvious — ConversationTemplate crashes without it | `conversation-template.tsx` | **FIXED** (prior session) — auto-wraps with `WithLayout` |
 

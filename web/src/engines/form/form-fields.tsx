@@ -4,30 +4,34 @@
  */
 
 import { useCallback, useReducer, useRef, type ReactNode } from 'react';
-import { type FieldDef, type SectionDef } from './form-types.js';
+import { type FieldDef, type FieldRenderContext, type FormClassNames, type SectionDef } from './form-types.js';
 
 // --- Field renderer ---
 
 export interface FieldRendererProps {
   field: FieldDef;
   value: unknown;
+  values: Record<string, unknown>;
   error: string | undefined;
   touched: boolean;
   disabled: boolean;
   onChange: (value: unknown) => void;
   onBlur: () => void;
   idPrefix: string;
+  classNames?: FormClassNames | undefined;
 }
 
 export function FieldRenderer({
   field,
   value,
+  values,
   error,
   touched,
   disabled,
   onChange,
   onBlur,
   idPrefix,
+  classNames,
 }: FieldRendererProps) {
   const inputId = `${idPrefix}-${field.name}`;
   const errorId = `${inputId}-error`;
@@ -38,6 +42,24 @@ export function FieldRenderer({
     field.helpText ? helpId : null,
   ].filter(Boolean).join(' ') || undefined;
 
+  // If the consumer supplies a custom renderer, dispatch to it BEFORE the
+  // built-in switch so the label / help / error wrapper still wraps the
+  // custom input (keeps visual rhythm consistent across fields).
+  const inputClassName = classNames?.input;
+  const inputStyleFallback = inputClassName
+    ? undefined
+    : {
+        width: '100%',
+        padding: 'var(--prism-form-field-padding, 8px 12px)',
+        border: `1px solid ${showError ? 'var(--prism-color-status-error, #dc2626)' : 'var(--prism-color-border-default, #d1d5db)'}`,
+        borderRadius: 'var(--prism-radius-md, 6px)',
+        fontSize: 'var(--prism-font-size-body, 14px)',
+        fontFamily: 'inherit',
+        backgroundColor: 'var(--prism-color-surface-input, transparent)',
+        color: 'var(--prism-color-text-primary, inherit)',
+        boxSizing: 'border-box' as const,
+      };
+
   const commonProps = {
     id: inputId,
     name: field.name,
@@ -46,20 +68,28 @@ export function FieldRenderer({
     'aria-invalid': showError ? true as const : undefined,
     'aria-required': field.required || undefined,
     onBlur,
-    style: {
-      width: '100%',
-      padding: 'var(--prism-form-field-padding, 8px 12px)',
-      border: `1px solid ${showError ? 'var(--prism-color-status-error, #dc2626)' : 'var(--prism-color-border-default, #d1d5db)'}`,
-      borderRadius: 'var(--prism-radius-md, 6px)',
-      fontSize: 'var(--prism-font-size-body, 14px)',
-      fontFamily: 'inherit',
-      backgroundColor: 'var(--prism-color-surface-input, transparent)',
-      color: 'var(--prism-color-text-primary, inherit)',
-      boxSizing: 'border-box' as const,
-    },
+    // className override takes precedence; style fallback otherwise
+    className: inputClassName,
+    style: inputStyleFallback,
   };
 
   let input: ReactNode;
+
+  if (field.render) {
+    const ctx: FieldRenderContext = {
+      value,
+      onChange,
+      onBlur,
+      error,
+      touched,
+      disabled: disabled || Boolean(field.disabled),
+      values,
+      field,
+      inputId,
+      describedBy,
+    };
+    input = field.render(ctx);
+  } else {
 
   switch (field.type) {
     case 'textarea':
@@ -214,12 +244,19 @@ export function FieldRenderer({
         />
       );
   }
+  }
+
+  const fieldClassName = classNames?.field;
+  const labelClassName = classNames?.label;
+  const helpClassName = classNames?.helpText;
+  const errorClassName = classNames?.error;
 
   return (
     <div
       role="group"
       aria-labelledby={`${inputId}-label`}
-      style={{
+      className={fieldClassName}
+      style={fieldClassName ? undefined : {
         display: 'flex',
         flexDirection: 'column',
         gap: 'var(--prism-form-field-gap, 4px)',
@@ -228,7 +265,8 @@ export function FieldRenderer({
       <label
         id={`${inputId}-label`}
         htmlFor={field.type !== 'radio' ? inputId : undefined}
-        style={{
+        className={labelClassName}
+        style={labelClassName ? undefined : {
           fontSize: 'var(--prism-font-size-label, 14px)',
           fontWeight: 500,
           color: 'var(--prism-color-text-primary, inherit)',
@@ -249,7 +287,8 @@ export function FieldRenderer({
       {field.helpText && !showError && (
         <span
           id={helpId}
-          style={{
+          className={helpClassName}
+          style={helpClassName ? undefined : {
             fontSize: 'var(--prism-font-size-caption, 12px)',
             color: 'var(--prism-color-text-secondary, #6b7280)',
           }}
@@ -261,7 +300,8 @@ export function FieldRenderer({
         <span
           id={errorId}
           role="alert"
-          style={{
+          className={errorClassName}
+          style={errorClassName ? undefined : {
             fontSize: 'var(--prism-font-size-caption, 12px)',
             color: 'var(--prism-color-status-error, #dc2626)',
           }}
@@ -360,14 +400,16 @@ export interface FormSectionProps {
   collapsed: boolean;
   onToggle: (() => void) | undefined;
   children: ReactNode;
+  className?: string | undefined;
 }
 
-export function FormSection({ section, collapsed, onToggle, children }: FormSectionProps) {
+export function FormSection({ section, collapsed, onToggle, children, className }: FormSectionProps) {
   if (!section) return <>{children}</>;
 
   return (
     <fieldset
-      style={{
+      className={className}
+      style={className ? undefined : {
         border: 'none',
         padding: 0,
         margin: 0,

@@ -409,9 +409,15 @@ describe('useChatState', () => {
       sender: 'assistant',
     };
 
-    act(() => { (handle as any)._emitComplete(assistantMsg); });
+    // onComplete triggers refreshConversations() when activeConversationId is null;
+    // wait for that async effect to settle so state updates stay inside act().
+    await act(async () => {
+      (handle as any)._emitComplete(assistantMsg);
+    });
+    await waitFor(() => {
+      expect(result.current.isStreaming).toBe(false);
+    });
 
-    expect(result.current.isStreaming).toBe(false);
     expect(result.current.streamBuffer).toBe('');
     // User message + assistant message
     expect(result.current.messages).toHaveLength(2);
@@ -487,7 +493,16 @@ describe('useChatState', () => {
     act(() => { result.current.sendMessage('Hello'); });
     expect(result.current.isStreaming).toBe(true);
 
-    act(() => { result.current.switchConversation('conv-2'); });
+    // switchConversation triggers an effect that loads messages for the new
+    // conversation via the adapter; wait for that async load to settle so the
+    // downstream setIsLoadingMessages(false) runs inside act().
+    await act(async () => {
+      result.current.switchConversation('conv-2');
+    });
+    await waitFor(() => {
+      expect(result.current.isLoadingMessages).toBe(false);
+    });
+
     expect(handle.abort).toHaveBeenCalled();
     expect(result.current.isStreaming).toBe(false);
   });

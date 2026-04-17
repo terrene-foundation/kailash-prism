@@ -1,0 +1,39 @@
+# Session Notes — 2026-04-14 (Wave 2)
+
+## Where we are
+
+Wave 2 arbor migration complete. Three parallel migrations (calculators, payslips, documents) landed on Prism 0.2.0. Red team ran to convergence — 5 HIGH fixed, 2 HIGH deferred pending policy decisions. Upstream proposal at loom appended with 20+ new entries (status: pending_review). Next wave is real adapter implementation (FormAdapter + DataTableAdapter + Card/CardGrid atoms).
+
+## Read first
+
+1. `workspaces/fe-codegen-platform/04-validate/redteam-arbor-wave2-convergence.md` — the disposition of every HIGH finding, what was fixed vs deferred
+2. `workspaces/fe-codegen-platform/04-validate/migration-integration-evidence.md` — automated integration check (Next.js build clean; live browser check still pending)
+3. `workspaces/fe-codegen-platform/04-validate/migration-m0{1,2,3}-findings.md` — the raw friction notes from each migration
+4. `docs/specs/05-engine-specifications.md` § 5.1.1 — the DataTableAdapter design (next-wave target)
+5. `web/CHANGELOG.md` — 0.2.0 breaking changes
+6. `.claude/.proposals/latest.yaml` — upstream proposal (pending_review), wave-1 + wave-2 combined
+
+## In-flight state
+
+- Arbor branch `feat/prism-advisory` from wave 1 had 1 commit; wave-2 work layered on top is uncommitted in arbor.
+- Arbor's `@kailash/prism-web` dependency points to `/tmp/kailash-prism-web-0.2.0.tgz` (breaking 0.1.0 change — tarball must be re-packed if Prism changes).
+- 2 HIGH findings deferred with rationale (need separate decisions):
+  - **S3 tarball integrity** — `/tmp/` path is local-only; need GitHub Packages or committed tarball before CI can run. Memory note says GitHub-only distribution preferred.
+  - **S4 documents API authz** — need arbor backend owner to confirm `documentsApi.listTemplates()` is role-scoped server-side.
+
+## Traps
+
+- Prism 0.2.0 is a BREAKING change on `ColumnDef.render` typing — any consumer upgrading from 0.1.0 that casts `value` may need to adapt. Arbor's migrations survived due to TS parameter contravariance.
+- `exactOptionalPropertyTypes` is NOT set in arbor's tsconfig (despite some prior notes saying so) — both wave-1 and wave-2 migration code still coded defensively as if it were. Survives a future tightening without edits.
+- `ConversationTemplate` auto-wraps `LayoutProvider` but NOT `ThemeProvider` — consumers need to add ThemeProvider themselves if they want theme-driven CSS vars.
+- Turbopack cannot resolve `file:` symlinked packages — must use `npm pack` tarball with `transpilePackages` in `next.config.ts`. Permanent DX.
+- **None of the three arbor -prism pages actually exercise Prism's `ServerDataSource.fetchData` path** — they all fetch client-side. The M-04 D1 wiring is covered by the regression test but has no arbor consumer today. First real server-side consumer will arrive in the next wave (leave / claims / employees — datasets that need server-side pagination).
+- **act() warnings** — there were 6 in `ai-chat-sidebar.test.tsx` that M-04 deferred citing "shard discipline." M-08 convergence corrected this (wrapped in `await act(async () => ...)` + `waitFor`). Future convergence: "shard discipline" is NOT a valid exception to `rules/zero-tolerance.md` Rule 1.
+
+## Deferred to next wave (codify targets)
+
+- **FormAdapter interface** (M-01 BLOCKING-2) — motivates collapsing `{values, result}` state boilerplate from every consumer into the adapter.
+- **DataTableAdapter implementation** — design landed in M-05; implementation is a dedicated next-wave task.
+- **Card atom + CardGrid molecule** (M-03 NON-BLOCKING-1) — abstracts M-03's local `prism-document-card.tsx` into Prism proper.
+- **FilterBar molecule** (M-03 stretch proposal) — unifies chip-row + search UI.
+- All MEDIUM/LOW findings from M-07 red team are batched for /codify.
