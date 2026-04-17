@@ -2,6 +2,76 @@
 
 All notable changes to the Prism web engine package are documented here.
 
+## 0.2.2 — 2026-04-18 — DataTableAdapter (Shard 2 of 0.3.0 wave)
+
+Adds the `DataTableAdapter<T, TId>` interface + `adaptLegacy` shim, closing
+the M-02 / M-03 BLOCKING-1 finding. The deprecated `ServerDataSource` shape
+is now internally lifted to the adapter form via a shim; external consumers
+continue to work unchanged. `ServerDataSource` is removed in 0.3.0 (Shard 3).
+
+The adapter parallels `FormAdapter` (§ 5.2.2) — required core + optional
+extensions, all plain-async. One interface owns every dimension of a list
+page: identity, capability declaration, paging, row/bulk actions, cache
+invalidation.
+
+### DataTable engine
+
+- **D5 (feat)**: `DataTableAdapter<T, TId>` interface exported from
+  `@kailash/prism-web`. Seven methods: `getRowId`, `capabilities`,
+  `fetchPage` (required); `onRowActivate`, `rowActions`, `bulkActions`,
+  `invalidate` (optional). `filterDimensions` and `subscribe` reserved
+  for 0.4.0 when the faceted-filter UI / live-update pipeline land.
+- **D6 (feat)**: `DataSource<T>` union widened to
+  `T[] | ServerDataSource<T> | DataTableAdapter<T>`. The legacy
+  `ServerDataSource` is shimmed internally via `adaptLegacy()` so the
+  hook's body only handles two cases (array / adapter).
+- **D7 (feat)**: `adapter.rowActions` renders a trailing actions column
+  when declared. Each action is an `<a>` (if `href` supplied) or
+  `<button>` (if `onExecute` supplied). Keyboard focus order matches
+  declaration order; `visible` / `disabled` predicates honored per row.
+  Action clicks call `event.stopPropagation()` so they don't trigger
+  `onRowActivate` / `onRowClick`.
+- **D8 (feat)**: `adapter.bulkActions` merged with
+  `DataTableConfig.bulkActions` in the bulk-action toolbar — adapter's
+  actions come first, then config's, so consumers can EXTEND (not
+  override) the adapter's declared set.
+- **D9 (feat)**: `adapter.onRowActivate` takes precedence over
+  `DataTableConfig.onRowClick`. Both fire on row click and Enter keyboard
+  activation.
+- **D10 (feat)**: Row-action / bulk-action `onExecute` returns (sync or
+  Promise). Engine awaits the promise, calls `adapter.invalidate?.()`,
+  then forces a refetch by bumping the internal retry tick.
+- **D11 (public)**: New public exports —
+  `adaptLegacy(source: ServerDataSource<T>): DataTableAdapter<T>`,
+  `isDataTableAdapter(data)`, `isServerDataSource(data)`,
+  `resolveDataSource(data)`. Consumers migrating incrementally can lift
+  their ServerDataSource manually via `adaptLegacy(source)` before the
+  0.3.0 removal.
+
+### Migration notes
+
+- **No breaking changes in 0.2.2.** `ServerDataSource<T>` marked
+  `@deprecated` via JSDoc with a pointer to `DataTableAdapter`.
+- **Legacy-to-adapter migration cheatsheet** (one-shot refactor per page):
+  ```diff
+  - const dataSource: ServerDataSource<Doc> = {
+  -   fetchData: async (params) => { /* ... */ return { items, totalCount }; },
+  - };
+  + const adapter: DataTableAdapter<Doc> = {
+  +   getRowId: (row) => String(row.id),
+  +   capabilities: () => ({ serverPagination: true, globalSearch: true }),
+  +   fetchPage: async (query) => { /* ... */ return { rows, totalCount }; },
+  +   rowActions: [{ id: 'preview', label: 'Preview', href: (row, id) => `/docs/${id}` }],
+  + };
+  ```
+- **`data-table.yaml` bumped to 0.2.2** — changelog entry + new prop
+  (adapter accepted via `data:`).
+- **Hook result new fields**: `UseDataTableResult` gains `onRowActivate`,
+  `rowActions`, `adapterBulkActions`, `executeRowAction`,
+  `executeBulkAction`. Consumers pattern-matching on the hook result via
+  `Object.keys(result)` will see five new keys; typed consumers get them
+  in autocomplete.
+
 ## 0.2.1 — 2026-04-18 — FormAdapter (Shard 1 of 0.3.0 wave)
 
 Adds the `FormAdapter<TValues, TResult>` interface, closing the M-01

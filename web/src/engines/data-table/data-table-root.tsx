@@ -75,19 +75,47 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
 
   const state = useDataTable(props);
 
-  // Detect whether data is a ServerDataSource so the engine can auto-manage
-  // the loading / error surface without the consumer having to wire up both
-  // `loading`/`error` and the server fetch manually.
+  // Detect whether data is a server-driven source (either the new
+  // `DataTableAdapter` or the deprecated `ServerDataSource`) so the engine
+  // can auto-manage the loading / error surface without the consumer
+  // having to wire up both `loading`/`error` and the server fetch manually.
+  //
+  // Discrimination: anything non-array-shaped is treated as server-driven;
+  // the hook's `resolveDataSource` has already normalised both shapes into
+  // a single adapter path and exposed serverLoading / serverError.
   const isServerSource =
     typeof props.data === 'object' &&
     props.data !== null &&
-    !Array.isArray(props.data) &&
-    typeof (props.data as { fetchData?: unknown }).fetchData === 'function';
+    !Array.isArray(props.data);
   const effectiveLoading = isServerSource ? loading || state.serverLoading : loading;
   const effectiveError = isServerSource ? error ?? state.serverError : error;
   const effectiveRetry = isServerSource
     ? (onRetry ?? state.retryServerFetch)
     : onRetry;
+
+  // Merge adapter-driven bulk actions with consumer-supplied bulkActions.
+  // Adapter's actions come first so consumers can extend (not override)
+  // the adapter's declared set.
+  const mergedBulkActions = useMemo(() => {
+    if (state.adapterBulkActions.length === 0) return bulkActions;
+    return [
+      ...state.adapterBulkActions.map(a => ({
+        label: a.label,
+        variant: (a.variant === 'destructive' ? 'destructive' : a.variant === 'primary' ? 'primary' : 'ghost') as 'primary' | 'destructive' | 'ghost',
+        onExecute: (_rows: T[]) => {
+          // Fire-and-forget wrapper; adapter-side onExecute may return a
+          // Promise. Engine handles invalidate+refetch via executeBulkAction.
+          void state.executeBulkAction(a);
+        },
+      })),
+      ...bulkActions,
+    ];
+  }, [state.adapterBulkActions, state.executeBulkAction, bulkActions]);
+
+  // Prefer adapter.onRowActivate over consumer's onRowClick. Both fire on
+  // row click; adapter path takes precedence because it's part of the
+  // typed contract.
+  const effectiveRowClick = state.onRowActivate ?? props.onRowClick;
 
   // --- Responsive: detect mobile ---
   const [isMobile, setIsMobile] = useState(false);
@@ -151,12 +179,12 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
         </div>
       )}
 
-      {/* Bulk actions bar */}
-      {selectionEnabled && bulkActions.length > 0 && (
+      {/* Bulk actions bar (adapter + config merged) */}
+      {selectionEnabled && mergedBulkActions.length > 0 && (
         <DataTableBulkActions
           selectedCount={state.selectedIds.size}
           selectedRows={state.selectedRows}
-          actions={bulkActions}
+          actions={mergedBulkActions}
           onClearSelection={state.clearSelection}
         />
       )}
@@ -169,7 +197,7 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
             columns={columns}
             selectionEnabled={selectionEnabled}
             selectedIds={state.selectedIds}
-            onRowClick={props.onRowClick}
+            onRowClick={effectiveRowClick}
             onToggleRow={state.handleToggleRow}
             getRowId={state.getRowId}
           />
@@ -240,13 +268,15 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
                 selectedIds={state.selectedIds}
                 virtualScroll={virtualScroll}
                 rowHeight={rowHeight}
-                onRowClick={props.onRowClick}
+                onRowClick={effectiveRowClick}
                 onToggleRow={state.handleToggleRow}
                 getRowId={state.getRowId}
                 expandable={expandable}
                 expandedIds={state.expandedIds}
                 onToggleExpand={state.handleToggleExpand}
                 expandContent={expandContent}
+                rowActions={state.rowActions}
+                executeRowAction={state.executeRowAction}
               />
             )}
           </table>

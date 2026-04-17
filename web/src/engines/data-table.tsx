@@ -9,6 +9,10 @@
 export {
   DataTable,
   useDataTable,
+  adaptLegacy,
+  isDataTableAdapter,
+  isServerDataSource,
+  resolveDataSource,
   type DataTableConfig,
   type DataTableRow,
   type ColumnDef,
@@ -22,4 +26,11 @@ export {
   type ServerFetchParams,
   type ServerFetchResult,
   type SortState,
+  type DataTableAdapter,
+  type DataTableCapabilities,
+  type DataTableQuery,
+  type DataTablePage,
+  type DataTableSort,
+  type DataTableRowAction,
+  type DataTableBulkAction,
 } from './data-table/index.js';

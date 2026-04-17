@@ -17,7 +17,21 @@ export type {
   ServerFetchParams,
   ServerFetchResult,
   SortState,
+  DataTableAdapter,
+  DataTableCapabilities,
+  DataTableQuery,
+  DataTablePage,
+  DataTableSort,
+  DataTableRowAction,
+  DataTableBulkAction,
 } from './types.js';
+
+export {
+  adaptLegacy,
+  isDataTableAdapter,
+  isServerDataSource,
+  resolveDataSource,
+} from './adapter.js';
 
 export { DataTable } from './data-table-root.js';
 export { useDataTable } from './use-data-table.js';

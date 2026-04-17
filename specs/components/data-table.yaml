@@ -2,13 +2,23 @@
 # Source: docs/specs/03-component-contracts.md § 3.4.3
 # Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll.
 
-version: "0.2.0"
+version: "0.2.2"
 
 name: DataTable
 category: organism
 description: "Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll."
 
 changelog:
+  - version: "0.2.2"
+    date: "2026-04-18"
+    changes:
+      - "FEAT: DataTableAdapter<T, TId> interface — bridges DataTable to any backend. Required: getRowId, capabilities, fetchPage. Optional: onRowActivate, rowActions, bulkActions, invalidate. Parallel to FormAdapter and ChatAdapter."
+      - "FEAT: DataSource<T> widened to accept DataTableAdapter<T> alongside T[] and ServerDataSource<T>."
+      - "FEAT: Row actions column auto-rendered when adapter.rowActions is non-empty. Anchors for href, buttons for onExecute. stopPropagation on action clicks prevents row activation."
+      - "FEAT: Bulk actions merged — adapter.bulkActions + config.bulkActions render together in the bulk toolbar."
+      - "FEAT: adapter.onRowActivate takes precedence over DataTableConfig.onRowClick."
+      - "FEAT: adaptLegacy(source) lifts ServerDataSource to DataTableAdapter; resolveDataSource/isDataTableAdapter/isServerDataSource exported for incremental migration."
+      - "DEPRECATED: ServerDataSource<T> — internal usage shimmed via adaptLegacy; public interface removed in 0.3.0 (Shard 3)."
   - version: "0.2.0"
     date: "2026-04-14"
     changes:
@@ -34,10 +44,10 @@ props:
     default: null
     description: "Column definitions including header label, accessor, width, and sortability"
   - name: data
-    type: "T[] | ServerDataSource<T>"
+    type: "T[] | DataTableAdapter<T> | ServerDataSource<T>"
     required: true
     default: null
-    description: "Array of row data objects (client-side processing) OR a ServerDataSource whose fetchData is invoked on every state change (since 0.2.0). The engine auto-manages loading/error for server sources."
+    description: "Array of row data objects (client-side), a DataTableAdapter<T> (since 0.2.2) OR the deprecated ServerDataSource<T>. The adapter form is the canonical contract; ServerDataSource is shimmed internally and removed in 0.3.0."
   - name: getRowId
     type: "((row: T, index: number) => string) | undefined"
     required: false

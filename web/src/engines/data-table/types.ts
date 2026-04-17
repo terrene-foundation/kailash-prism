@@ -117,15 +117,29 @@ export interface BulkAction<T extends DataTableRow> {
 // --- Data source ---
 
 /**
- * Static data: plain array — the engine sorts / filters / paginates client-side.
- * Server-side: a `ServerDataSource` whose `fetchData(params)` is invoked by the
- * engine on mount and on every page / sort / filter / search change. The engine
- * owns the `loading` / `error` lifecycle for server sources automatically.
+ * Three accepted shapes for `DataTableConfig.data`:
+ *
+ * - **Plain array** — engine sorts / filters / paginates client-side.
+ * - **`ServerDataSource<T>`** — DEPRECATED. Legacy shape from 0.2.x. Internally
+ *   shimmed to `DataTableAdapter` via `adaptLegacy`; removed in 0.3.0.
+ *   Consumers MUST migrate to `DataTableAdapter`.
+ * - **`DataTableAdapter<T>`** — the canonical adapter contract (since 0.2.2).
+ *   Owns getRowId, capability declaration, paging / filtering / sorting /
+ *   row activation / row actions / bulk actions / cache invalidation.
+ *
+ * The engine internally lifts all three shapes to `DataTableAdapter` so the
+ * hook's body only handles the adapter form.
  */
 export type DataSource<T extends DataTableRow> =
   | T[]
-  | ServerDataSource<T>;
+  | ServerDataSource<T>
+  | DataTableAdapter<T>;
 
+/**
+ * @deprecated Use `DataTableAdapter` instead. `ServerDataSource` will be
+ * removed in 0.3.0 — the interface was orphaned through 0.1.x (see
+ * M-02/M-03 BLOCKING-1) and is superseded by the typed adapter contract.
+ */
 export interface ServerDataSource<T extends DataTableRow> {
   /**
    * Called by `useDataTable` whenever pagination / sort / filter / global
@@ -157,6 +171,211 @@ export interface ServerFetchParams {
 export interface ServerFetchResult<T extends DataTableRow> {
   items: T[];
   totalCount: number;
+}
+
+// --- DataTableAdapter (canonical, since 0.2.2) ---
+
+/**
+ * Capabilities an adapter declares to the engine, read once at mount.
+ *
+ * Operations DECLARED are forwarded to the adapter (via `fetchPage` query
+ * fields). Operations NOT DECLARED are performed client-side over the most
+ * recent `fetchPage` result. An adapter with every capability empty is a
+ * valid "in-memory fixture" — the engine fetches once and then sorts /
+ * filters / paginates locally.
+ */
+export interface DataTableCapabilities {
+  /** Fields the server can sort by. Empty/missing → engine sorts client-side. */
+  readonly sortableFields?: ReadonlyArray<string>;
+  /** Whether the server honors limit/offset (or page/pageSize) pagination. Default: false. */
+  readonly serverPagination?: boolean;
+  /** Pagination model the server speaks. Default: "offset". */
+  readonly paginationMode?: 'offset' | 'cursor';
+  /** Per-column filterable fields. Empty/missing → engine filters client-side. */
+  readonly filterableFields?: ReadonlyArray<string>;
+  /** Whether the server supports a free-text search across fields. Default: false. */
+  readonly globalSearch?: boolean;
+}
+
+/**
+ * Sort order element forwarded to the adapter.
+ *
+ * Shape mirrors the engine's internal `SortState` and is identical across
+ * both the legacy `ServerFetchParams.sort` and the new
+ * `DataTableQuery.sort` so migration from the old to the new contract is
+ * field-rename-free.
+ */
+export interface DataTableSort {
+  readonly field: string;
+  readonly direction: 'asc' | 'desc';
+}
+
+/**
+ * Single-page query forwarded to `DataTableAdapter.fetchPage`. The engine
+ * populates every field even when the adapter does not declare the
+ * corresponding capability (adapters that care about performance should
+ * destructure only what `capabilities()` declared).
+ */
+export interface DataTableQuery {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly sort: ReadonlyArray<DataTableSort>;
+  /** Per-column header filters. */
+  readonly filters: Readonly<Record<string, string>>;
+  readonly globalSearch: string;
+  /** Opaque cursor for keyset pagination. Present iff paginationMode === "cursor". */
+  readonly cursor?: string;
+  /** AbortSignal for cancellation when the engine supersedes a request. */
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Single-page response from the adapter. `totalCount: -1` signals an unknown
+ * total (cursor-paginated backends that can't cheaply count); the engine
+ * renders "Load more" instead of a numbered pager in that case.
+ */
+export interface DataTablePage<T extends DataTableRow> {
+  readonly rows: ReadonlyArray<T>;
+  readonly totalCount: number;
+  /** Next-page cursor for keyset pagination. Required iff paginationMode === "cursor" and more pages exist. */
+  readonly nextCursor?: string;
+}
+
+/**
+ * Declarative per-row action. Engine renders the array as a trailing
+ * actions column (table mode) or as a card-footer slot (card-grid mode,
+ * when CardGrid is wired in Shard 4).
+ *
+ * `onExecute` and `href` are mutually exclusive — `href` renders an
+ * anchor, `onExecute` renders a button. Exactly one MUST be defined.
+ */
+export interface DataTableRowAction<T extends DataTableRow, TId = string> {
+  /** Stable id — used for aria, keyboard focus order, analytics. */
+  readonly id: string;
+  /** Display label. Required even for icon-only buttons (used as aria-label). */
+  readonly label: string;
+  /** Optional leading icon. */
+  readonly icon?: ReactNode;
+  /** Visual variant. Default: "ghost". */
+  readonly variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
+  /** Navigation target. Renders as anchor. Mutually exclusive with onExecute. */
+  readonly href?: (row: T, id: TId) => string;
+  /**
+   * Imperative handler. Renders as button. Returning a Promise puts the
+   * button into a busy state until it settles; engine calls
+   * `adapter.invalidate?.()` and refetches on success.
+   */
+  readonly onExecute?: (row: T, id: TId) => void | Promise<void>;
+  /** Hide on rows where the predicate returns false. */
+  readonly visible?: (row: T) => boolean;
+  /** Disable on rows where the predicate returns true. */
+  readonly disabled?: (row: T) => boolean;
+}
+
+/**
+ * Multi-row bulk action. Rendered in the bulk-action toolbar above the
+ * table when `selection.enabled` is true and at least one row is
+ * selected. Adapter-driven bulk actions take precedence over
+ * `DataTableConfig.bulkActions` when both are declared — the engine
+ * merges with adapter first (so consumer configs can extend, not
+ * compete).
+ */
+export interface DataTableBulkAction<T extends DataTableRow, TId = string> {
+  readonly id: string;
+  readonly label: string;
+  readonly icon?: ReactNode;
+  readonly variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
+  readonly onExecute: (rows: ReadonlyArray<T>, ids: ReadonlyArray<TId>) => void | Promise<void>;
+  /** Disable when fewer rows are selected. Default: 1. */
+  readonly minSelection?: number;
+  /** Disable when more rows are selected. Default: Infinity. */
+  readonly maxSelection?: number;
+}
+
+/**
+ * Transport-agnostic adapter for DataTable backends.
+ *
+ * Consumers implement this interface to connect Prism's DataTable engine
+ * to any specific data source (REST, GraphQL, in-memory array, file system,
+ * etc). The engine drives every state change through the adapter's methods
+ * and renders the result.
+ *
+ * See `docs/specs/05-engine-specifications.md` § 5.1.1 for the full
+ * contract including lifecycle, comparison with ChatAdapter, design
+ * decisions, and the ServerDataSource migration path.
+ *
+ * This 0.2.2 iteration ships 3 required + 4 optional methods:
+ *
+ * - **Required**: `getRowId`, `capabilities`, `fetchPage`.
+ * - **Optional**: `onRowActivate`, `rowActions`, `bulkActions`, `invalidate`.
+ *
+ * `filterDimensions` (faceted filter UI) and `subscribe` (live updates)
+ * are reserved for 0.4.0 when the engine-side UI lands — per
+ * `rules/orphan-detection.md` Rule 1, interface methods without wired
+ * consumers are not shipped.
+ */
+export interface DataTableAdapter<T extends DataTableRow, TId = string> {
+  /**
+   * Stable identity for a row. Required.
+   *
+   * Returned ids MUST be:
+   *   - stable across paginations (selection survives page change)
+   *   - unique across the entire result set (not just the current page)
+   *   - serialisable to string by the engine (`String(id)`) for DOM keys,
+   *     aria attributes, and selection-set membership
+   */
+  getRowId(row: T): TId;
+
+  /**
+   * Declare which query operations the backend supports natively. Required.
+   *
+   * Read ONCE at mount; an adapter that needs to change its capabilities at
+   * runtime MUST be replaced with a new instance.
+   */
+  capabilities(): DataTableCapabilities;
+
+  /**
+   * Fetch one page of rows. Required.
+   *
+   * Long-running fetches SHOULD honor `query.signal` (AbortSignal) so the
+   * engine can cancel in-flight requests on rapid state changes. `fetchPage`
+   * MAY throw / reject; the engine surfaces errors through `errorState`. An
+   * adapter MUST NOT catch its own errors and return empty pages.
+   */
+  fetchPage(query: DataTableQuery): Promise<DataTablePage<T>>;
+
+  /**
+   * Row activation handler. Optional.
+   *
+   * Invoked on click (or keyboard activation) of a row NOT on its action
+   * buttons. Returning a Promise lets the engine display a per-row busy
+   * indicator until the promise settles. Engine calls `event.stopPropagation`
+   * on action-button clicks, so consumers don't need to hand-wire the
+   * "click the button, not the row" distinction.
+   */
+  onRowActivate?: (row: T) => Promise<void> | void;
+
+  /** Per-row action buttons. Optional. */
+  rowActions?: ReadonlyArray<DataTableRowAction<T, TId>>;
+
+  /**
+   * Multi-row bulk actions. Optional.
+   *
+   * Merged with `DataTableConfig.bulkActions` — adapter's actions come first,
+   * then config's. Selection-aware enablement honors each action's
+   * `minSelection` / `maxSelection`.
+   */
+  bulkActions?: ReadonlyArray<DataTableBulkAction<T, TId>>;
+
+  /**
+   * Invalidate adapter caches. Optional.
+   *
+   * Engine calls `invalidate()` after any successful rowAction / bulkAction
+   * `onExecute`, before the follow-up `fetchPage()`. Adapter clears its
+   * memoized pages, in-flight dedup tables, etc. Returning a Promise lets
+   * the engine wait for the invalidation before refetching.
+   */
+  invalidate?: () => Promise<void> | void;
 }
 
 // --- Engine config ---

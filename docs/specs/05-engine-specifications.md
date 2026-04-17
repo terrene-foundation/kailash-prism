@@ -255,9 +255,14 @@ interface MobileCardLayout {
 
 ---
 
-## 5.1.1 DataTableAdapter<T> (proposed for next wave)
+## 5.1.1 DataTableAdapter<T> (since 0.2.2)
 
-**Status**: PROPOSED (M-05). Implementation is M-06 wave. Lands AFTER M-04 wires `ServerDataSource.fetchData` so the adapter has a working call site. This sub-section is the canonical contract — both M-02 and M-03 sketches reduce to what is documented here.
+**Status**: SHIPPED in 0.2.2. Seven methods of the nine originally proposed — `filterDimensions` and `subscribe` are reserved for 0.4.0 when the engine-side faceted-filter UI and live-update pipeline land (per `rules/orphan-detection.md` Rule 1, interface methods without wired consumers are not shipped).
+
+**Shipped surface**:
+- Required: `getRowId`, `capabilities`, `fetchPage`.
+- Optional: `onRowActivate`, `rowActions`, `bulkActions`, `invalidate`.
+- `ServerDataSource<T>` is kept as a deprecated public type, internally shimmed to `DataTableAdapter` via `adaptLegacy()`. Removed in 0.3.0.
 
 ### Overview
 
