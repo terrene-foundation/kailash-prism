@@ -1,7 +1,18 @@
+---
+type: GAP
+date: 2026-04-20
+created_at: 2026-04-20T06:31:00+08:00
+author: agent
+session_id: redteam-convergence-2026-04-20
+session_turn: post-round2
+project: fe-codegen-platform
+topic: 13 of 70 component YAMLs lack top-level version field; blocks batch codegen
+phase: redteam
+tags: [specs-authority, codegen, corpus-drift]
+---
+
 # 0022 — GAP — 13/70 component spec YAMLs missing `version:` field
 
-**Date**: 2026-04-20
-**Type**: GAP
 **Status**: Deferred to spec-corpus cleanup shard
 
 ## Context
@@ -34,3 +45,9 @@ One-session shard: add `version: "0.1.0"` (or the value from the commented heade
 ## Tracking
 
 Not filed as a GitHub issue (internal cleanup); will pick up in the next wave alongside the Layout migration shard or the MED-2 security hardening pass.
+
+## For Discussion
+
+1. **Counterfactual**: If the codegen loader were lenient (treat `version` as optional, default to `"0.0.0"`), would the drift get fixed or would it ossify — treating "0.0.0" as the permanent default because nothing breaks?
+2. **Data**: The 13 non-compliant files are all atoms (button, badge, avatar, etc.) per `ls specs/components/*.yaml | xargs grep -L '^version:'`. Does that pattern suggest atoms were created in one early cohort before the version convention landed, and the convention was added at organism level first?
+3. **Gate placement**: Should this check live in the `spec-loader.ts` (fail fast at codegen time) or in a pre-commit hook (fail fast at authoring time)? The former catches the error once it's already committed; the latter prevents it ever landing.
