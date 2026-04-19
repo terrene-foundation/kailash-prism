@@ -1,0 +1,149 @@
+# Kailash Prism — Card Atom Contract
+# Source: docs/specs/03-component-contracts.md (implicit) + specs/components/card-grid.yaml
+# Content container with optional media, title, body, and footer slots.
+
+version: "0.3.1"
+
+name: Card
+category: atom
+description: "Content container with optional media, title, body, and footer slots. Visual variants for flat/elevated/outlined surfaces. Optionally interactive — supplying onActivate makes the card a role=button with Enter/Space keyboard activation."
+
+changelog:
+  - version: "0.3.1"
+    date: "2026-04-18"
+    changes:
+      - "Initial release alongside CardGrid organism and DataTable display='card-grid' mode."
+
+composed_of:
+  atoms: []
+  molecules: []
+  # Card is a leaf atom — no sub-composition. Consumers supply ReactNodes
+  # into media/footer/children slots.
+
+props:
+  - name: variant
+    type: "'flat' | 'elevated' | 'outlined'"
+    required: false
+    default: "elevated"
+    description: "Visual variant — flat (no border or shadow), elevated (subtle shadow), outlined (1px border)."
+  - name: title
+    type: ReactNode
+    required: false
+    default: null
+    description: "Primary heading rendered in an <h3> within the card body."
+  - name: subtitle
+    type: ReactNode
+    required: false
+    default: null
+    description: "Secondary descriptor rendered in a <p> below the title."
+  - name: children
+    type: ReactNode
+    required: false
+    default: null
+    description: "Body content. Rendered below title/subtitle."
+  - name: media
+    type: ReactNode
+    required: false
+    default: null
+    description: "Media slot rendered at the top of the card — image, video, illustration."
+  - name: footer
+    type: ReactNode
+    required: false
+    default: null
+    description: "Footer slot — action buttons, status indicators, timestamps. Visually separated by a top border."
+  - name: onActivate
+    type: "() => void"
+    required: false
+    default: null
+    description: "Activation handler. When supplied the card renders as role=button with tabIndex=0 and Enter/Space keyboard handlers. Omitting it renders a passive content card."
+  - name: loading
+    type: boolean
+    required: false
+    default: false
+    description: "Loading state — sets aria-busy. Content still renders; consumers layer their own skeleton via media/children slots."
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class forwarded to the root element for composition."
+
+states:
+  initial: idle
+  states:
+    - name: idle
+      description: "Default content-display state"
+    - name: interactive
+      description: "onActivate supplied — card is keyboard-focusable and click-activatable"
+    - name: loading
+      description: "aria-busy=true; content rendered but operators know data is in flight"
+  transitions:
+    - from: idle
+      to: interactive
+      trigger: "Consumer supplies onActivate prop"
+      visual_change: "Cursor changes to pointer; tabIndex=0; role=button on the root element"
+    - from: interactive
+      to: loading
+      trigger: "Consumer sets loading=true"
+      visual_change: "aria-busy set; content still visible (optional consumer-drawn spinner)"
+
+composition_slots:
+  - name: media
+    description: "Top-of-card media — image/video/illustration. Opts out of default padding for full-bleed."
+  - name: children
+    description: "Main body content rendered below title/subtitle."
+  - name: footer
+    description: "Bottom-of-card actions. Separated from body by a 1px top border."
+
+accessibility:
+  role: "button (when interactive) | null"
+  aria_attributes:
+    - attribute: aria-busy
+      source: "Set when loading=true"
+      required: false
+    - attribute: role
+      source: "button when onActivate supplied, unset otherwise"
+      required: false
+  keyboard:
+    - key: Enter
+      action: "Activate the card (when interactive)"
+    - key: Space
+      action: "Activate the card (when interactive)"
+    - key: Tab
+      action: "Move focus to/from the card (when interactive)"
+  focus:
+    tabindex: "0 when onActivate is supplied, otherwise unset"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "Card title + subtitle concatenation (when title supplied)"
+    announcements:
+      - "Button (when interactive, announced alongside title)"
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Full-width card with consistent padding"
+  - breakpoint: tablet
+    behavior: "Card size determined by CardGrid column count"
+  - breakpoint: desktop
+    behavior: "Card size determined by CardGrid column count"
+  - breakpoint: wide
+    behavior: "Card size determined by CardGrid column count"
+
+tokens:
+  consumes:
+    - card.default.padding       # var(--prism-card-padding)
+    - card.default.radius        # var(--prism-card-radius)
+    - card.default.bg            # var(--prism-card-bg)
+    - card.default.shadow        # var(--prism-card-shadow) — elevated variant
+    - color.surface.page         # flat/outlined variants
+    - color.surface.elevated     # elevated variant
+    - color.border.default       # outlined variant + footer separator
+    - color.text.primary         # title + body
+    - color.text.secondary       # subtitle
+    - spacing.xs                 # gap between title and subtitle
+    - spacing.sm                 # footer padding-top + action gap
+    - font-size.h3               # title
+    - font-size.caption          # subtitle
+    - font-size.body             # children
+    - radius.md                  # card.default.radius fallback
+  inherits_from: null

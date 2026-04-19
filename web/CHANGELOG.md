@@ -36,11 +36,21 @@ Non-breaking — existing DataTable consumers keep `display="table"`.
 - **D17 (feat)**: `DataTableConfig.cardGridColumns?` forwards breakpoint
   column counts to the underlying `CardGrid`.
 - **D18 (feat)**: Adapter `rowActions` render in the card footer (not a
-  trailing actions column). Same stopPropagation semantics — clicking an
-  action doesn't activate the card. Same `visible` / `disabled` predicate
-  support as the table-mode column.
+  trailing actions column). Both `href` (anchor) and `onExecute` (button)
+  branches supported — parity with table-mode. Same stopPropagation
+  semantics — clicking an action doesn't activate the card. Same
+  `visible` / `disabled` predicate support as the table-mode column.
 - **D19 (feat)**: Empty / loading / error states adapted for card-grid
   layout (skeleton cards, alert banner, plain empty message).
+- **D20 (safety)**: `sanitizeHref()` extracted into
+  `web/src/engines/data-table/sanitize-href.ts` and shared between
+  table-mode and card-grid-mode action renderers. The scheme allowlist
+  (http/https/mailto/tel/relative/anchor) lives in exactly one place;
+  adding a new render surface can't accidentally ship without it.
+- **D21 (safety)**: `CardGrid.columns` values coerce through
+  `Number(v) | Math.trunc | Math.max(0, …)` before CSS interpolation.
+  Defense-in-depth against JS `any` callers that might slip a
+  CSS-injection payload through the type boundary.
 
 ### Migration notes
 

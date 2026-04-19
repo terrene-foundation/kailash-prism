@@ -17,6 +17,7 @@ import { DataTablePagination } from './data-table-pagination.js';
 import { DataTableBulkActions } from './data-table-bulk-actions.js';
 import { DataTableLoading, DataTableEmpty, DataTableError } from './data-table-states.js';
 import { DataTableMobile } from './data-table-mobile.js';
+import { sanitizeHref } from './sanitize-href.js';
 import { Card } from '../../atoms/card.js';
 import { CardGrid } from '../../organisms/card-grid.js';
 
@@ -400,22 +401,51 @@ function CardItem<T extends DataTableRow>({
       {rowActions.map((action) => {
         if (action.visible && !action.visible(row)) return null;
         const disabled = action.disabled?.(row) ?? false;
+        const rowIdField = (row as Record<string, unknown>)['id'];
+        const idForAction = rowIdField != null ? String(rowIdField) : String(rowIndex);
+        const actionStyle: React.CSSProperties = {
+          padding: '4px 10px',
+          borderRadius: 'var(--prism-radius-md, 4px)',
+          fontSize: 'var(--prism-typography-caption-size, 0.75rem)',
+          background: action.variant === 'primary' ? 'var(--prism-color-interactive-primary, #2563EB)' : 'transparent',
+          color: action.variant === 'primary' ? 'var(--prism-color-text-on-primary, #FFFFFF)' : 'var(--prism-color-text-primary, #0F172A)',
+          border: action.variant === 'destructive' ? '1px solid var(--prism-color-status-error, #DC2626)' : '1px solid var(--prism-color-border-default, #CBD5E1)',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+          textDecoration: 'none',
+          display: 'inline-block',
+        };
+
+        // Anchor branch — parity with table-mode RowActionsCell. `href` is
+        // sanitized against scheme allowlist; click stopPropagation
+        // prevents card activation.
+        if (action.href) {
+          const href = sanitizeHref(action.href(row, idForAction));
+          return (
+            <a
+              key={action.id}
+              href={href}
+              aria-label={action.label}
+              aria-disabled={disabled || undefined}
+              tabIndex={disabled ? -1 : 0}
+              style={{
+                ...actionStyle,
+                pointerEvents: disabled ? 'none' : 'auto',
+              }}
+              onClick={(e) => { e.stopPropagation(); }}
+            >
+              {action.icon}{action.label}
+            </a>
+          );
+        }
+
         return (
           <button
             key={action.id}
             type="button"
             aria-label={action.label}
             disabled={disabled}
-            style={{
-              padding: '4px 10px',
-              borderRadius: 'var(--prism-radius-md, 4px)',
-              fontSize: 'var(--prism-typography-caption-size, 0.75rem)',
-              background: action.variant === 'primary' ? 'var(--prism-color-interactive-primary, #2563EB)' : 'transparent',
-              color: action.variant === 'primary' ? 'var(--prism-color-text-on-primary, #FFFFFF)' : 'var(--prism-color-text-primary, #0F172A)',
-              border: action.variant === 'destructive' ? '1px solid var(--prism-color-status-error, #DC2626)' : '1px solid var(--prism-color-border-default, #CBD5E1)',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              opacity: disabled ? 0.5 : 1,
-            }}
+            style={actionStyle}
             onClick={(e) => {
               e.stopPropagation();
               void executeRowAction(action, row, rowIndex);

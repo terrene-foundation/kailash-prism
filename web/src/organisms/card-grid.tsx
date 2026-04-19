@@ -56,12 +56,30 @@ export function CardGrid({
   className,
   emptyState,
 }: CardGridProps) {
-  const cols = { ...DEFAULT_COLUMNS, ...columns };
+  // Coerce each column count to a non-negative integer before interpolation
+  // into CSS. TypeScript enforces `number` at the type boundary, but the
+  // engine is consumed from JS too where `any` callers could slip a
+  // CSS-injection payload through. Defense-in-depth: coerce via truncation
+  // + Math.max(0, …), then interpolate. Non-finite inputs fall back to the
+  // breakpoint default.
+  const coerceInt = (v: number | undefined, fallback: number): number => {
+    if (v === undefined) return fallback;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.trunc(n));
+  };
+  const cols = {
+    mobile: coerceInt(columns?.mobile, DEFAULT_COLUMNS.mobile),
+    tablet: coerceInt(columns?.tablet, DEFAULT_COLUMNS.tablet),
+    desktop: coerceInt(columns?.desktop, DEFAULT_COLUMNS.desktop),
+    wide: coerceInt(columns?.wide, DEFAULT_COLUMNS.wide),
+  };
 
   // Stable class name for the grid so the media queries below can target
   // THIS grid specifically instead of every grid on the page. Derived from
-  // the column counts so two identical CardGrids share the same rules
-  // (CSSOM dedup) without conflicting with a differently-configured grid.
+  // the coerced column counts (all integers), so two identical CardGrids
+  // share the same rules (CSSOM dedup) without conflicting with a
+  // differently-configured grid.
   const configKey = `${String(cols.mobile)}-${String(cols.tablet)}-${String(cols.desktop)}-${String(cols.wide)}`;
   const gridClassName = `prism-card-grid prism-card-grid-${configKey}`;
   const combinedClassName = className ? `${gridClassName} ${className}` : gridClassName;

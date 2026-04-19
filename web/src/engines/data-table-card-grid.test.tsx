@@ -181,6 +181,64 @@ describe('DataTable display="card-grid"', () => {
 
       expect(screen.getAllByRole('button', { name: 'Publish' })).toHaveLength(1);
     });
+
+    it('renders anchor when action.href is supplied (parity with table mode)', async () => {
+      const adapter = makeAdapter({
+        rowActions: [{
+          id: 'preview',
+          label: 'Preview',
+          href: (_row, id) => `/docs/${id}/preview`,
+        }],
+      });
+      render(<DataTable columns={columns} data={adapter} display="card-grid" />);
+      await waitFor(() => expect(screen.getByText('Contract')).toBeDefined());
+
+      const link = screen.getAllByRole('link', { name: 'Preview' })[0]!;
+      expect(link.getAttribute('href')).toBe('/docs/1/preview');
+    });
+
+    it('sanitizes javascript: hrefs in card-grid action footers', async () => {
+      const adapter = makeAdapter({
+        rowActions: [{
+          id: 'link',
+          label: 'Link',
+          href: () => 'javascript:alert(1)',
+        }],
+      });
+      render(<DataTable columns={columns} data={adapter} display="card-grid" />);
+      await waitFor(() => expect(screen.getByText('Contract')).toBeDefined());
+
+      const link = screen.getAllByRole('link', { name: 'Link' })[0]!;
+      expect(link.getAttribute('href')).toBe('#');
+    });
+
+    it('sanitizes data: hrefs in card-grid action footers', async () => {
+      const adapter = makeAdapter({
+        rowActions: [{
+          id: 'link',
+          label: 'Link',
+          href: () => 'data:text/html,<script>alert(1)</script>',
+        }],
+      });
+      render(<DataTable columns={columns} data={adapter} display="card-grid" />);
+      await waitFor(() => expect(screen.getByText('Contract')).toBeDefined());
+      const link = screen.getAllByRole('link', { name: 'Link' })[0]!;
+      expect(link.getAttribute('href')).toBe('#');
+    });
+
+    it('anchor click does not activate the card (stopPropagation)', async () => {
+      const onRowActivate = vi.fn();
+      const adapter = makeAdapter({
+        onRowActivate,
+        rowActions: [{ id: 'view', label: 'View', href: (_r, id) => `/doc/${id}` }],
+      });
+      render(<DataTable columns={columns} data={adapter} display="card-grid" />);
+      await waitFor(() => expect(screen.getByText('Contract')).toBeDefined());
+
+      const link = screen.getAllByRole('link', { name: 'View' })[0]!;
+      fireEvent.click(link);
+      expect(onRowActivate).not.toHaveBeenCalled();
+    });
   });
 
   describe('card activation', () => {

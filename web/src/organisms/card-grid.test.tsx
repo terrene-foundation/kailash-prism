@@ -94,6 +94,28 @@ describe('CardGrid organism', () => {
       const grids = container.querySelectorAll('.prism-card-grid-1-2-3-4');
       expect(grids).toHaveLength(2);
     });
+
+    it('coerces non-integer column counts to truncated non-negative integers', () => {
+      // Defense-in-depth against JS `any` callers passing fractional or
+      // negative values — each coerced to an integer before CSS interpolation.
+      const { container } = render(
+        <CardGrid columns={{ mobile: 1.5, tablet: -3, desktop: 2.9, wide: 4 }}>
+          <Card title="A" />
+        </CardGrid>,
+      );
+      // 1.5 → 1, -3 → 0, 2.9 → 2, 4 → 4
+      expect(container.querySelector('.prism-card-grid-1-0-2-4')).not.toBeNull();
+    });
+
+    it('coerces non-finite column counts to defaults', () => {
+      const { container } = render(
+        <CardGrid columns={{ mobile: NaN, tablet: Infinity, desktop: -Infinity, wide: 7 }}>
+          <Card title="A" />
+        </CardGrid>,
+      );
+      // NaN / ±Infinity → per-breakpoint defaults (1/2/3); wide: 7 → 7
+      expect(container.querySelector('.prism-card-grid-1-2-3-7')).not.toBeNull();
+    });
   });
 
   describe('a11y', () => {
