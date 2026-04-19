@@ -69,6 +69,39 @@ export {
   type ScrollProps,
 } from './engines/layout.js';
 
+// Layout engine — composable primitives (S5).
+// Exported under `Layout*`-prefixed aliases at the top level so they can
+// coexist with the legacy single-file layout primitives above without
+// name collisions. Consumers who want the full six-primitive surface
+// unaliased should import from `@kailash/prism-web/engines/layout`.
+export {
+  Stack as LayoutStack,
+  Row as LayoutRow,
+  Grid as LayoutGrid,
+  Split as LayoutSplit,
+  Layer as LayoutLayer,
+  Scroll as LayoutScroll,
+  spacingVar as layoutSpacingVar,
+  SPACING_TOKEN_FALLBACK as LAYOUT_SPACING_TOKEN_FALLBACK,
+  LAYER_Z_INDEX_FALLBACK as LAYOUT_LAYER_Z_INDEX_FALLBACK,
+  type SpacingToken as LayoutSpacingToken,
+  type LayoutProps,
+  type ResponsiveColumns as LayoutResponsiveColumns,
+  type StackProps as LayoutStackProps,
+  type StackDirection as LayoutStackDirection,
+  type StackAlign as LayoutStackAlign,
+  type StackJustify as LayoutStackJustify,
+  type RowProps as LayoutRowProps,
+  type GridProps as LayoutGridProps,
+  type SplitProps as LayoutSplitProps,
+  type SplitDirection as LayoutSplitDirection,
+  type LayerProps as LayoutLayerProps,
+  type LayerTier as LayoutLayerTier,
+  type LayerPosition as LayoutLayerPosition,
+  type ScrollProps as LayoutScrollProps,
+  type ScrollDirection as LayoutScrollDirection,
+} from './engines/layout/index.js';
+
 export {
   NavigationProvider,
   AppShell,
