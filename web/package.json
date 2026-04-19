@@ -20,7 +20,8 @@
     "dev": "tsc --watch",
     "test": "vitest",
     "test:run": "vitest run",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "release:check": "npm run build && npm pack --dry-run"
   },
   "keywords": [
     "kailash",
