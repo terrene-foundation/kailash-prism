@@ -7,7 +7,7 @@
  * DO NOT EDIT BY HAND — regenerate via:
  *   npm --prefix compiler run codegen
  *
- * @spec        DataTable v0.3.0
+ * @spec        DataTable v0.4.0
  * @authority   docs/specs/05-engine-specifications.md § 5.1.1
  * @since       0.2.2
  * @supersedes ServerDataSource

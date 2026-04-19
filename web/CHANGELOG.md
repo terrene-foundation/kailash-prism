@@ -2,6 +2,38 @@
 
 All notable changes to the Prism web engine package are documented here.
 
+## Unreleased — Layout engine (S5) — six composable primitives (sub-path only)
+
+New engine available via sub-path import only: `@kailash/prism-web/engines/layout`. NOT re-exported from the top-level barrel, because all 10 existing templates still compose against the legacy `engines/layout.tsx` and exposing a `Layout*`-aliased subset at the top level would drag a public API with zero production consumers. A follow-up migration shard will unify the two engines.
+
+Adds six composable primitives organised per `docs/specs/04-layout-grammar.md`:
+
+- **L1 — `Stack`**: vertical/horizontal arrangement with token-driven spacing. Props: `direction`, `spacing` (SpacingToken), `align`, `justify`, `wrap`. Default `direction="vertical"`.
+- **L2 — `Row`**: intent-revealing alias for `<Stack direction="horizontal">`. Accepts all Stack props except `direction`.
+- **L3 — `Grid`**: N-column responsive grid. Props: `columns` (number or per-breakpoint map), `gap`, `minChildWidth` (auto-fill). SSR-safe CSS-only media queries — no JS breakpoint detection, no hydration flash.
+- **L4 — `Split`**: two-panel layout with draggable divider. Mouse + touch + keyboard (arrows 5%, PageUp/PageDown 20%, Home/End snap). Divider is `role="separator"` with full `aria-valuenow`/`aria-valuemin`/`aria-valuemax`/`aria-orientation`. Honors `minSize` (px) as dynamic minimum ratio.
+- **L5 — `Layer`**: absolutely-positioned overlay with tier-based z-index. Positions: `center`, `top-left`, `top-right`, `bottom-left`, `bottom-right`. Tier map (`page`/`popover`/`modal`/`toast`/`tooltip`) resolves through `var(--prism-layer-z-{tier}, <fallback>)`. `onDismiss` fires on Escape.
+- **L6 — `Scroll`**: overflow container with token-driven styled scrollbar. Per-instance scoped via `data-prism-scroll` (no cross-sibling bleed). `maxHeight`/`maxWidth` accept `number | string | SpacingToken`.
+
+### Coexistence rationale
+
+- The legacy `engines/layout.tsx` provides `LayoutProvider`, `useLayout`, `useResponsive`, `Zone`, `VStack`, and narrower primitives — all 10 templates depend on it and it stays the top-level API.
+- The new engine lives at `web/src/engines/layout/` and is opt-in via sub-path import. A future migration shard will grow the new engine to feature-parity and retire the legacy file.
+
+### Token discipline
+
+All values resolve through `var(--prism-*, <fallback>)`. No hardcoded px/hex/rgb in the engine source. The `var(...)` fallback is the sole permitted literal.
+
+### Tests
+
+- 49 new Vitest cases across 7 files (`stack.test.tsx` + `row.test.tsx` + `grid.test.tsx` + `split.test.tsx` + `layer.test.tsx` + `scroll.test.tsx` + `layout-engine.wiring.test.tsx`).
+- The wiring test composes all six primitives and asserts keyboard (Split arrows) + dismissal (Layer Escape) + render paths end-to-end per `.claude/rules/orphan-detection.md` Rule 2.
+
+### Migration notes
+
+- Zero-impact for existing consumers. Templates continue to import from `engines/layout.js` unchanged.
+- New consumers opt in via `import { Stack } from '@kailash/prism-web/engines/layout'`.
+
 ## 0.4.0 — 2026-04-20 — TId generics + controlled globalSearch + defaultSortComparator export
 
 Adds typed row-id propagation through the DataTable engine's callback
@@ -99,79 +131,7 @@ not be lifted into a parent URL-state store.
 - Parent-owned search: add `globalSearchValue={url.search}` and
   `onGlobalSearchChange={(v) => updateUrl({ search: v })}` to lift the
   search into URL state.
-## Unreleased — Layout engine (S5) — six composable primitives
 
-New minor surface. Release coordinator decides the target version (0.4.0
-or 0.5.0 depending on wave grouping). This shard does NOT bump
-`web/package.json`.
-
-Adds a new `@kailash/prism-web/engines/layout` engine with six
-composable primitives organised per `docs/specs/04-layout-grammar.md`:
-
-- **L1 (feat)**: `Stack` — vertical or horizontal arrangement with
-  token-driven spacing. Props: `direction`, `spacing` (SpacingToken),
-  `align`, `justify`, `wrap`. Default `direction="vertical"`.
-- **L2 (feat)**: `Row` — intent-revealing alias for
-  `<Stack direction="horizontal">`. Accepts all Stack props except
-  `direction`.
-- **L3 (feat)**: `Grid` — N-column responsive grid. Props: `columns`
-  (number or per-breakpoint map), `gap` (SpacingToken),
-  `minChildWidth` (auto-fill). Emits scoped CSS-only mobile-first
-  media queries — no JS breakpoint detection, SSR-safe, no hydration
-  flash.
-- **L4 (feat)**: `Split` — two-panel layout with a draggable divider.
-  Mouse, touch, and keyboard interaction: arrows adjust by 5%,
-  PageUp/PageDown by 20%, Home/End snap to min/max. Divider is a
-  `role="separator"` with full `aria-valuenow`/`aria-valuemin`/
-  `aria-valuemax`/`aria-orientation` wiring. Honors `minSize` (px) as
-  a dynamic minimum ratio computed from the container size.
-- **L5 (feat)**: `Layer` — absolutely-positioned overlay with
-  tier-based z-index. Positions: `center`, `top-left`, `top-right`,
-  `bottom-left`, `bottom-right`. Tier map (`page` / `popover` /
-  `modal` / `toast` / `tooltip`) resolves through
-  `var(--prism-layer-z-{tier}, <fallback>)` so a theme can re-order
-  tiers without touching component code. `onDismiss` fires on Escape.
-- **L6 (feat)**: `Scroll` — overflow container with token-driven
-  styled scrollbar. Per-instance scoped scrollbar rules via a
-  unique `data-prism-scroll` attribute (no cross-sibling bleed).
-  `maxHeight` / `maxWidth` accept `number | string | SpacingToken`.
-  WebKit + Firefox scrollbar tokens exposed as CSS custom properties.
-
-### Top-level barrel exports
-
-To coexist with the legacy `engines/layout.tsx` primitives (which
-still export `Row`, `Grid`, `Split`, `Layer`, `Scroll` with a narrower
-API), the new engine's top-level exports are `Layout*`-prefixed
-(`LayoutStack`, `LayoutRow`, `LayoutGrid`, `LayoutSplit`,
-`LayoutLayer`, `LayoutScroll`). Consumers who want the unaliased
-six-primitive surface import from
-`@kailash/prism-web/engines/layout` directly.
-
-### Token discipline
-
-All spacing, sizing, z-index, color values resolve through
-`var(--prism-*, <fallback>)` CSS custom properties. No hardcoded
-px/hex/rgb appear in the engine source — the `var(...)` fallback is
-the sole permitted literal, matching the convention established by
-`atoms/card.tsx`.
-
-### Tests
-
-- 49 new Vitest cases across 7 files (`stack.test.tsx` +
-  `row.test.tsx` + `grid.test.tsx` + `split.test.tsx` +
-  `layer.test.tsx` + `scroll.test.tsx` +
-  `layout-engine.wiring.test.tsx`).
-- Wiring test composes all six primitives into a realistic page and
-  asserts end-to-end keyboard (Split arrow keys) + dismissal (Layer
-  Escape) + render paths — per `.claude/rules/orphan-detection.md`
-  Rule 2 this proves the engine surface is consumable end-to-end,
-  not merely that each primitive works in isolation.
-
-### Migration notes
-
-- Zero-impact for existing consumers. Legacy `Row`, `Grid`, `Split`,
-  `Layer`, `Scroll` at the top level are unchanged. The new engine
-  lives at the sub-path import.
 ## 0.3.1 — 2026-04-18 — Card + CardGrid + DataTable card-grid mode (Shard 4 of 0.3.0 wave)
 
 Adds Card atom + CardGrid organism, and a `display="card-grid"` mode on

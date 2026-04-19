@@ -69,38 +69,16 @@ export {
   type ScrollProps,
 } from './engines/layout.js';
 
-// Layout engine — composable primitives (S5).
-// Exported under `Layout*`-prefixed aliases at the top level so they can
-// coexist with the legacy single-file layout primitives above without
-// name collisions. Consumers who want the full six-primitive surface
-// unaliased should import from `@kailash/prism-web/engines/layout`.
-export {
-  Stack as LayoutStack,
-  Row as LayoutRow,
-  Grid as LayoutGrid,
-  Split as LayoutSplit,
-  Layer as LayoutLayer,
-  Scroll as LayoutScroll,
-  spacingVar as layoutSpacingVar,
-  SPACING_TOKEN_FALLBACK as LAYOUT_SPACING_TOKEN_FALLBACK,
-  LAYER_Z_INDEX_FALLBACK as LAYOUT_LAYER_Z_INDEX_FALLBACK,
-  type SpacingToken as LayoutSpacingToken,
-  type LayoutProps,
-  type ResponsiveColumns as LayoutResponsiveColumns,
-  type StackProps as LayoutStackProps,
-  type StackDirection as LayoutStackDirection,
-  type StackAlign as LayoutStackAlign,
-  type StackJustify as LayoutStackJustify,
-  type RowProps as LayoutRowProps,
-  type GridProps as LayoutGridProps,
-  type SplitProps as LayoutSplitProps,
-  type SplitDirection as LayoutSplitDirection,
-  type LayerProps as LayoutLayerProps,
-  type LayerTier as LayoutLayerTier,
-  type LayerPosition as LayoutLayerPosition,
-  type ScrollProps as LayoutScrollProps,
-  type ScrollDirection as LayoutScrollDirection,
-} from './engines/layout/index.js';
+// Layout engine (new, composable primitives) lives at
+// `@kailash/prism-web/engines/layout` and is NOT re-exported from the
+// top-level barrel. Rationale: the new engine deliberately has a smaller
+// surface than the legacy `engines/layout.tsx` (no LayoutProvider /
+// useLayout / useResponsive / Zone) and all 10 existing templates still
+// compose against the legacy engine. Exposing a `Layout*`-aliased subset
+// at the top level creates public-API drag for a surface with zero
+// production consumers. Consumers who want the new primitives opt in
+// via the sub-path import. A follow-up migration shard will unify the
+// two engines — until then coexistence is deliberate, not an accident.
 
 export {
   NavigationProvider,
