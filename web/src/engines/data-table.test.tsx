@@ -522,7 +522,12 @@ describe('DataTable Engine', () => {
       fireEvent.click(firstRow);
 
       expect(onRowClick).toHaveBeenCalledTimes(1);
-      expect((onRowClick.mock.calls[0] as [TestRow])[0].name).toBe('User 1');
+      // Since 0.4.0 — signature is (row, id: TId). TId defaults to string
+      // for array-data sources; the row has `id: 1` so the engine passes
+      // the stringified '1' as the second arg.
+      const call = onRowClick.mock.calls[0] as [TestRow, string];
+      expect(call[0].name).toBe('User 1');
+      expect(call[1]).toBe('1');
     });
   });
 

@@ -16,13 +16,13 @@ import type { DataTableAdapter, DataTableRow } from './types.js';
  * Discrimination: an adapter has `getRowId`, `capabilities`, AND
  * `fetchPage` as functions.
  */
-export function isDataTableAdapter<T extends DataTableRow>(
+export function isDataTableAdapter<T extends DataTableRow, TId = string>(
   data: unknown,
-): data is DataTableAdapter<T> {
+): data is DataTableAdapter<T, TId> {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     return false;
   }
-  const candidate = data as Partial<DataTableAdapter<T>>;
+  const candidate = data as Partial<DataTableAdapter<T, TId>>;
   return (
     typeof candidate.getRowId === 'function' &&
     typeof candidate.capabilities === 'function' &&
@@ -37,13 +37,13 @@ export function isDataTableAdapter<T extends DataTableRow>(
  * Returns `{ adapter: null, clientData: T[] }` for plain arrays so the hook
  * can keep its existing client-side sort/filter/paginate code path.
  */
-export function resolveDataSource<T extends DataTableRow>(
-  data: T[] | DataTableAdapter<T>,
-): { adapter: DataTableAdapter<T> | null; clientData: T[] } {
+export function resolveDataSource<T extends DataTableRow, TId = string>(
+  data: T[] | DataTableAdapter<T, TId>,
+): { adapter: DataTableAdapter<T, TId> | null; clientData: T[] } {
   if (Array.isArray(data)) {
     return { adapter: null, clientData: data };
   }
-  if (isDataTableAdapter<T>(data)) {
+  if (isDataTableAdapter<T, TId>(data)) {
     return { adapter: data, clientData: [] };
   }
   // Unrecognised object shape — treat as empty array for safety. The

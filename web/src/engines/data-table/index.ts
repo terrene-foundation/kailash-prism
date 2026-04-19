@@ -29,4 +29,4 @@ export {
 } from './adapter.js';
 
 export { DataTable } from './data-table-root.js';
-export { useDataTable } from './use-data-table.js';
+export { useDataTable, defaultSortComparator } from './use-data-table.js';

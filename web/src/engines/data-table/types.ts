@@ -131,9 +131,9 @@ export interface BulkAction<T extends DataTableRow> {
  * existed in 0.2.2 is also removed; if you need a drop-in lift, copy
  * its ~30 LOC from git history (commit 8489bc9) into your code.
  */
-export type DataSource<T extends DataTableRow> =
+export type DataSource<T extends DataTableRow, TId = string> =
   | T[]
-  | DataTableAdapter<T>;
+  | DataTableAdapter<T, TId>;
 
 // --- DataTableAdapter (canonical) ---
 
@@ -342,11 +342,11 @@ export interface DataTableAdapter<T extends DataTableRow, TId = string> {
 
 // --- Engine config ---
 
-export interface DataTableConfig<T extends DataTableRow> {
+export interface DataTableConfig<T extends DataTableRow, TId = string> {
   /** Column definitions */
   columns: ColumnDef<T>[];
   /** Data: array (client-side) or server data source */
-  data: DataSource<T>;
+  data: DataSource<T, TId>;
   /** Sorting configuration */
   sorting?: SortingConfig;
   /** Filtering configuration */
@@ -357,8 +357,22 @@ export interface DataTableConfig<T extends DataTableRow> {
   selection?: SelectionConfig;
   /** Bulk actions shown when rows selected */
   bulkActions?: BulkAction<T>[];
-  /** Callback when a row is clicked */
-  onRowClick?: (row: T) => void;
+  /**
+   * Callback when a row is clicked.
+   *
+   * Receives the row object AND the typed id extracted via
+   * `adapter.getRowId` / `config.getRowId` (since 0.4.0). Consumers with
+   * numerically-keyed rows can declare `DataTableConfig<Row, number>` and
+   * receive the id as `number` directly — no more `Number(id)` coercion at
+   * the call site.
+   *
+   * When `display="card-grid"` this handler wires to `Card.onActivate` —
+   * a card click (or keyboard activation) fires `onRowClick(row, id)` the
+   * same way a table-row click does in `display="table"`. Adapter-declared
+   * `onRowActivate` still takes precedence over `onRowClick`; only when no
+   * adapter-level activation handler is declared does `onRowClick` run.
+   */
+  onRowClick?: (row: T, id: TId) => void;
   /** Callback when sort changes */
   onSort?: (sorts: SortState[]) => void;
   /** Callback when filter changes */
@@ -420,6 +434,28 @@ export interface DataTableConfig<T extends DataTableRow> {
     desktop?: number;
     wide?: number;
   };
+  /**
+   * Controlled global-search value (since 0.4.0).
+   *
+   * When BOTH `globalSearchValue` and `onGlobalSearchChange` are supplied the
+   * engine treats the search input as controlled — the parent owns the
+   * query string and the engine reflects it. When NEITHER is supplied the
+   * engine keeps its existing uncontrolled behavior (internal state).
+   *
+   * Supplying exactly one side (value without setter, or setter without
+   * value) logs a one-time dev-mode warning — consistent with React's
+   * standard controlled/uncontrolled pattern.
+   */
+  globalSearchValue?: string;
+  /**
+   * Controlled global-search setter (since 0.4.0). See `globalSearchValue`.
+   */
+  onGlobalSearchChange?: (value: string) => void;
+  /**
+   * Placeholder text for the global-search input. Default: "Search all
+   * columns...". (Since 0.4.0.)
+   */
+  globalSearchPlaceholder?: string;
   /** Enable expandable rows. Default: false */
   expandable?: boolean;
   /** Render function for expanded row content */
@@ -452,7 +488,23 @@ export interface ResolvedTableState<T extends DataTableRow> {
   filters: Record<string, string>;
   /** Global search query */
   globalSearch: string;
-  /** Selected row indices (by stringified index or id) */
+  /**
+   * Selected row ids, stringified.
+   *
+   * Deliberately string-keyed even when `TId` is numeric or a compound
+   * type (since 0.4.0). The engine strings the id at the selection
+   * boundary via `String(id)` so that:
+   *
+   *   1. DOM attributes (data-testid, aria-rowindex targets) stay stable
+   *      and human-readable regardless of the consumer's TId choice.
+   *   2. `Set<string>` identity is preserved across serialization boundaries
+   *      (localStorage rehydration, RSC-serialized snapshots).
+   *
+   * TId flows through to CALLBACK surfaces (`rowAction.onExecute(row, id)`,
+   * `onRowClick(row, id)`) where the typed id is the whole point. Internal
+   * selection state stays string-keyed on purpose — this asymmetry is a
+   * deliberate design choice, not a bug. See CHANGELOG 0.4.0 for rationale.
+   */
   selectedIds: Set<string>;
   /** Current data state */
   status: 'idle' | 'loading' | 'error' | 'empty';

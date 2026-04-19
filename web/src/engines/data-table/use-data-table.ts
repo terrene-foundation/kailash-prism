@@ -19,7 +19,7 @@ import type {
 } from './types.js';
 import { resolveDataSource } from './adapter.js';
 
-export interface UseDataTableResult<T extends DataTableRow> {
+export interface UseDataTableResult<T extends DataTableRow, TId = string> {
   /** Rows to display on the current page */
   displayRows: T[];
   /** Total count of rows (pre-pagination) */
@@ -66,8 +66,16 @@ export interface UseDataTableResult<T extends DataTableRow> {
   handleSelectAll: () => void;
   /** Clear all selections */
   clearSelection: () => void;
-  /** Get stable ID for a row */
+  /** Get stable ID for a row (stringified — used for DOM keys and selection state). */
   getRowId: (row: T, index: number) => string;
+  /**
+   * Get the typed row-id for callback surfaces (since 0.4.0). Mirrors the
+   * adapter's `getRowId` return type so consumer callbacks receive the
+   * declared `TId` (e.g. `number`) without `Number(id)` coercion at the
+   * call site. Falls back to the stringified id when no adapter is
+   * wired.
+   */
+  getTypedRowId: (row: T, index: number) => TId;
   /** Set of expanded row IDs */
   expandedIds: Set<string>;
   /** Toggle expand/collapse of a row */
@@ -83,19 +91,19 @@ export interface UseDataTableResult<T extends DataTableRow> {
    * actions (reserved for future extension). Consumed by DataTableBody to
    * render the trailing actions column.
    */
-  rowActions: ReadonlyArray<DataTableRowAction<T>>;
+  rowActions: ReadonlyArray<DataTableRowAction<T, TId>>;
   /**
    * Merged bulk actions — adapter-declared first, then `config.bulkActions`.
    * Consumed by the bulk-action toolbar.
    */
-  adapterBulkActions: ReadonlyArray<DataTableBulkAction<T>>;
+  adapterBulkActions: ReadonlyArray<DataTableBulkAction<T, TId>>;
   /**
    * Invoke a row action. The engine calls `onExecute(row, id)`, awaits it,
    * calls `adapter.invalidate?.()` on success, and triggers a refetch of
    * the current page. Rejections are surfaced to the caller.
    */
   executeRowAction: (
-    action: DataTableRowAction<T>,
+    action: DataTableRowAction<T, TId>,
     row: T,
     rowIndex: number,
   ) => Promise<void>;
@@ -103,12 +111,12 @@ export interface UseDataTableResult<T extends DataTableRow> {
    * Invoke a bulk action over the currently selected rows. Same lifecycle
    * as `executeRowAction` — await, invalidate, refetch.
    */
-  executeBulkAction: (action: DataTableBulkAction<T>) => Promise<void>;
+  executeBulkAction: (action: DataTableBulkAction<T, TId>) => Promise<void>;
 }
 
-export function useDataTable<T extends DataTableRow>(
-  config: DataTableConfig<T>,
-): UseDataTableResult<T> {
+export function useDataTable<T extends DataTableRow, TId = string>(
+  config: DataTableConfig<T, TId>,
+): UseDataTableResult<T, TId> {
   const {
     data,
     columns,
@@ -120,6 +128,8 @@ export function useDataTable<T extends DataTableRow>(
     onFilter,
     onPageChange: onPageChangeCb,
     onSelectionChange,
+    globalSearchValue,
+    onGlobalSearchChange,
   } = config;
 
   // --- Data-source classification ---
@@ -128,7 +138,7 @@ export function useDataTable<T extends DataTableRow>(
   // or `{adapter: null, clientData: T[]}`. The hook body only handles
   // two cases: array OR adapter.
   const { adapter, clientData } = useMemo(
-    () => resolveDataSource<T>(data),
+    () => resolveDataSource<T, TId>(data),
     [data],
   );
   const isClientSide = adapter === null;
@@ -153,7 +163,45 @@ export function useDataTable<T extends DataTableRow>(
 
   // --- Filter state ---
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [globalSearch, setGlobalSearch] = useState('');
+  // Uncontrolled-mode global-search state. When the parent supplies BOTH
+  // `globalSearchValue` and `onGlobalSearchChange` the engine ignores this
+  // state and reflects the parent's value.
+  const [uncontrolledGlobalSearch, setUncontrolledGlobalSearch] = useState('');
+  const isGlobalSearchControlled =
+    globalSearchValue !== undefined && onGlobalSearchChange !== undefined;
+  const globalSearch = isGlobalSearchControlled
+    ? (globalSearchValue ?? '')
+    : uncontrolledGlobalSearch;
+  // Dev-mode one-sided-control warning (React convention). Fires ONCE
+  // per hook instance when exactly one of the two fields is present —
+  // consumers are almost certainly wiring the search incorrectly.
+  const oneSidedGlobalSearchWarnedRef = useRef(false);
+  useEffect(() => {
+    // Dev-mode gate: `process` is not guaranteed to exist in the browser,
+    // so we read it defensively. Bundlers (Vite, webpack) typically
+    // replace `process.env.NODE_ENV` at build time; runtime access works
+    // in Node/SSR and is a silent no-op in a pure browser where
+    // `process` is undefined.
+    const g =
+      typeof globalThis !== 'undefined'
+        ? (globalThis as { process?: { env?: { NODE_ENV?: string } } })
+        : undefined;
+    const nodeEnv = g?.process?.env?.NODE_ENV;
+    if (nodeEnv === 'production') return;
+    if (oneSidedGlobalSearchWarnedRef.current) return;
+    const hasValue = globalSearchValue !== undefined;
+    const hasSetter = onGlobalSearchChange !== undefined;
+    if (hasValue !== hasSetter) {
+      oneSidedGlobalSearchWarnedRef.current = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[prism-web DataTable] `globalSearchValue` and `onGlobalSearchChange` ' +
+          'must be supplied together to opt into controlled mode. ' +
+          `Got ${hasValue ? 'value without setter' : 'setter without value'}. ` +
+          'Falling back to uncontrolled mode.',
+      );
+    }
+  }, [globalSearchValue, onGlobalSearchChange]);
 
   // --- Pagination state ---
   const defaultPageSize = pagination?.defaultPageSize ?? 25;
@@ -200,6 +248,26 @@ export function useDataTable<T extends DataTableRow>(
       return String(index);
     },
     [adapter, configGetRowId],
+  );
+  // Typed row-id resolver for CALLBACK surfaces (rowAction.onExecute,
+  // bulkAction.onExecute, onRowClick). Returns the adapter's typed
+  // `TId` when the adapter declares one, otherwise falls back to the
+  // stringified id from `getRowId`. Keeps DOM/selection state stable
+  // on string ids (see ResolvedTableState.selectedIds docstring) while
+  // callbacks receive the consumer's declared TId unchanged.
+  const getTypedRowId = useCallback(
+    (row: T, index: number): TId => {
+      if (adapter) {
+        const aid = adapter.getRowId(row);
+        if (aid != null && String(aid) !== '') return aid;
+      }
+      // No typed adapter — fall back to the string surface (TId defaults
+      // to string in that case). The cast is safe: when no adapter is
+      // present TId is either the default `string` or a user-chosen type
+      // for which getTypedRowId is documented as returning stringified.
+      return getRowId(row, index) as unknown as TId;
+    },
+    [adapter, getRowId],
   );
 
   // --- Server-side fetch effect (adapter path) ---
@@ -301,27 +369,13 @@ export function useDataTable<T extends DataTableRow>(
 
     return [...filteredData].sort((a, b) => {
       for (const sort of sorts) {
-        const aVal = (a as Record<string, unknown>)[sort.field];
-        const bVal = (b as Record<string, unknown>)[sort.field];
-
-        if (aVal == null && bVal == null) continue;
-        if (aVal == null) return sort.direction === 'asc' ? -1 : 1;
-        if (bVal == null) return sort.direction === 'asc' ? 1 : -1;
-
-        const aStr = String(aVal);
-        const bStr = String(bVal);
-
-        // Try numeric comparison
-        const aNum = Number(aStr);
-        const bNum = Number(bStr);
-        if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
-          const diff = aNum - bNum;
-          if (diff !== 0) return sort.direction === 'asc' ? diff : -diff;
-          continue;
-        }
-
-        const cmp = aStr.localeCompare(bStr);
-        if (cmp !== 0) return sort.direction === 'asc' ? cmp : -cmp;
+        const cmp = defaultSortComparator(
+          a,
+          b,
+          sort.field as keyof T,
+          sort.direction,
+        );
+        if (cmp !== 0) return cmp;
       }
       return 0;
     });
@@ -412,10 +466,14 @@ export function useDataTable<T extends DataTableRow>(
 
   const handleGlobalSearch = useCallback(
     (query: string) => {
-      setGlobalSearch(query);
+      if (isGlobalSearchControlled) {
+        onGlobalSearchChange?.(query);
+      } else {
+        setUncontrolledGlobalSearch(query);
+      }
       setPage(0);
     },
-    [],
+    [isGlobalSearchControlled, onGlobalSearchChange],
   );
 
   const handlePageChange = useCallback(
@@ -504,14 +562,14 @@ export function useDataTable<T extends DataTableRow>(
   // engine does NOT swallow them. Consumers that want centralised error
   // UI should await these and show their own toast / banner.
 
-  const rowActions: ReadonlyArray<DataTableRowAction<T>> = adapter?.rowActions ?? [];
-  const adapterBulkActions: ReadonlyArray<DataTableBulkAction<T>> = adapter?.bulkActions ?? [];
+  const rowActions: ReadonlyArray<DataTableRowAction<T, TId>> = adapter?.rowActions ?? [];
+  const adapterBulkActions: ReadonlyArray<DataTableBulkAction<T, TId>> = adapter?.bulkActions ?? [];
   const adapterOnRowActivate = adapter?.onRowActivate;
 
   const executeRowAction = useCallback(
-    async (action: DataTableRowAction<T>, row: T, rowIndex: number): Promise<void> => {
+    async (action: DataTableRowAction<T, TId>, row: T, rowIndex: number): Promise<void> => {
       if (!action.onExecute) return;
-      const id = getRowId(row, rowIndex);
+      const id = getTypedRowId(row, rowIndex);
       await action.onExecute(row, id);
       // Invalidate adapter caches (if any) then refetch so the UI reflects
       // whatever the action mutated server-side. If invalidate() itself
@@ -532,13 +590,13 @@ export function useDataTable<T extends DataTableRow>(
         setRetryTick((t) => t + 1);
       }
     },
-    [adapter, getRowId],
+    [adapter, getTypedRowId],
   );
 
   const executeBulkAction = useCallback(
-    async (action: DataTableBulkAction<T>): Promise<void> => {
+    async (action: DataTableBulkAction<T, TId>): Promise<void> => {
       if (selectedRows.length === 0) return;
-      const ids = selectedRows.map((row, i) => getRowId(row, i));
+      const ids = selectedRows.map((row, i) => getTypedRowId(row, i));
       await action.onExecute(selectedRows, ids);
       if (adapter?.invalidate) {
         try {
@@ -556,7 +614,7 @@ export function useDataTable<T extends DataTableRow>(
       setSelectedIds(new Set());
       onSelectionChange?.([]);
     },
-    [adapter, selectedRows, getRowId, onSelectionChange],
+    [adapter, selectedRows, getTypedRowId, onSelectionChange],
   );
 
   return {
@@ -591,5 +649,52 @@ export function useDataTable<T extends DataTableRow>(
     adapterBulkActions,
     executeRowAction,
     executeBulkAction,
+    getTypedRowId,
   };
+}
+
+/**
+ * Default row comparator used by the engine for client-side sort (since
+ * 0.4.0). Exported so consumers implementing custom virtualised row
+ * layouts can reuse the engine's sort semantics without re-deriving them.
+ *
+ * Contract:
+ *
+ *  - `null` / `undefined` on either side: null-like values sort FIRST in
+ *    ascending order (LAST in descending), mirroring PostgreSQL's
+ *    `NULLS FIRST` default on `ORDER BY ASC`.
+ *  - Both values numeric-coercible: compared numerically.
+ *  - Otherwise: stringified + `localeCompare` (locale-aware string sort).
+ *
+ * The comparator operates on the ROW shape (`T[keyof T]`), NOT on the row
+ * id — this is why the function is TId-independent and can be exported
+ * without the engine's TId generic.
+ */
+export function defaultSortComparator<T>(
+  a: T,
+  b: T,
+  key: keyof T,
+  direction: 'asc' | 'desc',
+): number {
+  const aVal = (a as Record<string, unknown>)[key as string];
+  const bVal = (b as Record<string, unknown>)[key as string];
+
+  if (aVal == null && bVal == null) return 0;
+  if (aVal == null) return direction === 'asc' ? -1 : 1;
+  if (bVal == null) return direction === 'asc' ? 1 : -1;
+
+  const aStr = String(aVal);
+  const bStr = String(bVal);
+
+  // Try numeric comparison
+  const aNum = Number(aStr);
+  const bNum = Number(bStr);
+  if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
+    const diff = aNum - bNum;
+    if (diff !== 0) return direction === 'asc' ? diff : -diff;
+    return 0;
+  }
+
+  const cmp = aStr.localeCompare(bStr);
+  return direction === 'asc' ? cmp : -cmp;
 }

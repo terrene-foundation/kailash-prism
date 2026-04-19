@@ -32,16 +32,17 @@ const cellStyle: React.CSSProperties = {
 
 // --- Props ---
 
-interface DataTableBodyProps<T extends DataTableRow> {
+interface DataTableBodyProps<T extends DataTableRow, TId = string> {
   rows: T[];
   columns: ColumnDef<T>[];
   selectionEnabled: boolean;
   selectedIds: Set<string>;
   virtualScroll: boolean;
   rowHeight: number;
-  onRowClick: ((row: T) => void | Promise<void>) | undefined;
+  onRowClick: ((row: T, id: TId) => void | Promise<void>) | undefined;
   onToggleRow: (index: number) => void;
   getRowId: (row: T, index: number) => string;
+  getTypedRowId: (row: T, index: number) => TId;
   expandable: boolean;
   expandedIds: Set<string>;
   onToggleExpand: (index: number) => void;
@@ -50,17 +51,17 @@ interface DataTableBodyProps<T extends DataTableRow> {
    * Per-row actions from the DataTableAdapter. When present AND non-empty,
    * a trailing "Actions" column is rendered. Empty array → no column.
    */
-  rowActions?: ReadonlyArray<DataTableRowAction<T>> | undefined;
+  rowActions?: ReadonlyArray<DataTableRowAction<T, TId>> | undefined;
   /**
    * Invoked when a user clicks an action button. The engine awaits the
    * action's onExecute, calls adapter.invalidate(), and refetches.
    */
-  executeRowAction?: ((action: DataTableRowAction<T>, row: T, rowIndex: number) => Promise<void>) | undefined;
+  executeRowAction?: ((action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>) | undefined;
 }
 
 // --- Component ---
 
-export function DataTableBody<T extends DataTableRow>({
+export function DataTableBody<T extends DataTableRow, TId = string>({
   rows,
   columns,
   selectionEnabled,
@@ -70,18 +71,19 @@ export function DataTableBody<T extends DataTableRow>({
   onRowClick,
   onToggleRow,
   getRowId,
+  getTypedRowId,
   expandable,
   expandedIds,
   onToggleExpand,
   expandContent,
   rowActions,
   executeRowAction,
-}: DataTableBodyProps<T>) {
+}: DataTableBodyProps<T, TId>) {
   const hasActions = rowActions !== undefined && rowActions.length > 0;
 
   if (virtualScroll) {
     return (
-      <VirtualBody
+      <VirtualBody<T, TId>
         rows={rows}
         columns={columns}
         selectionEnabled={selectionEnabled}
@@ -90,6 +92,7 @@ export function DataTableBody<T extends DataTableRow>({
         onRowClick={onRowClick}
         onToggleRow={onToggleRow}
         getRowId={getRowId}
+        getTypedRowId={getTypedRowId}
         rowActions={rowActions}
         executeRowAction={executeRowAction}
       />
@@ -106,13 +109,15 @@ export function DataTableBody<T extends DataTableRow>({
     <tbody>
       {rows.map((row, index) => {
         const id = getRowId(row, index);
+        const typedId = getTypedRowId(row, index);
         const isSelected = selectedIds.has(id);
         const isExpanded = expandable && expandedIds.has(id);
         return (
-          <TableRow
+          <TableRow<T, TId>
             key={id}
             row={row}
             index={index}
+            typedId={typedId}
             columns={columns}
             selectionEnabled={selectionEnabled}
             isSelected={isSelected}
@@ -134,20 +139,21 @@ export function DataTableBody<T extends DataTableRow>({
 
 // --- Virtual scrolling body ---
 
-interface VirtualBodyProps<T extends DataTableRow> {
+interface VirtualBodyProps<T extends DataTableRow, TId = string> {
   rows: T[];
   columns: ColumnDef<T>[];
   selectionEnabled: boolean;
   selectedIds: Set<string>;
   rowHeight: number;
-  onRowClick: ((row: T) => void | Promise<void>) | undefined;
+  onRowClick: ((row: T, id: TId) => void | Promise<void>) | undefined;
   onToggleRow: (index: number) => void;
   getRowId: (row: T, index: number) => string;
-  rowActions?: ReadonlyArray<DataTableRowAction<T>> | undefined;
-  executeRowAction?: ((action: DataTableRowAction<T>, row: T, rowIndex: number) => Promise<void>) | undefined;
+  getTypedRowId: (row: T, index: number) => TId;
+  rowActions?: ReadonlyArray<DataTableRowAction<T, TId>> | undefined;
+  executeRowAction?: ((action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>) | undefined;
 }
 
-function VirtualBody<T extends DataTableRow>({
+function VirtualBody<T extends DataTableRow, TId = string>({
   rows,
   columns,
   selectionEnabled,
@@ -156,9 +162,10 @@ function VirtualBody<T extends DataTableRow>({
   onRowClick,
   onToggleRow,
   getRowId,
+  getTypedRowId,
   rowActions,
   executeRowAction,
-}: VirtualBodyProps<T>) {
+}: VirtualBodyProps<T, TId>) {
   const parentRef = useRef<HTMLTableSectionElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -183,6 +190,7 @@ function VirtualBody<T extends DataTableRow>({
             const row = rows[virtualRow.index];
             if (!row) return null;
             const id = getRowId(row, virtualRow.index);
+            const typedId = getTypedRowId(row, virtualRow.index);
             const isSelected = selectedIds.has(id);
             return (
               <div
@@ -199,9 +207,10 @@ function VirtualBody<T extends DataTableRow>({
                   tableLayout: 'fixed',
                 }}
               >
-                <TableRow
+                <TableRow<T, TId>
                   row={row}
                   index={virtualRow.index}
+                  typedId={typedId}
                   columns={columns}
                   selectionEnabled={selectionEnabled}
                   isSelected={isSelected}
@@ -221,26 +230,29 @@ function VirtualBody<T extends DataTableRow>({
 
 // --- Individual row ---
 
-interface TableRowProps<T extends DataTableRow> {
+interface TableRowProps<T extends DataTableRow, TId = string> {
   row: T;
   index: number;
+  /** Typed row id for callback surfaces (since 0.4.0). */
+  typedId: TId;
   columns: ColumnDef<T>[];
   selectionEnabled: boolean;
   isSelected: boolean;
-  onRowClick?: ((row: T) => void | Promise<void>) | undefined;
+  onRowClick?: ((row: T, id: TId) => void | Promise<void>) | undefined;
   onToggleRow: (index: number) => void;
   expandable?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: ((index: number) => void) | undefined;
   expandContent?: ((row: T) => ReactNode) | undefined;
   columnCount?: number;
-  rowActions?: ReadonlyArray<DataTableRowAction<T>> | undefined;
-  executeRowAction?: ((action: DataTableRowAction<T>, row: T, rowIndex: number) => Promise<void>) | undefined;
+  rowActions?: ReadonlyArray<DataTableRowAction<T, TId>> | undefined;
+  executeRowAction?: ((action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>) | undefined;
 }
 
-function TableRow<T extends DataTableRow>({
+function TableRow<T extends DataTableRow, TId = string>({
   row,
   index,
+  typedId,
   columns,
   selectionEnabled,
   isSelected,
@@ -253,21 +265,21 @@ function TableRow<T extends DataTableRow>({
   columnCount,
   rowActions,
   executeRowAction,
-}: TableRowProps<T>) {
+}: TableRowProps<T, TId>) {
   const hasActions = rowActions !== undefined && rowActions.length > 0;
 
   const handleClick = useCallback(() => {
-    void onRowClick?.(row);
-  }, [row, onRowClick]);
+    void onRowClick?.(row, typedId);
+  }, [row, typedId, onRowClick]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTableRowElement>) => {
       if (e.key === 'Enter' && onRowClick) {
         e.preventDefault();
-        void onRowClick(row);
+        void onRowClick(row, typedId);
       }
     },
-    [row, onRowClick],
+    [row, typedId, onRowClick],
   );
 
   const handleCheckboxChange = useCallback(() => {
@@ -346,10 +358,11 @@ function TableRow<T extends DataTableRow>({
             onClick={(e) => { e.stopPropagation(); }}
             data-testid={`data-table-row-actions-${String(index)}`}
           >
-            <RowActionsCell
+            <RowActionsCell<T, TId>
               actions={rowActions}
               row={row}
               rowIndex={index}
+              typedId={typedId}
               executeRowAction={executeRowAction}
             />
           </td>
@@ -381,11 +394,11 @@ function TableRow<T extends DataTableRow>({
 // the declared action order; visibility and disabled state honor the
 // per-row predicates.
 
-interface RowActionsCellProps<T extends DataTableRow> {
-  actions: ReadonlyArray<DataTableRowAction<T>>;
+interface RowActionsCellProps<T extends DataTableRow, TId = string> {
+  actions: ReadonlyArray<DataTableRowAction<T, TId>>;
   row: T;
   rowIndex: number;
-  executeRowAction?: ((action: DataTableRowAction<T>, row: T, rowIndex: number) => Promise<void>) | undefined;
+  executeRowAction?: ((action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>) | undefined;
 }
 
 const actionButtonBaseStyle: React.CSSProperties = {
@@ -430,22 +443,21 @@ function variantStyle(variant: DataTableRowAction<DataTableRow>['variant']): Rea
 // `sanitizeHref` lives in `./sanitize-href.js` so both table-mode and
 // card-grid-mode action renderers share the same allowlist.
 
-function RowActionsCell<T extends DataTableRow>({
+function RowActionsCell<T extends DataTableRow, TId = string>({
   actions,
   row,
   rowIndex,
+  typedId,
   executeRowAction,
-}: RowActionsCellProps<T>) {
+}: RowActionsCellProps<T, TId> & { typedId: TId }) {
   return (
     <div role="group" aria-label="Row actions" style={{ display: 'inline-flex', gap: 4 }}>
       {actions.map((action) => {
         if (action.visible && !action.visible(row)) return null;
         const disabled = action.disabled?.(row) ?? false;
-        const rowId = (row as Record<string, unknown>)['id'];
-        const idForAction = rowId != null ? String(rowId) : String(rowIndex);
 
         if (action.href) {
-          const href = sanitizeHref(action.href(row, idForAction));
+          const href = sanitizeHref(action.href(row, typedId));
           return (
             <a
               key={action.id}
