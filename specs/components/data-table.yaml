@@ -2,13 +2,21 @@
 # Source: docs/specs/03-component-contracts.md § 3.4.3
 # Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll.
 
-version: "0.3.0"
+version: "0.4.0"
 
 name: DataTable
 category: organism
 description: "Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll."
 
 changelog:
+  - version: "0.4.0"
+    date: "2026-04-20"
+    changes:
+      - "G-1 (non-breaking, type-only): DataSource, DataTableConfig, DataTableAdapter, DataTableRowAction, DataTableBulkAction, useDataTable, DataTable now carry a second generic TId (default string). TId reaches callback boundaries — rowAction.onExecute(row, id: TId), rowAction.href(row, id: TId), bulkAction.onExecute(rows, ids: TId[]), onRowClick(row, id: TId). selectedIds: Set<string> stays string-keyed internally (DOM/cache stability — deliberate asymmetry)."
+      - "G-2 (additive): controlled globalSearch via DataTableConfig.globalSearchValue + onGlobalSearchChange + globalSearchPlaceholder. Single-side supply logs dev-mode warning and falls back to uncontrolled."
+      - "G-4: defaultSortComparator<T>(a, b, key, direction) exported from the engine barrel and top-level index — reusable by consumers building custom virtualised row layouts."
+      - "G-5 (docs-only): DataTableConfig.onRowClick JSDoc clarifies that display=\"card-grid\" wires onRowClick to Card.onActivate — wiring itself introduced in 0.3.1."
+      - "New public surface: getTypedRowId on UseDataTableResult — callback-surface counterpart to getRowId."
   - version: "0.3.0"
     date: "2026-04-18"
     changes:
