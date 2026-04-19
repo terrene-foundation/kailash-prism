@@ -7,7 +7,8 @@
   "types": "dist/index.d.ts",
   "bin": {
     "prism-compile": "dist/cli.js",
-    "prism-scaffold": "dist/scaffold-cli.js"
+    "prism-scaffold": "dist/scaffold-cli.js",
+    "prism-codegen": "dist/codegen/cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -15,7 +16,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "compile:web": "node dist/cli.js --theme enterprise --target web",
-    "compile:flutter": "node dist/cli.js --theme enterprise --target flutter"
+    "compile:flutter": "node dist/cli.js --theme enterprise --target flutter",
+    "codegen": "node dist/codegen/cli.js --spec ../specs/components/data-table.yaml --out generated/data-table-adapter-spec.ts"
   },
   "keywords": [
     "kailash",
