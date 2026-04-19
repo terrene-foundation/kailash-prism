@@ -253,7 +253,7 @@ describe('DataTable display="card-grid"', () => {
       expect(onRowActivate).toHaveBeenCalledWith(sampleDocs[0]);
     });
 
-    it('card click fires config.onRowClick when no adapter onRowActivate', async () => {
+    it('card click fires config.onRowClick with (row, id) when no adapter onRowActivate', async () => {
       const onRowClick = vi.fn();
       render(
         <DataTable
@@ -267,7 +267,10 @@ describe('DataTable display="card-grid"', () => {
 
       const firstCard = screen.getByTestId('data-table-card-0');
       fireEvent.click(firstCard);
-      expect(onRowClick).toHaveBeenCalledWith(sampleDocs[0]);
+      // Since 0.4.0 — config.onRowClick receives (row, id: TId). For plain
+      // array data with a numeric `id` field, TId defaults to string and
+      // the engine falls back to `String(row.id)`.
+      expect(onRowClick).toHaveBeenCalledWith(sampleDocs[0], '1');
     });
   });
 

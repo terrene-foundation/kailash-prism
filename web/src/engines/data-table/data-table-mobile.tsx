@@ -60,19 +60,20 @@ const cardFieldValueStyle: React.CSSProperties = {
 
 // --- Props ---
 
-interface DataTableMobileProps<T extends DataTableRow> {
+interface DataTableMobileProps<T extends DataTableRow, TId = string> {
   rows: T[];
   columns: ColumnDef<T>[];
   selectionEnabled: boolean;
   selectedIds: Set<string>;
-  onRowClick: ((row: T) => void) | undefined;
+  onRowClick: ((row: T, id: TId) => void | Promise<void>) | undefined;
   onToggleRow: (index: number) => void;
   getRowId: (row: T, index: number) => string;
+  getTypedRowId: (row: T, index: number) => TId;
 }
 
 // --- Component ---
 
-export function DataTableMobile<T extends DataTableRow>({
+export function DataTableMobile<T extends DataTableRow, TId = string>({
   rows,
   columns,
   selectionEnabled,
@@ -80,7 +81,8 @@ export function DataTableMobile<T extends DataTableRow>({
   onRowClick,
   onToggleRow,
   getRowId,
-}: DataTableMobileProps<T>) {
+  getTypedRowId,
+}: DataTableMobileProps<T, TId>) {
   const titleCol = columns[0];
   const subtitleCol = columns[1];
   const detailCols = columns.slice(2, 5); // Up to 3 additional fields
@@ -89,12 +91,14 @@ export function DataTableMobile<T extends DataTableRow>({
     <div role="list" data-testid="data-table-mobile">
       {rows.map((row, index) => {
         const id = getRowId(row, index);
+        const typedId = getTypedRowId(row, index);
         const isSelected = selectedIds.has(id);
         return (
-          <MobileCard
+          <MobileCard<T, TId>
             key={id}
             row={row}
             index={index}
+            typedId={typedId}
             titleCol={titleCol}
             subtitleCol={subtitleCol}
             detailCols={detailCols}
@@ -111,21 +115,23 @@ export function DataTableMobile<T extends DataTableRow>({
 
 // --- Card ---
 
-interface MobileCardProps<T extends DataTableRow> {
+interface MobileCardProps<T extends DataTableRow, TId = string> {
   row: T;
   index: number;
+  typedId: TId;
   titleCol: ColumnDef<T> | undefined;
   subtitleCol: ColumnDef<T> | undefined;
   detailCols: ColumnDef<T>[];
   selectionEnabled: boolean;
   isSelected: boolean;
-  onRowClick: ((row: T) => void) | undefined;
+  onRowClick: ((row: T, id: TId) => void | Promise<void>) | undefined;
   onToggleRow: (index: number) => void;
 }
 
-function MobileCard<T extends DataTableRow>({
+function MobileCard<T extends DataTableRow, TId = string>({
   row,
   index,
+  typedId,
   titleCol,
   subtitleCol,
   detailCols,
@@ -133,10 +139,10 @@ function MobileCard<T extends DataTableRow>({
   isSelected,
   onRowClick,
   onToggleRow,
-}: MobileCardProps<T>) {
+}: MobileCardProps<T, TId>) {
   const handleClick = useCallback(() => {
-    onRowClick?.(row);
-  }, [row, onRowClick]);
+    void onRowClick?.(row, typedId);
+  }, [row, typedId, onRowClick]);
 
   const handleCheckbox = useCallback(() => {
     onToggleRow(index);

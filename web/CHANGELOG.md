@@ -2,6 +2,104 @@
 
 All notable changes to the Prism web engine package are documented here.
 
+## 0.4.0 — 2026-04-20 — TId generics + controlled globalSearch + defaultSortComparator export
+
+Adds typed row-id propagation through the DataTable engine's callback
+boundaries, a controlled form of the global-search input, and exports the
+engine's default sort comparator for reuse by consumers running custom
+virtualised layouts. Motivated by the wave-3 arbor migration, where
+numerically-keyed rows forced consumers into `Number(id)` coercions at
+every callback site and where the uncontrolled global-search input could
+not be lifted into a parent URL-state store.
+
+### Changed
+
+- **G-1 (type-only, non-breaking)**: `DataSource`, `DataTableConfig`,
+  `DataTableAdapter`, `DataTableRowAction`, `DataTableBulkAction`,
+  `useDataTable`, and `DataTable` all now carry a second generic
+  `TId` (default `string`). The type parameter reaches callback
+  boundaries — `rowAction.onExecute(row, id: TId)`,
+  `rowAction.href(row, id: TId)`, `bulkAction.onExecute(rows, ids: TId[])`,
+  and `DataTableConfig.onRowClick(row, id: TId)`. Consumers with numeric
+  primary keys can now declare `DataTable<Row, number>` and drop the
+  `Number(id)` coercion at every call site.
+
+  - **Non-breaking**: the default `TId = string` preserves 0.3.1
+    behavior verbatim. Existing consumers that typed `DataSource<Row>`
+    or called `rowAction.onExecute(row, id: string)` continue to
+    compile unchanged.
+  - **Flagged with `!`** because in a narrow set of cases TypeScript's
+    structural inference may need an explicit type argument
+    (`<Row, number>`) rather than inferring from adapter.getRowId's
+    return type. A handful of previously-implicit type narrowings may
+    surface as compile errors; the fix is a one-character annotation.
+  - **Deliberate asymmetry — `selectedIds: Set<string>` stays string-keyed.**
+    The engine's internal selection state, expand state, DOM keys,
+    and aria attributes continue to use stringified ids regardless of
+    `TId`. This is NOT a bug: it is a deliberate design choice that
+    preserves DOM stability and keeps `Set<string>` identity
+    serialisable across rehydration boundaries (localStorage,
+    RSC-streamed snapshots). TId flows through to callback surfaces
+    where the typed id is load-bearing. See JSDoc on
+    `ResolvedTableState.selectedIds` for the full rationale.
+  - **Adapter `onRowActivate` keeps its single-arg `(row)` shape** —
+    only `config.onRowClick` gains the `(row, id)` second argument.
+    The engine's internal normaliser bridges the two shapes.
+  - **`onRowClick` arity change**: `onRowClick` now invokes with
+    `(row, id)` instead of `(row)`. Existing callbacks typed
+    `(row) => void` are wire-compatible (TS accepts narrower arity).
+    Tests that assert `toHaveBeenCalledWith(row)` need to be updated
+    to `toHaveBeenCalledWith(row, id)`.
+
+### Added
+
+- **G-2 (non-breaking)**: controlled global-search via three new
+  optional `DataTableConfig` fields:
+  - `globalSearchValue?: string` — parent-owned search query.
+  - `onGlobalSearchChange?: (value: string) => void` — parent setter.
+  - `globalSearchPlaceholder?: string` — placeholder override.
+
+  When both `globalSearchValue` AND `onGlobalSearchChange` are supplied
+  the engine treats the search as controlled. Supplying exactly one
+  side (value-without-setter or setter-without-value) logs a one-time
+  dev-mode warning and falls back to uncontrolled mode — consistent
+  with React's standard controlled/uncontrolled pattern. When neither
+  is supplied the engine's existing uncontrolled behavior is preserved
+  verbatim.
+
+- **G-4**: `defaultSortComparator<T>(a, b, key, direction)` is now a
+  public named export from `@kailash/prism-web/engines/data-table` and
+  the top-level barrel. The function operates on the row shape, not
+  the id, so it is TId-independent. Consumers building custom
+  virtualised row layouts can reuse the engine's sort semantics
+  (numeric-coercion first, then locale string compare; null/undef sort
+  first ascending) without re-deriving them.
+
+### Docs
+
+- **G-5 (docs-only)**: `DataTableConfig.onRowClick` JSDoc now
+  documents that in `display="card-grid"` mode the handler wires to
+  `Card.onActivate` — a card click (or Enter/Space keyboard
+  activation) fires `onRowClick(row, id)` the same way a table-row
+  click does in `display="table"`. The wiring itself was introduced
+  in 0.3.1; 0.4.0 adds the documentation clarification. No code
+  change on this line.
+
+### Migration
+
+- Consumers with typed numeric PKs: `<DataTable<Row, number>>` (type
+  argument) OR type the adapter's `getRowId` return as `number` and
+  let inference propagate. Drop any `Number(id)` wrappers in
+  `rowAction.onExecute`, `rowAction.href`, `bulkAction.onExecute`, and
+  `onRowClick` callbacks — they now receive the typed id unchanged.
+- Consumers with numerically-keyed rows who relied on the stringified
+  id reaching their callback: add `String(id)` inside the callback,
+  or keep `DataSource<Row>` (default `TId = string`) and the engine
+  will continue to stringify as in 0.3.1.
+- Parent-owned search: add `globalSearchValue={url.search}` and
+  `onGlobalSearchChange={(v) => updateUrl({ search: v })}` to lift the
+  search into URL state.
+
 ## 0.3.1 — 2026-04-18 — Card + CardGrid + DataTable card-grid mode (Shard 4 of 0.3.0 wave)
 
 Adds Card atom + CardGrid organism, and a `display="card-grid"` mode on

@@ -54,7 +54,9 @@ const MOBILE_BREAKPOINT = 768;
 
 // --- Component ---
 
-export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
+export function DataTable<T extends DataTableRow, TId = string>(
+  props: DataTableConfig<T, TId>,
+) {
   const {
     columns,
     sorting,
@@ -77,9 +79,10 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
     display = 'table',
     renderCard,
     cardGridColumns,
+    globalSearchPlaceholder,
   } = props;
 
-  const state = useDataTable(props);
+  const state = useDataTable<T, TId>(props);
 
   // Detect whether data is an adapter (vs plain array) so the engine can
   // auto-manage the loading / error surface without the consumer having
@@ -119,7 +122,24 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
   // Prefer adapter.onRowActivate over consumer's onRowClick. Both fire on
   // row click; adapter path takes precedence because it's part of the
   // typed contract.
-  const effectiveRowClick = state.onRowActivate ?? props.onRowClick;
+  //
+  // adapter.onRowActivate keeps its single-arg `(row)` calling convention
+  // because that is the typed contract. config.onRowClick receives
+  // `(row, id: TId)` (since 0.4.0). The `effectiveRowClick` closure
+  // normalises both shapes into `(row, id)` so sub-components can invoke
+  // one callback shape regardless of which surface supplied the handler.
+  //
+  // In `display="card-grid"` mode this handler is wired to Card.onActivate,
+  // so a card click (or Enter/Space keyboard activation) follows the same
+  // precedence — adapter-level onRowActivate wins, config-level onRowClick
+  // is the fallback. (See CHANGELOG 0.4.0 G-5 for the documentation
+  // clarification accompanying this wiring.)
+  const adapterOnRowActivate = state.onRowActivate;
+  const configOnRowClick = props.onRowClick;
+  const effectiveRowClick: ((row: T, id: TId) => void | Promise<void>) | undefined =
+    adapterOnRowActivate !== undefined
+      ? (row: T, _id: TId) => adapterOnRowActivate(row)
+      : configOnRowClick;
 
   // --- Responsive: detect mobile ---
   const [isMobile, setIsMobile] = useState(false);
@@ -176,7 +196,7 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
             type="search"
             value={state.globalSearch}
             onChange={handleGlobalSearchInput}
-            placeholder="Search all columns..."
+            placeholder={globalSearchPlaceholder ?? 'Search all columns...'}
             aria-label="Search all columns"
             style={globalSearchStyle}
           />
@@ -203,18 +223,24 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
             {...(ariaLabel !== undefined ? { 'aria-label': ariaLabel } : {})}
             {...(cardGridColumns !== undefined ? { columns: cardGridColumns } : {})}
           >
-            {state.displayRows.map((row, index) => (
-              <CardItem
-                key={state.getRowId(row, index)}
-                row={row}
-                rowIndex={index}
-                columns={columns}
-                renderCard={renderCard}
-                rowActions={state.rowActions}
-                executeRowAction={state.executeRowAction}
-                {...(effectiveRowClick !== undefined ? { onActivate: () => { void effectiveRowClick(row); } } : {})}
-              />
-            ))}
+            {state.displayRows.map((row, index) => {
+              const typedId = state.getTypedRowId(row, index);
+              return (
+                <CardItem<T, TId>
+                  key={state.getRowId(row, index)}
+                  row={row}
+                  rowIndex={index}
+                  typedId={typedId}
+                  columns={columns}
+                  renderCard={renderCard}
+                  rowActions={state.rowActions}
+                  executeRowAction={state.executeRowAction}
+                  {...(effectiveRowClick !== undefined
+                    ? { onActivate: () => { void effectiveRowClick(row, typedId); } }
+                    : {})}
+                />
+              );
+            })}
           </CardGrid>
           {paginationEnabled && !isLoading && !hasError && (
             <DataTablePagination
@@ -236,7 +262,7 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
       ) : /* Mobile card layout (table mode only) */
       isMobile && hasData ? (
         <>
-          <DataTableMobile
+          <DataTableMobile<T, TId>
             rows={state.displayRows}
             columns={columns}
             selectionEnabled={selectionEnabled}
@@ -244,6 +270,7 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
             onRowClick={effectiveRowClick}
             onToggleRow={state.handleToggleRow}
             getRowId={state.getRowId}
+            getTypedRowId={state.getTypedRowId}
           />
           {paginationEnabled && (
             <DataTablePagination
@@ -305,7 +332,7 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
             )}
 
             {hasData && (
-              <DataTableBody
+              <DataTableBody<T, TId>
                 rows={state.displayRows}
                 columns={columns}
                 selectionEnabled={selectionEnabled}
@@ -315,6 +342,7 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
                 onRowClick={effectiveRowClick}
                 onToggleRow={state.handleToggleRow}
                 getRowId={state.getRowId}
+                getTypedRowId={state.getTypedRowId}
                 expandable={expandable}
                 expandedIds={state.expandedIds}
                 onToggleExpand={state.handleToggleExpand}
@@ -361,25 +389,28 @@ export function DataTable<T extends DataTableRow>(props: DataTableConfig<T>) {
  * Row actions render in the card footer. The card is interactive when
  * onActivate is supplied.
  */
-interface CardItemProps<T extends DataTableRow> {
+interface CardItemProps<T extends DataTableRow, TId = string> {
   row: T;
   rowIndex: number;
-  columns: DataTableConfig<T>['columns'];
+  /** Typed row id — forwarded to `action.href(row, id)` for TId parity. */
+  typedId: TId;
+  columns: DataTableConfig<T, TId>['columns'];
   renderCard?: ((row: T, rowIndex: number) => ReactNode) | undefined;
-  rowActions: ReadonlyArray<DataTableRowAction<T>>;
-  executeRowAction: (action: DataTableRowAction<T>, row: T, rowIndex: number) => Promise<void>;
+  rowActions: ReadonlyArray<DataTableRowAction<T, TId>>;
+  executeRowAction: (action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>;
   onActivate?: (() => void) | undefined;
 }
 
-function CardItem<T extends DataTableRow>({
+function CardItem<T extends DataTableRow, TId = string>({
   row,
   rowIndex,
+  typedId,
   columns,
   renderCard,
   rowActions,
   executeRowAction,
   onActivate,
-}: CardItemProps<T>) {
+}: CardItemProps<T, TId>) {
   const body = renderCard ? renderCard(row, rowIndex) : defaultCardBody(row, columns);
   const titleColumn = columns[0];
   const subtitleColumn = columns[1];
@@ -401,8 +432,6 @@ function CardItem<T extends DataTableRow>({
       {rowActions.map((action) => {
         if (action.visible && !action.visible(row)) return null;
         const disabled = action.disabled?.(row) ?? false;
-        const rowIdField = (row as Record<string, unknown>)['id'];
-        const idForAction = rowIdField != null ? String(rowIdField) : String(rowIndex);
         const actionStyle: React.CSSProperties = {
           padding: '4px 10px',
           borderRadius: 'var(--prism-radius-md, 4px)',
@@ -420,7 +449,7 @@ function CardItem<T extends DataTableRow>({
         // sanitized against scheme allowlist; click stopPropagation
         // prevents card activation.
         if (action.href) {
-          const href = sanitizeHref(action.href(row, idForAction));
+          const href = sanitizeHref(action.href(row, typedId));
           return (
             <a
               key={action.id}

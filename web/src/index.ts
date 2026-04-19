@@ -84,6 +84,7 @@ export {
 export {
   DataTable,
   useDataTable,
+  defaultSortComparator,
   isDataTableAdapter,
   resolveDataSource,
   type DataTableConfig,
