@@ -1,7 +1,18 @@
+---
+type: DECISION
+date: 2026-04-20
+created_at: 2026-04-20T06:32:00+08:00
+author: agent
+session_id: redteam-convergence-2026-04-20
+session_turn: post-round2
+project: fe-codegen-platform
+topic: /redteam converged after round-1 surfaced 3 HIGH and PR #17 resolved them; round-2 clean; 7 PRs shipped
+phase: redteam
+tags: [convergence, parallel-execution, f1-f2-f3-f4, multi-framing]
+---
+
 # 0023 — DECISION — /redteam convergence: round 2 clean, 6-stream parallel wave closed
 
-**Date**: 2026-04-20
-**Type**: DECISION
 **Status**: Converged
 
 ## Context
@@ -60,3 +71,9 @@ Net delta from `01b1c1d` baseline: +3,725 LOC source + tests + docs. Web package
 - Journal 0021: Layout engine migration — 2-3 sessions for 0.5.0
 - Journal 0022: 13 spec YAMLs missing `version:` — one-session cleanup
 - Arbor wave-4 `/clients` migration (scoping lives at `01-analysis/arbor-wave4-route-selection.md`)
+
+## For Discussion
+
+1. **Counterfactual**: Would a sequential one-stream-per-session run of F1/F2/F3/F4 have produced the same 3 HIGH blockers, or do some of them (HIGH-3 spec drift, HIGH-1 orphan) only surface when multiple streams land in the same wave and interact? If parallel execution multiplies latent-issue surface area, the /redteam gate is load-bearing in a way sequential work doesn't need.
+2. **Data**: The 4-parallel-agent round-1 produced 3 HIGH across 4 dimensions in ~20 min wall-clock. Round-2 single-analyst produced 0 findings in ~4 min. Does that asymmetry suggest round 1 exhausted the finding surface, or that fixing + re-running at the same rigor would have surfaced new issues we missed?
+3. **Convergence criterion**: We honored "0 CRIT, 0 HIGH, 2 clean rounds" with round-2 as the first clean round and "vacuously clean round-3" as the second. Is that a legitimate interpretation, or is the 2-clean-rounds rule load-bearing against a specific failure mode (e.g., round-1 fixes introduce new issues that round-2 misses because it only spot-checks)? If so, the session over-trusted the diff-is-tiny assumption.

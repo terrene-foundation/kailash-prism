@@ -1,7 +1,18 @@
+---
+type: GAP
+date: 2026-04-20
+created_at: 2026-04-20T06:30:00+08:00
+author: agent
+session_id: redteam-convergence-2026-04-20
+session_turn: post-round2
+project: fe-codegen-platform
+topic: New Layout engine has zero production consumers; sub-path gate only partially resolves the orphan pattern
+phase: redteam
+tags: [orphan-detection, layout-engine, migration, public-api]
+---
+
 # 0021 — GAP — Layout engine orphan: partial resolution via sub-path gate
 
-**Date**: 2026-04-20
-**Type**: GAP
 **Status**: Partial-resolution; migration shard pending
 
 ## Context
@@ -29,3 +40,9 @@ The new engine continues to accumulate tests and maintenance cost with zero prod
 ## Tracking
 
 Added to `workspaces/fe-codegen-platform/01-analysis/prism-0.4.0-scoping.md` roadmap as a dedicated migration shard (est. 2-3 sessions) for 0.5.0 or later.
+
+## For Discussion
+
+1. **Counterfactual**: If we had deleted the new engine instead of gating it (per `rules/orphan-detection.md` Rule 3 "Removed = Deleted, Not Deprecated"), would we have lost ~1,500 LOC of test-validated code with no path to recover? Or would the pressure of "we want those primitives" force migration to happen sooner?
+2. **Data**: All 10 templates (`rg 'from.*engines/layout' web/src/templates/ | wc -l`) depend on legacy `engines/layout.tsx` which exports orchestration symbols (`LayoutProvider`/`useLayout`/`useResponsive`/`Zone`) the new engine does not provide. Which symbols are load-bearing vs vestigial? A per-symbol grep would identify the minimum compatible surface the new engine must grow.
+3. **Incentive**: Does leaving the engine at the sub-path with tests-only consumers create a maintenance tax that keeps pressure on the migration, or does it let the migration sit forever because "everything works"?
