@@ -9,9 +9,9 @@ category: organism
 description: "Responsive grid of card elements with configurable columns per breakpoint."
 
 composed_of:
-  atoms: []
+  atoms:
+    - Card            # Repeated card elements (see specs/components/card.yaml)
   molecules:
-    - Card            # Repeated card elements
     - Pagination      # Optional pagination below the grid
     - EmptyState      # Shown when no items are available
 

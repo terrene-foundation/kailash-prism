@@ -6,6 +6,7 @@
 import { useRef, useCallback, type KeyboardEvent, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ColumnDef, DataTableRow, DataTableRowAction } from './types.js';
+import { sanitizeHref } from './sanitize-href.js';
 
 // --- Styles ---
 
@@ -426,27 +427,8 @@ function variantStyle(variant: DataTableRowAction<DataTableRow>['variant']): Rea
   }
 }
 
-/**
- * Safe href schemes for row actions. The adapter is consumer code, which
- * means `action.href(row, id)` can return user-controlled strings (backend
- * data flowing through a `row.externalUrl` field, for example). React's
- * auto-escaping prevents HTML injection in text children but does NOT
- * validate URL schemes — `javascript:alert(1)` as href is a click-to-XSS.
- *
- * Engine-side defense: rewrite disallowed schemes to `#`. Consumers with a
- * legitimate need for custom schemes (internal protocol handlers) can
- * switch to `onExecute` + `window.location.assign`.
- */
-const SAFE_HREF_SCHEME = /^(?:https?:|mailto:|tel:|[/?#])/i;
-
-function sanitizeHref(href: string): string {
-  // Strip surrounding whitespace — `"  javascript:..."` also triggers the
-  // browser's URL parser to execute JS.
-  const trimmed = href.trim();
-  if (trimmed === '') return '#';
-  if (SAFE_HREF_SCHEME.test(trimmed)) return trimmed;
-  return '#';
-}
+// `sanitizeHref` lives in `./sanitize-href.js` so both table-mode and
+// card-grid-mode action renderers share the same allowlist.
 
 function RowActionsCell<T extends DataTableRow>({
   actions,

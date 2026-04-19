@@ -2,6 +2,63 @@
 
 All notable changes to the Prism web engine package are documented here.
 
+## 0.3.1 — 2026-04-18 — Card + CardGrid + DataTable card-grid mode (Shard 4 of 0.3.0 wave)
+
+Adds Card atom + CardGrid organism, and a `display="card-grid"` mode on
+the DataTable engine that renders rows as Cards instead of a tabular grid.
+Non-breaking — existing DataTable consumers keep `display="table"`.
+
+### Atoms
+
+- **A1 (feat)**: `Card` atom exported from `@kailash/prism-web/atoms`.
+  Props: `variant` (flat/elevated/outlined), `title`, `subtitle`, `media`,
+  `footer`, `onActivate`, `loading`. All visual values from design tokens;
+  consumers override via `className`. When `onActivate` is supplied the
+  card renders as `role="button"` with Enter+Space keyboard activation.
+
+### Organisms
+
+- **O1 (feat)**: `CardGrid` organism exported from
+  `@kailash/prism-web/organisms`. Responsive grid with per-breakpoint
+  column counts (mobile/tablet/desktop/wide). Wraps each child in a
+  `<li role="listitem">` inside a `<ul role="list">` for screen-reader
+  navigation. Custom empty-state slot.
+
+### DataTable engine
+
+- **D15 (feat)**: `DataTableConfig.display?: 'table' | 'card-grid'`.
+  Default `'table'` preserves existing behavior; `'card-grid'` renders
+  each row as a Card inside a CardGrid.
+- **D16 (feat)**: `DataTableConfig.renderCard?(row, index) => ReactNode`
+  for custom card bodies. Default renderer uses the first column's value
+  as title, the second as subtitle, and remaining columns as key/value
+  pairs in a `<dl>`.
+- **D17 (feat)**: `DataTableConfig.cardGridColumns?` forwards breakpoint
+  column counts to the underlying `CardGrid`.
+- **D18 (feat)**: Adapter `rowActions` render in the card footer (not a
+  trailing actions column). Both `href` (anchor) and `onExecute` (button)
+  branches supported — parity with table-mode. Same stopPropagation
+  semantics — clicking an action doesn't activate the card. Same
+  `visible` / `disabled` predicate support as the table-mode column.
+- **D19 (feat)**: Empty / loading / error states adapted for card-grid
+  layout (skeleton cards, alert banner, plain empty message).
+- **D20 (safety)**: `sanitizeHref()` extracted into
+  `web/src/engines/data-table/sanitize-href.ts` and shared between
+  table-mode and card-grid-mode action renderers. The scheme allowlist
+  (http/https/mailto/tel/relative/anchor) lives in exactly one place;
+  adding a new render surface can't accidentally ship without it.
+- **D21 (safety)**: `CardGrid.columns` values coerce through
+  `Number(v) | Math.trunc | Math.max(0, …)` before CSS interpolation.
+  Defense-in-depth against JS `any` callers that might slip a
+  CSS-injection payload through the type boundary.
+
+### Migration notes
+
+- Zero source changes required for existing consumers. `display`
+  defaults to `'table'`.
+- Arbor `/documents-prism` page (wave-3 migration) can now drop its
+  bespoke list/grid toggle and set `display="card-grid"` directly.
+
 ## 0.3.0 — 2026-04-18 — ServerDataSource removed (Shard 3 of 0.3.0 wave)
 
 BREAKING: `ServerDataSource<T>`, `ServerFetchParams`, `ServerFetchResult`,
