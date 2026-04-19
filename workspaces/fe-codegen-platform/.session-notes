@@ -1,39 +1,77 @@
-# Session Notes — 2026-04-14 (Wave 2)
+# Session Notes — 2026-04-19 (wave-3 complete)
 
 ## Where we are
 
-Wave 2 arbor migration complete. Three parallel migrations (calculators, payslips, documents) landed on Prism 0.2.0. Red team ran to convergence — 5 HIGH fixed, 2 HIGH deferred pending policy decisions. Upstream proposal at loom appended with 20+ new entries (status: pending_review). Next wave is real adapter implementation (FormAdapter + DataTableAdapter + Card/CardGrid atoms).
+Arbor wave-3 migration shipped end-to-end against Prism 0.3.1. Both
+existing prism routes (`/documents-prism`, `/my-payslips-prism`) now
+consume `DataTableAdapter`, `Card`+`CardGrid`, and `display="card-grid"`
+mode. ServerDataSource-era orphans removed. arbor `tsc --noEmit` clean,
+`vitest run` 43/43 passed. All five wave-2 redteam fixes (H3, M4, M5,
+S1, S2) preserved through the refactor.
+
+LOW-1 from `redteam-remove-server-data-source.md` resolved
+(`specs/components/data-table.yaml` deprecation string updated). LOW-2
+and LOW-3 were already resolved before this session.
 
 ## Read first
 
-1. `workspaces/fe-codegen-platform/04-validate/redteam-arbor-wave2-convergence.md` — the disposition of every HIGH finding, what was fixed vs deferred
-2. `workspaces/fe-codegen-platform/04-validate/migration-integration-evidence.md` — automated integration check (Next.js build clean; live browser check still pending)
-3. `workspaces/fe-codegen-platform/04-validate/migration-m0{1,2,3}-findings.md` — the raw friction notes from each migration
-4. `docs/specs/05-engine-specifications.md` § 5.1.1 — the DataTableAdapter design (next-wave target)
-5. `web/CHANGELOG.md` — 0.2.0 breaking changes
-6. `.claude/.proposals/latest.yaml` — upstream proposal (pending_review), wave-1 + wave-2 combined
+1. `workspaces/fe-codegen-platform/04-validate/migration-wave3-findings.md`
+   — authoritative wave-3 summary, including 5 Prism gaps (G-1..G-5)
+   surfaced for 0.4.0 consideration.
+2. `web/CHANGELOG.md` — Prism 0.2.1 → 0.3.1 wave summary.
+3. Previous `.session-notes` via `git log -- workspaces/fe-codegen-platform/.session-notes`.
+4. `memory/MEMORY.md` — Prism distribution still GitHub-only (S3 deferred);
+   squash-merge preference; arbor consumes via `/tmp/*.tgz`.
 
 ## In-flight state
 
-- Arbor branch `feat/prism-advisory` from wave 1 had 1 commit; wave-2 work layered on top is uncommitted in arbor.
-- Arbor's `@kailash/prism-web` dependency points to `/tmp/kailash-prism-web-0.2.0.tgz` (breaking 0.1.0 change — tarball must be re-packed if Prism changes).
-- 2 HIGH findings deferred with rationale (need separate decisions):
-  - **S3 tarball integrity** — `/tmp/` path is local-only; need GitHub Packages or committed tarball before CI can run. Memory note says GitHub-only distribution preferred.
-  - **S4 documents API authz** — need arbor backend owner to confirm `documentsApi.listTemplates()` is role-scoped server-side.
+Working tree at session end:
+- arbor (uncommitted, in `~/repos/terrene/contrib/arbor`):
+  - 5 files changed: 543 insertions, 770 deletions
+  - 1 file deleted: `apps/web/src/components/prism-document-card.tsx`
+  - npm install bumped Prism to 0.3.1 tarball; package.json points at
+    `/tmp/kailash-prism-web-0.3.1.tgz`
+- kailash-prism (uncommitted):
+  - `specs/components/data-table.yaml` — LOW-1 fix
+  - `workspaces/fe-codegen-platform/04-validate/migration-wave3-findings.md` — new artifact
+  - `.session-notes` — this file
+  - existing untracked: `.claude/learning/`, `.claude/settings.json`,
+    `flutter/pubspec.lock`, `scripts/`,
+    `workspaces/fe-codegen-platform/04-validate/redteam-remove-server-data-source.md`
+
+## Next candidate threads
+
+1. **Prism 0.4.0 scoping** — fold G-1 (TId propagation through
+   DataSource/DataTableConfig generics) and G-4 (engine-side
+   `defaultSortComparator`) into a 0.4.0 wave. G-2 (FilterBar molecule)
+   is the bigger lift.
+2. **GitHub Packages distribution** — still pending per arbor-pilot
+   memory note. Each Prism change requires re-pack to `/tmp` + arbor
+   `npm install` reroll. GitHub Packages or git-URL deps would fix.
+3. **arbor wave-4** — pick a third route to migrate (advisory-prism is
+   already on ConversationTemplate; remaining list-shaped pages
+   include /clients, /employees, /policies). Each migration will
+   either confirm 0.3.1 contracts or surface gaps.
+4. **Commit + PR** — wave-3 changes split across two repos. Arbor
+   changes are a single PR scope; kailash-prism changes (LOW-1 +
+   findings + session notes) are a smaller polish PR.
 
 ## Traps
 
-- Prism 0.2.0 is a BREAKING change on `ColumnDef.render` typing — any consumer upgrading from 0.1.0 that casts `value` may need to adapt. Arbor's migrations survived due to TS parameter contravariance.
-- `exactOptionalPropertyTypes` is NOT set in arbor's tsconfig (despite some prior notes saying so) — both wave-1 and wave-2 migration code still coded defensively as if it were. Survives a future tightening without edits.
-- `ConversationTemplate` auto-wraps `LayoutProvider` but NOT `ThemeProvider` — consumers need to add ThemeProvider themselves if they want theme-driven CSS vars.
-- Turbopack cannot resolve `file:` symlinked packages — must use `npm pack` tarball with `transpilePackages` in `next.config.ts`. Permanent DX.
-- **None of the three arbor -prism pages actually exercise Prism's `ServerDataSource.fetchData` path** — they all fetch client-side. The M-04 D1 wiring is covered by the regression test but has no arbor consumer today. First real server-side consumer will arrive in the next wave (leave / claims / employees — datasets that need server-side pagination).
-- **act() warnings** — there were 6 in `ai-chat-sidebar.test.tsx` that M-04 deferred citing "shard discipline." M-08 convergence corrected this (wrapped in `await act(async () => ...)` + `waitFor`). Future convergence: "shard discipline" is NOT a valid exception to `rules/zero-tolerance.md` Rule 1.
-
-## Deferred to next wave (codify targets)
-
-- **FormAdapter interface** (M-01 BLOCKING-2) — motivates collapsing `{values, result}` state boilerplate from every consumer into the adapter.
-- **DataTableAdapter implementation** — design landed in M-05; implementation is a dedicated next-wave task.
-- **Card atom + CardGrid molecule** (M-03 NON-BLOCKING-1) — abstracts M-03's local `prism-document-card.tsx` into Prism proper.
-- **FilterBar molecule** (M-03 stretch proposal) — unifies chip-row + search UI.
-- All MEDIUM/LOW findings from M-07 red team are batched for /codify.
+- Prism's `DataSource<T>` fixes TId to `string` even though the
+  underlying `DataTableAdapter<T, TId>` accepts a typed TId. Numeric
+  PKs require stringifying at `getRowId`. Documented as G-1.
+- `useRouter` from `next/navigation` is the right way to handle
+  `onRowClick` navigation; `window.location.assign` causes a full
+  page reload and loses Next router state.
+- Adapter recreations on filter-state change DO trigger engine
+  refetch (engine's useEffect dep includes `adapter` identity). To
+  avoid backend re-hits, cache the raw API response at the page
+  level and have the adapter close over the cached array.
+- `onExecute: async (...)` puts the row-action button into a busy
+  state automatically — no manual `downloadingId` state needed.
+- arbor consumes Prism via `/tmp/kailash-prism-web-*.tgz`. Re-pack
+  after every Prism change. This still hurts; G-2-adjacent.
+- `display="card-grid"` mode wires `onRowClick` to Card's `onActivate`,
+  preserving row-click navigation parity. Worth a one-liner in the
+  Prism CHANGELOG; documented as G-5.

@@ -303,7 +303,7 @@ adapter:
     capabilities_vs_auto_detection: "explicit capabilities() — engine owns client-side fallback"
     rowActions_shape: "static array with visible/disabled predicates"
     filterDimensions_location: "on DataTableAdapter, not a sibling FilterAdapter"
-    serverDataSource_deprecation: "one-release window: deprecate M-06, remove 0.2.0"
+    serverDataSource_deprecation: "two-release window: deprecated in 0.2.2, removed in 0.3.0"
     row_type_constraint: "getRowId owns identity; no mapRow; relies on M-04 relaxing DataTableRow to `object`"
     subscribe_granularity: "coarse (refetch signal) not fine-grained deltas"
     pagination_split: "single interface, paginationMode capability flag distinguishes offset vs cursor"
