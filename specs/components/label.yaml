@@ -2,6 +2,8 @@
 # Spec version: 0.1.0
 # Source: docs/specs/03-component-contracts.md section 3.2.9
 
+version: "0.1.0"
+
 name: Label
 category: atom
 description: "Text label associated with a form field."
