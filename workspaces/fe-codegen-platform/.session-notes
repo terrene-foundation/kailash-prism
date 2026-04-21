@@ -1,77 +1,127 @@
-# Session Notes — 2026-04-19 (wave-3 complete)
+# Session Notes — 2026-04-20/21 (parallel wave + /redteam convergence)
 
 ## Where we are
 
-Arbor wave-3 migration shipped end-to-end against Prism 0.3.1. Both
-existing prism routes (`/documents-prism`, `/my-payslips-prism`) now
-consume `DataTableAdapter`, `Card`+`CardGrid`, and `display="card-grid"`
-mode. ServerDataSource-era orphans removed. arbor `tsc --noEmit` clean,
-`vitest run` 43/43 passed. All five wave-2 redteam fixes (H3, M4, M5,
-S1, S2) preserved through the refactor.
-
-LOW-1 from `redteam-remove-server-data-source.md` resolved
-(`specs/components/data-table.yaml` deprecation string updated). LOW-2
-and LOW-3 were already resolved before this session.
+Prism web engine at 0.4.0 on main. Ten PRs merged this session
+(`01b1c1d..ac55dc6`), advancing all four framings F1 (engine
+completeness) / F2 (codegen) / F3 (consumer validation — partial) /
+F4 (production-grade). /redteam converged after round-1 surfaced
+3 HIGH and PR #17 resolved them; round-2 clean.
 
 ## Read first
 
-1. `workspaces/fe-codegen-platform/04-validate/migration-wave3-findings.md`
-   — authoritative wave-3 summary, including 5 Prism gaps (G-1..G-5)
-   surfaced for 0.4.0 consideration.
-2. `web/CHANGELOG.md` — Prism 0.2.1 → 0.3.1 wave summary.
-3. Previous `.session-notes` via `git log -- workspaces/fe-codegen-platform/.session-notes`.
-4. `memory/MEMORY.md` — Prism distribution still GitHub-only (S3 deferred);
-   squash-merge preference; arbor consumes via `/tmp/*.tgz`.
+1. `workspaces/fe-codegen-platform/journal/0023-DECISION-redteam-convergence-round2-clean.md`
+   — full session arc: what shipped, convergence verdict, outstanding
+   work.
+2. `workspaces/fe-codegen-platform/journal/0020-RISK-flutter-parity-redteam-round1-findings.md`
+   — Flutter parity gap (compiler output dead code, Riverpod absent,
+   200-LOC cap violated 5/5). Multi-session workstream.
+3. `workspaces/fe-codegen-platform/journal/0021-GAP-layout-engine-orphan-partial-resolution.md`
+   — new Layout engine sub-path-gated; legacy→new migration needed.
+4. `workspaces/fe-codegen-platform/01-analysis/arbor-wave4-route-selection.md`
+   — /clients identified as next arbor migration target (but see
+   "Traps" below — arbor does NOT have wave-3 landed yet).
+5. `web/CHANGELOG.md` — 0.4.0 + Unreleased (Layout engine sub-path).
 
-## In-flight state
+## What shipped (PRs in order)
 
-Working tree at session end:
-- arbor (uncommitted, in `~/repos/terrene/contrib/arbor`):
-  - 5 files changed: 543 insertions, 770 deletions
-  - 1 file deleted: `apps/web/src/components/prism-document-card.tsx`
-  - npm install bumped Prism to 0.3.1 tarball; package.json points at
-    `/tmp/kailash-prism-web-0.3.1.tgz`
-- kailash-prism (uncommitted):
-  - `specs/components/data-table.yaml` — LOW-1 fix
-  - `workspaces/fe-codegen-platform/04-validate/migration-wave3-findings.md` — new artifact
-  - `.session-notes` — this file
-  - existing untracked: `.claude/learning/`, `.claude/settings.json`,
-    `flutter/pubspec.lock`, `scripts/`,
-    `workspaces/fe-codegen-platform/04-validate/redteam-remove-server-data-source.md`
+| PR  | Commit    | Scope                                                       |
+| --- | --------- | ----------------------------------------------------------- |
+| #11 | `a41c9ad` | chore: wave-3 polish + 0.4.0/wave-4/distribution scoping    |
+| #12 | `54e3498` | feat(ops): GitHub Release asset distribution workflow       |
+| #13 | `6ebc341` | feat(compiler): codegen pipeline PoC                        |
+| #14 | `7b5c686` | feat(prism-web): Layout engine (6 primitives, sub-path)     |
+| #15 | `56340ba` | test(prism-web): Tier 2 engine wiring tests (3 engines)     |
+| #16 | `421dd41` | feat(prism-web)!: 0.4.0 — TId + globalSearch + comparator   |
+| #17 | `1c47a20` | fix(prism): /redteam round-1 — 3 HIGH + 1 MED + 1 LOW       |
+| #18 | `7daf973` | docs(journal): convergence entries 0021/0022/0023           |
+| #19 | `35f455f` | fix(journal): frontmatter + For Discussion                  |
+| #20 | `ac55dc6` | chore(specs): version field on 13 atom specs (closes 0022)  |
 
-## Next candidate threads
+Test posture on main: 387/387 web + 73/73 compiler = 460/460 passing.
+`tsc --noEmit` clean in web/ and compiler/.
 
-1. **Prism 0.4.0 scoping** — fold G-1 (TId propagation through
-   DataSource/DataTableConfig generics) and G-4 (engine-side
-   `defaultSortComparator`) into a 0.4.0 wave. G-2 (FilterBar molecule)
-   is the bigger lift.
-2. **GitHub Packages distribution** — still pending per arbor-pilot
-   memory note. Each Prism change requires re-pack to `/tmp` + arbor
-   `npm install` reroll. GitHub Packages or git-URL deps would fix.
-3. **arbor wave-4** — pick a third route to migrate (advisory-prism is
-   already on ConversationTemplate; remaining list-shaped pages
-   include /clients, /employees, /policies). Each migration will
-   either confirm 0.3.1 contracts or surface gaps.
-4. **Commit + PR** — wave-3 changes split across two repos. Arbor
-   changes are a single PR scope; kailash-prism changes (LOW-1 +
-   findings + session notes) are a smaller polish PR.
+## /redteam verdict
 
-## Traps
+Round 1 (4 parallel agents — spec / security / code / tests):
+- 0 CRIT / 3 HIGH / 8 MED / 12 LOW
 
-- Prism's `DataSource<T>` fixes TId to `string` even though the
-  underlying `DataTableAdapter<T, TId>` accepts a typed TId. Numeric
-  PKs require stringifying at `getRowId`. Documented as G-1.
-- `useRouter` from `next/navigation` is the right way to handle
-  `onRowClick` navigation; `window.location.assign` causes a full
-  page reload and loses Next router state.
-- Adapter recreations on filter-state change DO trigger engine
-  refetch (engine's useEffect dep includes `adapter` identity). To
-  avoid backend re-hits, cache the raw API response at the page
-  level and have the adapter close over the cached array.
-- `onExecute: async (...)` puts the row-action button into a busy
-  state automatically — no manual `downloadingId` state needed.
-- arbor consumes Prism via `/tmp/kailash-prism-web-*.tgz`. Re-pack
-  after every Prism change. This still hurts; G-2-adjacent.
-- `display="card-grid"` mode wires `onRowClick` to Card's `onActivate`,
-  preserving row-click navigation parity. Worth a one-liner in the
-  Prism CHANGELOG; documented as G-5.
+Round 1 HIGH blockers + dispositions (PR #17):
+- HIGH-1 Layout orphan → sub-path gate (full migration deferred)
+- HIGH-2 Layout* barrel drag → 30-line re-export removed
+- HIGH-3 `data-table.yaml` v0.3.0 vs 0.4.0 code → spec bumped + regen
+
+Round 2 (single analyst re-validation):
+- 0 new CRIT/HIGH/MED/LOW — all round-1 resolutions AST/grep verified
+- Declared converged
+
+## Deferred workstreams (by size)
+
+1. **Layout engine legacy→new unification** — journal 0021. ~2-3
+   sessions. Scope: grow `engines/layout/` with orchestration
+   (LayoutProvider/useLayout/useResponsive/Zone) OR have legacy
+   delegate to new primitives. Then migrate 10 templates. Then
+   delete `engines/layout.tsx`.
+
+2. **Flutter parity** — journal 0020. Multi-session. Compiler's
+   Flutter output is orphan (`compiler/generated/flutter/*.dart`
+   never imported); `flutter/lib/theme/prism_colors.dart` is
+   hand-authored and diverges. Riverpod absent. All 5 engines
+   violate 200-LOC cap (k_chat.dart is 1,694 LOC). 1 failing test
+   (`KConversationSidebar` date-group label) — zero-tolerance carry.
+
+3. **Arbor wave-1/2/3 commitment + wave-4** — prerequisite gap
+   surfaced in 2026-04-21 wrap-up. Arbor main at `d1a6c44` has NO
+   Prism integration. The wave-1/2/3 work from prior sessions lives
+   on local branch `feat/prism-advisory` + one git stash on that
+   branch (`arbor-wip-prism-and-sync`). Wave-4 `/clients` cannot
+   start until wave-3 is landed on arbor main. Scope: either (a)
+   PR feat/prism-advisory into arbor main and ship the stash, or
+   (b) re-scope from scratch targeting the current 0.4.0 API.
+
+## Traps (for the next session)
+
+- **Arbor state mismatch.** Previous `.session-notes` said "wave-3
+  shipped end-to-end" — that was in the working tree. It was
+  stashed, never committed, never PR'd. Arbor main has zero Prism.
+  Before promising wave-4, unstash on `feat/prism-advisory`, decide
+  to ship or abandon.
+- **`engines/layout.tsx` is the canonical Layout import.** New
+  `engines/layout/` primitives are at the sub-path only. Do NOT
+  import Layout primitives from the top-level barrel — they aren't
+  there anymore.
+- **Distribution via GitHub Release assets is live but unused.**
+  The `.github/workflows/release-web.yml` fires on `web-v*` tags.
+  No `web-v0.4.0` tag has been pushed yet. Cut the release tag
+  before telling a consumer to use the release asset URL.
+- **Spec-loader is strict on `version:`.** All 70 component specs
+  have it now. Don't introduce a new atom spec without `version:` —
+  batch codegen will refuse with SCHEMA_VIOLATION.
+- **`specs-authority.md` Rule 5b** (sibling-spec sweep on edits) is
+  now codified — every future spec edit triggers a full sibling
+  grep across the same domain.
+- **Stale `.spec-coverage-v2.md` Layout claim.** Line 126 still says
+  "PASS" on a removed alias. Non-blocking, refresh on next codify.
+
+## Next candidate threads (ranked by leverage)
+
+1. **~~Ship the 0.4.0 GitHub Release~~** — DONE 2026-04-21. `web-v0.4.0`
+   tag cut; `.github/workflows/release-web.yml` fired successfully
+   (run #24704781006); tarball published at
+   `https://github.com/terrene-foundation/kailash-prism/releases/download/web-v0.4.0/kailash-prism-web-0.4.0.tgz`.
+   Node 20 deprecation warning noted in workflow annotations
+   (action runtime migration to Node 24 required before 2026-09-16) —
+   track as a future hardening pass.
+2. **Arbor feat/prism-advisory resolution** — decide ship vs abandon.
+   If ship: PR into arbor main, then wave-4 `/clients` can start.
+3. **Layout migration shard** (journal 0021) — 2-3 sessions.
+4. **Flutter parity wave** (journal 0020) — multi-session.
+
+## Memory + env pointers
+
+- `memory/MEMORY.md`: Prism = GitHub-only distribution; squash-merge
+  preference; arbor Prism integration pattern.
+- `.claude/rules/` full complement loaded; rule 5b (specs) and
+  pytest plugin+marker rule (testing) codified this week.
+- Deferred items are tracked in journal, not as todos — workspace
+  has no active todos as of this session.
