@@ -2,6 +2,8 @@
 # Spec version: 0.1.0
 # Source: docs/specs/03-component-contracts.md section 3.2.12
 
+version: "0.1.0"
+
 name: Icon
 category: atom
 description: "SVG icon from the icon set with standardized sizing."

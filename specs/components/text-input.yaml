@@ -2,6 +2,8 @@
 # Spec version: 0.1.0
 # Source: docs/specs/03-component-contracts.md section 3.2.3
 
+version: "0.1.0"
+
 name: TextInput
 category: atom
 description: "Single-line text input field for user data entry."
