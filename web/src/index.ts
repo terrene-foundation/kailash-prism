@@ -24,14 +24,14 @@ export {
   type SpinnerSize,
   type CardProps,
   type CardVariant,
-} from './atoms/index.js';
+} from "./atoms/index.js";
 
 // Organisms
 export {
   CardGrid,
   type CardGridProps,
   type ResponsiveColumns,
-} from './organisms/index.js';
+} from "./organisms/index.js";
 
 // Engines
 export {
@@ -43,12 +43,12 @@ export {
   type ThemeContextValue,
   type ColorMode,
   type ColorModePreference,
-} from './engines/theme.js';
+} from "./engines/theme.js";
 
 export {
   LayoutProvider,
   useLayout,
-  useResponsive,
+  useLayoutMaybe,
   VStack,
   Row,
   Grid,
@@ -56,29 +56,28 @@ export {
   Layer,
   Scroll,
   Zone,
-  resolveBreakpoint,
-  BREAKPOINTS,
-  type LayoutEngineConfig,
-  type LayoutContextValue,
   type Breakpoint,
+  type LayoutEngineConfig,
   type ZoneContent,
   type ResponsiveValue,
   type LayerTier,
   type LayerProps,
   type ScrollDirection,
   type ScrollProps,
-} from './engines/layout.js';
+} from "./engines/layout.js";
 
 // Layout engine (new, composable primitives) lives at
-// `@kailash/prism-web/engines/layout` and is NOT re-exported from the
-// top-level barrel. Rationale: the new engine deliberately has a smaller
-// surface than the legacy `engines/layout.tsx` (no LayoutProvider /
-// useLayout / useResponsive / Zone) and all 10 existing templates still
-// compose against the legacy engine. Exposing a `Layout*`-aliased subset
-// at the top level creates public-API drag for a surface with zero
-// production consumers. Consumers who want the new primitives opt in
-// via the sub-path import. A follow-up migration shard will unify the
-// two engines — until then coexistence is deliberate, not an accident.
+// `@kailash/prism-web/engines/layout` and is reachable via sub-path
+// import for tokenized callers. The top-level barrel above continues to
+// export the legacy primitive names (`VStack`, `Row`, `Grid`, `Split`,
+// `Layer`, `Scroll`, `Zone`) — but as of 0.5.0 the first three are thin
+// delegates over `engines/layout/{stack,row,grid}.js`, giving the new
+// engine real production call sites without changing the public
+// top-level surface. `Split`, `Layer`, and `Scroll` retain legacy
+// implementations because their semantics (static ratio + mobile
+// collapse / backdrop + focus trap / scrollbar toggle) have no direct
+// equivalent in the primitives engine yet. See journal 0025 for the
+// migration map.
 
 export {
   NavigationProvider,
@@ -90,7 +89,7 @@ export {
   type RouteNode,
   type SidebarConfig,
   type BreadcrumbConfig,
-} from './engines/navigation.js';
+} from "./engines/navigation.js";
 
 export {
   DataTable,
@@ -115,7 +114,7 @@ export {
   type DataTableSort,
   type DataTableRowAction,
   type DataTableBulkAction,
-} from './engines/data-table/index.js';
+} from "./engines/data-table/index.js";
 
 export {
   ChatEngine,
@@ -145,7 +144,7 @@ export {
   type ConversationSidebarProps,
   type ChatStateOptions,
   type ChatStateValue,
-} from './engines/ai-chat/index.js';
+} from "./engines/ai-chat/index.js";
 
 export {
   Form,
@@ -164,7 +163,7 @@ export {
   type FormConfig,
   type WizardStep,
   type FormWizardConfig,
-} from './engines/form/index.js';
+} from "./engines/form/index.js";
 
 // Templates
 export {
@@ -197,4 +196,4 @@ export {
   type CalendarTemplateProps,
   type BaseTemplateProps,
   type ZoneSlot,
-} from './templates/index.js';
+} from "./templates/index.js";
