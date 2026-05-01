@@ -5,6 +5,15 @@
  * Coordinates page layout from template definitions. Monitors viewport width,
  * resolves breakpoints, manages zone visibility and ordering, integrates
  * with the Navigation engine for chrome.
+ *
+ * 0.5.0 — `VStack`, `Row`, and `Grid` are thin delegates over the
+ * composable primitives in `engines/layout/`. The `gap: number` API is
+ * preserved at this surface; canonical values resolve to SpacingTokens,
+ * non-canonical values pass through as inline `style.gap` overrides.
+ * `Split`, `Layer`, `Scroll`, `LayoutProvider`, `useLayout`,
+ * `useLayoutMaybe`, and `Zone` retain legacy implementations because their
+ * semantics (mobile collapse, focus trap, scrollbar toggle, orchestration
+ * context) have no direct equivalent in the primitives engine yet.
  */
 
 import {
@@ -17,13 +26,19 @@ import {
   useState,
   type CSSProperties,
   type ReactNode,
-} from 'react';
+} from "react";
 
-// --- Types ---
+import { Stack as PrismStack } from "./layout/stack.js";
+import { Row as PrismRow } from "./layout/row.js";
+import { Grid as PrismGrid } from "./layout/grid.js";
+import { SPACING_TOKEN_FALLBACK, type SpacingToken } from "./layout/types.js";
 
-export type Breakpoint = 'mobile' | 'tablet' | 'desktop' | 'wide';
+// --- Types (internal — not re-exported through the package barrel) ---
 
-/** Breakpoint boundaries in pixels (min-width) */
+export type Breakpoint = "mobile" | "tablet" | "desktop" | "wide";
+
+/** Breakpoint boundaries in pixels (min-width) — internal helper for the
+ *  orchestration surface (LayoutProvider + Split mobile collapse + Zone). */
 const BREAKPOINTS: Record<Breakpoint, number> = {
   mobile: 0,
   tablet: 768,
@@ -31,6 +46,10 @@ const BREAKPOINTS: Record<Breakpoint, number> = {
   wide: 1440,
 };
 
+/**
+ * Spec-mandated public API per `docs/specs/05-engine-specifications.md` § 5.4.
+ * Configuration shape for the LayoutProvider.
+ */
 export interface LayoutEngineConfig {
   /** Template name (determines zone structure) */
   template?: string;
@@ -44,11 +63,16 @@ export interface LayoutEngineConfig {
   onBreakpointChange?: (event: { from: Breakpoint; to: Breakpoint }) => void;
 }
 
+/**
+ * Spec-mandated public API per `docs/specs/05-engine-specifications.md` § 5.4
+ * (`zones: Record<string, ZoneContent>` in LayoutEngineConfig). Slot data
+ * shape consumed by `Zone`.
+ */
 export interface ZoneContent {
   /** Content to render in this zone */
   children: ReactNode;
   /** ARIA landmark role */
-  role?: 'navigation' | 'complementary' | 'contentinfo' | 'main';
+  role?: "navigation" | "complementary" | "contentinfo" | "main";
   /** Responsive visibility per breakpoint */
   visible?: Partial<Record<Breakpoint, boolean>>;
   /** Zone ordering (lower = renders first) */
@@ -57,9 +81,13 @@ export interface ZoneContent {
   sticky?: boolean;
 }
 
+/**
+ * Spec-mandated public API per `docs/specs/04-layout-grammar.md` § 4.4.
+ * Wrapper for any responsive value (columns, spacing tokens, ratios).
+ */
 export type ResponsiveValue<T> = Partial<Record<Breakpoint, T>>;
 
-export interface LayoutContextValue {
+interface LayoutContextValue {
   /** Current resolved breakpoint */
   breakpoint: Breakpoint;
   /** Whether viewport is mobile */
@@ -72,13 +100,45 @@ export interface LayoutContextValue {
   viewportWidth: number;
 }
 
+// --- 0.5.0 delegation helper ---
+//
+// The legacy primitives (VStack/Row/Grid) accept `gap: number` (raw px).
+// The new primitives accept `spacing: SpacingToken`. Canonical legacy
+// values map cleanly to a token; everything else passes through as an
+// inline `style.gap` override on the new primitive's wrapper div, which
+// preserves exact px output. The new engine's Stack/Row/Grid all spread
+// the consumer-supplied `style` after their own defaults, so a `gap`
+// override wins (see web/src/engines/layout/stack.tsx).
+
+const NUMERIC_TO_SPACING_TOKEN: Map<number, SpacingToken> = new Map(
+  (Object.entries(SPACING_TOKEN_FALLBACK) as Array<[SpacingToken, number]>).map(
+    ([token, px]) => [px, token],
+  ),
+);
+
+interface LegacyGapResolution {
+  spacing: SpacingToken;
+  styleOverride: { gap: number } | undefined;
+}
+
+function resolveLegacyGap(gap: number): LegacyGapResolution {
+  const token = NUMERIC_TO_SPACING_TOKEN.get(gap);
+  if (token !== undefined) return { spacing: token, styleOverride: undefined };
+  // Non-canonical: keep exact px via inline override.
+  return { spacing: "none", styleOverride: { gap } };
+}
+
 // --- Breakpoint Detection ---
 
-function resolveBreakpoint(width: number): Breakpoint {
-  if (width >= BREAKPOINTS.wide) return 'wide';
-  if (width >= BREAKPOINTS.desktop) return 'desktop';
-  if (width >= BREAKPOINTS.tablet) return 'tablet';
-  return 'mobile';
+/**
+ * Module-exported for internal boundary tests; not re-exported through
+ * the package barrel. Public consumers read breakpoint via `useLayout()`.
+ */
+export function resolveBreakpoint(width: number): Breakpoint {
+  if (width >= BREAKPOINTS.wide) return "wide";
+  if (width >= BREAKPOINTS.desktop) return "desktop";
+  if (width >= BREAKPOINTS.tablet) return "tablet";
+  return "mobile";
 }
 
 function resolveResponsive<T>(
@@ -87,11 +147,11 @@ function resolveResponsive<T>(
   fallback: T,
 ): T {
   if (value === undefined) return fallback;
-  if (typeof value !== 'object' || value === null) return value as T;
+  if (typeof value !== "object" || value === null) return value as T;
 
   const responsive = value as ResponsiveValue<T>;
   // Cascade: current breakpoint -> previous breakpoints -> fallback
-  const order: Breakpoint[] = ['wide', 'desktop', 'tablet', 'mobile'];
+  const order: Breakpoint[] = ["wide", "desktop", "tablet", "mobile"];
   const startIdx = order.indexOf(breakpoint);
   for (let i = startIdx; i < order.length; i++) {
     const key = order[i];
@@ -115,7 +175,7 @@ export function LayoutProvider({
   onBreakpointChange,
 }: LayoutEngineConfig & { children: ReactNode }) {
   const [viewportWidth, setViewportWidth] = useState(() => {
-    if (typeof window === 'undefined') return 1024;
+    if (typeof window === "undefined") return 1024;
     return window.innerWidth;
   });
 
@@ -135,16 +195,16 @@ export function LayoutProvider({
     };
 
     for (const { mq } of queries) {
-      mq.addEventListener('change', handler);
+      mq.addEventListener("change", handler);
     }
     // Also listen for resize for smooth tracking
-    window.addEventListener('resize', handler);
+    window.addEventListener("resize", handler);
 
     return () => {
       for (const { mq } of queries) {
-        mq.removeEventListener('change', handler);
+        mq.removeEventListener("change", handler);
       }
-      window.removeEventListener('resize', handler);
+      window.removeEventListener("resize", handler);
     };
   }, []);
 
@@ -156,14 +216,18 @@ export function LayoutProvider({
     }
   }, [breakpoint, prevBreakpoint, onBreakpointChange]);
 
-  const resolvedMargin = resolveResponsive(pageMargin, breakpoint, breakpoint === 'mobile' ? 16 : 24);
+  const resolvedMargin = resolveResponsive(
+    pageMargin,
+    breakpoint,
+    breakpoint === "mobile" ? 16 : 24,
+  );
 
   const value = useMemo<LayoutContextValue>(
     () => ({
       breakpoint,
-      isMobile: breakpoint === 'mobile',
-      isTablet: breakpoint === 'tablet',
-      isDesktop: breakpoint === 'desktop' || breakpoint === 'wide',
+      isMobile: breakpoint === "mobile",
+      isTablet: breakpoint === "tablet",
+      isDesktop: breakpoint === "desktop" || breakpoint === "wide",
       viewportWidth,
     }),
     [breakpoint, viewportWidth],
@@ -171,71 +235,97 @@ export function LayoutProvider({
 
   const containerStyle: CSSProperties = {
     maxWidth: maxContentWidth,
-    marginLeft: 'auto',
-    marginRight: 'auto',
+    marginLeft: "auto",
+    marginRight: "auto",
     paddingLeft: resolvedMargin,
     paddingRight: resolvedMargin,
   };
 
   return (
     <LayoutContext.Provider value={value}>
-      <div style={containerStyle}>
-        {children}
-      </div>
+      <div style={containerStyle}>{children}</div>
     </LayoutContext.Provider>
   );
 }
 
 // --- Layout Primitives ---
+//
+// As of 0.5.0, VStack/Row/Grid are thin delegates over the composable
+// primitives in `engines/layout/`. The legacy `gap: number` API is
+// preserved at this surface; the wrapper translates each call to the
+// new primitive's `spacing: SpacingToken` (or inline-style override
+// for non-canonical values). This gives the new engine real production
+// call sites (`engines/layout/stack.tsx` etc.) without changing the
+// public top-level barrel surface that downstream consumers (arbor,
+// templates) depend on. See `workspaces/fe-codegen-platform/01-analysis/
+// layout-migration-scoping.md` for the full migration map.
 
-export interface VStackProps {
+interface VStackProps {
   children: ReactNode;
   gap?: number;
-  align?: 'start' | 'center' | 'end' | 'stretch';
+  align?: "start" | "center" | "end" | "stretch";
   padding?: number;
   className?: string | undefined;
 }
 
-export function VStack({ children, gap = 0, align = 'stretch', padding = 0, className }: VStackProps) {
-  const style: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap,
-    alignItems: align === 'stretch' ? 'stretch' : `flex-${align}`,
-    padding: padding || undefined,
-  };
-  return <div style={style} className={className}>{children}</div>;
+export function VStack({
+  children,
+  gap = 0,
+  align = "stretch",
+  padding = 0,
+  className,
+}: VStackProps) {
+  const { spacing, styleOverride } = resolveLegacyGap(gap);
+  const style: CSSProperties | undefined =
+    padding || styleOverride
+      ? { ...(padding ? { padding } : {}), ...(styleOverride ?? {}) }
+      : undefined;
+  return (
+    <PrismStack
+      direction="vertical"
+      spacing={spacing}
+      align={align}
+      className={className}
+      style={style}
+    >
+      {children}
+    </PrismStack>
+  );
 }
 
-export interface RowProps {
+interface RowProps {
   children: ReactNode;
   gap?: number;
-  align?: 'start' | 'center' | 'end' | 'stretch';
-  justify?: 'start' | 'center' | 'end' | 'between' | 'around';
+  align?: "start" | "center" | "end" | "stretch";
+  justify?: "start" | "center" | "end" | "between" | "around";
   wrap?: boolean;
   className?: string;
 }
 
-export function Row({ children, gap = 0, align = 'center', justify = 'start', wrap = false, className }: RowProps) {
-  const justifyMap: Record<string, string> = {
-    start: 'flex-start',
-    center: 'center',
-    end: 'flex-end',
-    between: 'space-between',
-    around: 'space-around',
-  };
-  const style: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'row',
-    gap,
-    alignItems: align === 'stretch' ? 'stretch' : `flex-${align}`,
-    justifyContent: justifyMap[justify],
-    flexWrap: wrap ? 'wrap' : 'nowrap',
-  };
-  return <div style={style} className={className}>{children}</div>;
+export function Row({
+  children,
+  gap = 0,
+  align = "center",
+  justify = "start",
+  wrap = false,
+  className,
+}: RowProps) {
+  const { spacing, styleOverride } = resolveLegacyGap(gap);
+  return (
+    <PrismRow
+      spacing={spacing}
+      align={align}
+      justify={justify}
+      wrap={wrap}
+      className={className}
+      style={styleOverride}
+    >
+      {children}
+    </PrismRow>
+  );
 }
 
-export interface GridProps {
+interface GridProps {
   children: ReactNode;
   columns?: number | ResponsiveValue<number>;
   gap?: number;
@@ -243,17 +333,31 @@ export interface GridProps {
   className?: string;
 }
 
-export function Grid({ children, columns = 1, gap = 16, rowGap, className }: GridProps) {
-  const { breakpoint } = useLayout();
-  const resolvedCols = resolveResponsive(columns, breakpoint, 1);
-
-  const style: CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: `repeat(${resolvedCols}, minmax(0, 1fr))`,
-    gap,
-    rowGap: rowGap ?? gap,
-  };
-  return <div style={style} className={className}>{children}</div>;
+export function Grid({
+  children,
+  columns = 1,
+  gap = 16,
+  rowGap,
+  className,
+}: GridProps) {
+  const { spacing, styleOverride } = resolveLegacyGap(gap);
+  // Legacy supported separate rowGap; new Grid uses a single gap. When the
+  // consumer asked for a different rowGap, override via inline style.
+  const needsRowGap = rowGap !== undefined && rowGap !== gap;
+  const style: CSSProperties | undefined =
+    styleOverride || needsRowGap
+      ? { ...(styleOverride ?? {}), ...(needsRowGap ? { rowGap } : {}) }
+      : undefined;
+  return (
+    <PrismGrid
+      columns={columns}
+      gap={spacing}
+      className={className}
+      style={style}
+    >
+      {children}
+    </PrismGrid>
+  );
 }
 
 export interface SplitProps {
@@ -263,37 +367,52 @@ export interface SplitProps {
   className?: string | undefined;
 }
 
-export function Split({ children, ratio = '1:2', gap = 0, className }: SplitProps) {
+export function Split({
+  children,
+  ratio = "1:2",
+  gap = 0,
+  className,
+}: SplitProps) {
   const { breakpoint, isMobile } = useLayout();
-  const resolvedRatio = resolveResponsive(ratio, breakpoint, '1:2');
+  const resolvedRatio = resolveResponsive(ratio, breakpoint, "1:2");
 
   // On mobile, stack vertically
-  if (isMobile || resolvedRatio === '0:1') {
-    return <VStack gap={gap} className={className}>{children[1]}</VStack>;
+  if (isMobile || resolvedRatio === "0:1") {
+    return (
+      <VStack gap={gap} className={className}>
+        {children[1]}
+      </VStack>
+    );
   }
 
-  const parts = resolvedRatio.split(':').map(Number);
+  const parts = resolvedRatio.split(":").map(Number);
   const left = parts[0] ?? 1;
   const right = parts[1] ?? 2;
   const total = left + right;
 
   const style: CSSProperties = {
-    display: 'flex',
+    display: "flex",
     gap,
   };
 
   return (
     <div style={style} className={className}>
-      <div style={{ flex: `${left} 0 ${(left / total) * 100}%`, minWidth: 0 }}>{children[0]}</div>
-      <div style={{ flex: `${right} 0 ${(right / total) * 100}%`, minWidth: 0 }}>{children[1]}</div>
+      <div style={{ flex: `${left} 0 ${(left / total) * 100}%`, minWidth: 0 }}>
+        {children[0]}
+      </div>
+      <div
+        style={{ flex: `${right} 0 ${(right / total) * 100}%`, minWidth: 0 }}
+      >
+        {children[1]}
+      </div>
     </div>
   );
 }
 
 // --- Layer (z-axis stacking for overlays, modals, popovers) ---
 
-export type LayerTier = 'page' | 'popover' | 'modal' | 'toast' | 'tooltip';
-type LayerPosition = 'center' | 'top' | 'bottom' | 'start' | 'end';
+export type LayerTier = "page" | "popover" | "modal" | "toast" | "tooltip";
+type LayerPosition = "center" | "top" | "bottom" | "start" | "end";
 
 const LAYER_Z_INDEX: Record<LayerTier, number> = {
   page: 0,
@@ -308,7 +427,7 @@ export interface LayerProps {
   /** Z-index tier. Default: "page" */
   tier?: LayerTier;
   /** Positioning: fixed to viewport or absolute to parent. Default: "viewport" */
-  anchor?: 'viewport' | 'parent';
+  anchor?: "viewport" | "parent";
   /** Where content appears relative to anchor. Default: "center" */
   position?: LayerPosition;
   /** Show semi-transparent backdrop. Default: false */
@@ -326,9 +445,9 @@ export interface LayerProps {
 
 export function Layer({
   children,
-  tier = 'page',
-  anchor = 'viewport',
-  position = 'center',
+  tier = "page",
+  anchor = "viewport",
+  position = "center",
   backdrop = false,
   backdropDismiss = true,
   trapFocus = false,
@@ -343,10 +462,10 @@ export function Layer({
   useEffect(() => {
     if (!open || !onDismiss) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onDismiss();
+      if (e.key === "Escape") onDismiss();
     };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
   }, [open, onDismiss]);
 
   // Focus trap
@@ -359,7 +478,7 @@ export function Layer({
     if (focusable.length > 0) focusable[0]!.focus();
 
     const handler = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab' || focusable.length === 0) return;
+      if (e.key !== "Tab" || focusable.length === 0) return;
       const first = focusable[0]!;
       const last = focusable[focusable.length - 1]!;
       if (e.shiftKey && document.activeElement === first) {
@@ -370,56 +489,61 @@ export function Layer({
         first.focus();
       }
     };
-    container.addEventListener('keydown', handler);
-    return () => container.removeEventListener('keydown', handler);
+    container.addEventListener("keydown", handler);
+    return () => container.removeEventListener("keydown", handler);
   }, [open, trapFocus]);
 
   if (!open) return null;
 
-  const positionStyle = anchor === 'viewport'
-    ? { position: 'fixed' as const, inset: 0 }
-    : { position: 'absolute' as const, inset: 0 };
+  const positionStyle =
+    anchor === "viewport"
+      ? { position: "fixed" as const, inset: 0 }
+      : { position: "absolute" as const, inset: 0 };
 
   const alignmentStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: position === 'top' ? 'flex-start'
-              : position === 'bottom' ? 'flex-end'
-              : 'center',
-    justifyContent: position === 'start' ? 'flex-start'
-                  : position === 'end' ? 'flex-end'
-                  : 'center',
+    display: "flex",
+    alignItems:
+      position === "top"
+        ? "flex-start"
+        : position === "bottom"
+          ? "flex-end"
+          : "center",
+    justifyContent:
+      position === "start"
+        ? "flex-start"
+        : position === "end"
+          ? "flex-end"
+          : "center",
   };
 
   return (
     <div
       ref={containerRef}
-      role={tier === 'modal' ? 'dialog' : undefined}
-      aria-modal={tier === 'modal' ? true : undefined}
+      role={tier === "modal" ? "dialog" : undefined}
+      aria-modal={tier === "modal" ? true : undefined}
       style={{ ...positionStyle, zIndex, ...alignmentStyle }}
       className={className}
     >
       {backdrop && (
         <div
           style={{
-            position: 'absolute',
+            position: "absolute",
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
             zIndex,
           }}
           onClick={backdropDismiss ? onDismiss : undefined}
           aria-hidden="true"
         />
       )}
-      <div style={{ position: 'relative', zIndex: zIndex + 1 }}>
-        {children}
-      </div>
+      <div style={{ position: "relative", zIndex: zIndex + 1 }}>{children}</div>
     </div>
   );
 }
 
 // --- Scroll (constrained scroll region) ---
 
-export type ScrollDirection = 'vertical' | 'horizontal' | 'both';
+export type ScrollDirection = "vertical" | "horizontal" | "both";
 
 export interface ScrollProps {
   children: ReactNode;
@@ -434,22 +558,24 @@ export interface ScrollProps {
   /** Show scrollbar indicator. Default: true */
   indicator?: boolean;
   /** Accessible label for the scroll region */
-  'aria-label'?: string;
+  "aria-label"?: string;
   className?: string;
 }
 
 export function Scroll({
   children,
-  direction = 'vertical',
+  direction = "vertical",
   maxHeight,
   maxWidth,
   padding = 0,
   indicator = true,
-  'aria-label': ariaLabel,
+  "aria-label": ariaLabel,
   className,
 }: ScrollProps) {
-  const overflowX = direction === 'horizontal' || direction === 'both' ? 'auto' : 'hidden';
-  const overflowY = direction === 'vertical' || direction === 'both' ? 'auto' : 'hidden';
+  const overflowX =
+    direction === "horizontal" || direction === "both" ? "auto" : "hidden";
+  const overflowY =
+    direction === "vertical" || direction === "both" ? "auto" : "hidden";
 
   const style: CSSProperties = {
     overflowX,
@@ -458,7 +584,7 @@ export function Scroll({
     maxWidth: maxWidth ?? undefined,
     padding: padding || undefined,
     // Hide scrollbar when indicator=false but keep scrolling functional
-    ...(indicator ? {} : { scrollbarWidth: 'none' as const }),
+    ...(indicator ? {} : { scrollbarWidth: "none" as const }),
   };
 
   return (
@@ -481,7 +607,7 @@ export function Scroll({
 
 // --- Zone Renderer ---
 
-export interface ZoneProps {
+interface ZoneProps {
   name: string;
   zone: ZoneContent;
   className?: string;
@@ -490,24 +616,34 @@ export interface ZoneProps {
 export function Zone({ name, zone, className }: ZoneProps) {
   const { breakpoint } = useLayout();
   const isVisible = zone.visible
-    ? resolveResponsive(zone.visible as ResponsiveValue<boolean>, breakpoint, true)
+    ? resolveResponsive(
+        zone.visible as ResponsiveValue<boolean>,
+        breakpoint,
+        true,
+      )
     : true;
 
   if (!isVisible) return null;
 
-  const Tag = zone.role === 'main' ? 'main' :
-              zone.role === 'navigation' ? 'nav' :
-              zone.role === 'complementary' ? 'aside' :
-              zone.role === 'contentinfo' ? 'footer' : 'section';
+  const Tag =
+    zone.role === "main"
+      ? "main"
+      : zone.role === "navigation"
+        ? "nav"
+        : zone.role === "complementary"
+          ? "aside"
+          : zone.role === "contentinfo"
+            ? "footer"
+            : "section";
 
   const style: CSSProperties = zone.sticky
-    ? { position: 'sticky', top: 0, zIndex: 10 }
+    ? { position: "sticky", top: 0, zIndex: 10 }
     : {};
 
   return (
     <Tag
       data-zone={name}
-      aria-label={name.replace(/-/g, ' ')}
+      aria-label={name.replace(/-/g, " ")}
       style={style}
       className={className}
     >
@@ -522,8 +658,8 @@ export function useLayout(): LayoutContextValue {
   const ctx = useContext(LayoutContext);
   if (!ctx) {
     throw new Error(
-      'useLayout() must be used within a <LayoutProvider>. ' +
-      'Wrap your page with <LayoutProvider>.',
+      "useLayout() must be used within a <LayoutProvider>. " +
+        "Wrap your page with <LayoutProvider>.",
     );
   }
   return ctx;
@@ -532,12 +668,6 @@ export function useLayout(): LayoutContextValue {
 /** Returns the layout context or null if no LayoutProvider wraps this tree. */
 export function useLayoutMaybe(): LayoutContextValue | null {
   return useContext(LayoutContext);
-}
-
-/** Resolve a responsive value for the current breakpoint */
-export function useResponsive<T>(value: T | ResponsiveValue<T>, fallback: T): T {
-  const { breakpoint } = useLayout();
-  return resolveResponsive(value, breakpoint, fallback);
 }
 
 // --- Utilities ---
@@ -553,5 +683,3 @@ function usePrevious<T>(value: T): T | undefined {
 
   return prev;
 }
-
-export { resolveBreakpoint, resolveResponsive, BREAKPOINTS };

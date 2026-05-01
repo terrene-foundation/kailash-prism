@@ -1,127 +1,48 @@
-# Session Notes — 2026-04-20/21 (parallel wave + /redteam convergence)
+# Session Notes — 2026-04-29
 
 ## Where we are
 
-Prism web engine at 0.4.0 on main. Ten PRs merged this session
-(`01b1c1d..ac55dc6`), advancing all four framings F1 (engine
-completeness) / F2 (codegen) / F3 (consumer validation — partial) /
-F4 (production-grade). /redteam converged after round-1 surfaced
-3 HIGH and PR #17 resolved them; round-2 clean.
+Prism web 0.5.0 work split into two PR-ready local branches per the
+new `rules/git.md` § "Release-Prep PRs MUST Use release/v* Branch
+Convention". Both branches are local; remote push pending user
+approval. Arbor PR #17 (wave-1/2/3 + lint fix) OPEN at
+terrene-foundation/arbor, awaiting admin-merge. Local-only
+`feat/prism-0.4.0-upgrade` in arbor is staged on top of #17, awaiting
+rebase + push after #17 squash-merges.
 
 ## Read first
 
-1. `workspaces/fe-codegen-platform/journal/0023-DECISION-redteam-convergence-round2-clean.md`
-   — full session arc: what shipped, convergence verdict, outstanding
-   work.
-2. `workspaces/fe-codegen-platform/journal/0020-RISK-flutter-parity-redteam-round1-findings.md`
-   — Flutter parity gap (compiler output dead code, Riverpod absent,
-   200-LOC cap violated 5/5). Multi-session workstream.
-3. `workspaces/fe-codegen-platform/journal/0021-GAP-layout-engine-orphan-partial-resolution.md`
-   — new Layout engine sub-path-gated; legacy→new migration needed.
-4. `workspaces/fe-codegen-platform/01-analysis/arbor-wave4-route-selection.md`
-   — /clients identified as next arbor migration target (but see
-   "Traps" below — arbor does NOT have wave-3 landed yet).
-5. `web/CHANGELOG.md` — 0.4.0 + Unreleased (Layout engine sub-path).
+1. `journal/0025-DECISION-layout-delegation-wrapper-0.5.0.md` — 0.5.0 work + spec-sweep correction (most recent)
+2. `journal/0024-DECISION-arbor-wave3-ship-and-0.4.0-upgrade-stage.md` — kitchen-sink-branch escape + 0.4.0 upgrade staging
+3. `01-analysis/layout-migration-scoping.md` — drove Option 2 partial-delegation
+4. `web/CHANGELOG.md` — 0.5.0 dated 2026-04-28
+5. `01-analysis/arbor-wave4-route-selection.md` — `/clients` is wave-4 target after 0.4.0+0.5.0 ship
+6. `journal/0023-DECISION-redteam-convergence-round2-clean.md` — prior /redteam baseline
 
-## What shipped (PRs in order)
+## In-flight state
 
-| PR  | Commit    | Scope                                                       |
-| --- | --------- | ----------------------------------------------------------- |
-| #11 | `a41c9ad` | chore: wave-3 polish + 0.4.0/wave-4/distribution scoping    |
-| #12 | `54e3498` | feat(ops): GitHub Release asset distribution workflow       |
-| #13 | `6ebc341` | feat(compiler): codegen pipeline PoC                        |
-| #14 | `7b5c686` | feat(prism-web): Layout engine (6 primitives, sub-path)     |
-| #15 | `56340ba` | test(prism-web): Tier 2 engine wiring tests (3 engines)     |
-| #16 | `421dd41` | feat(prism-web)!: 0.4.0 — TId + globalSearch + comparator   |
-| #17 | `1c47a20` | fix(prism): /redteam round-1 — 3 HIGH + 1 MED + 1 LOW       |
-| #18 | `7daf973` | docs(journal): convergence entries 0021/0022/0023           |
-| #19 | `35f455f` | fix(journal): frontmatter + For Discussion                  |
-| #20 | `ac55dc6` | chore(specs): version field on 13 atom specs (closes 0022)  |
+- Local branches ready (NOT pushed):
+  - `feat/prism-web-0.5.0-layout-delegation` — chore (test-setup jsdom fix) + feat (layout delegation code) + docs (workspace journals + this notes file). NO version bump, NO CHANGELOG.
+  - `release/v0.5.0` — version bump (web/package.json 0.4.0→0.5.0) + CHANGELOG entry only. Branches off the feat branch's tip so the version bump references the merged feat code.
+  - `backup-2026-04-29` — preserves the original 3-commit local-main state in case rollback is needed.
+- Arbor PR #17 OPEN. Cron watcher `trig_01BdEn4bUeeXxiy3JW1RkgT6` armed daily 9am SGT — surfaces merge + the local rebase script when state flips to MERGED.
+- 3 spec-mandated types (`LayoutEngineConfig`, `ZoneContent`, `ResponsiveValue<T>`) restored to public barrel after spec sweep caught the audit miss — six symbols actually removed, not nine.
+- **jsdom navigation warning suppressed at root cause** (test-setup.ts capture-phase preventDefault on `<a href>` clicks). Pre-existed since 0.3.1 (`data-table-card-grid.test.tsx:229` clicks an anchor for stopPropagation assertion); navigation queued via setTimeout fired during the next test as cross-test contamination. Production behavior unchanged. Tests now 403/403 with zero stderr noise.
 
-Test posture on main: 387/387 web + 73/73 compiler = 460/460 passing.
-`tsc --noEmit` clean in web/ and compiler/.
+## Traps
 
-## /redteam verdict
+- **`dist/` is stale** (pre-0.5.0 build, no `dist/engines/layout/` directory yet). `/release` rebuilds via `tsc`. Do NOT ship the stale dist or treat its absence of new-engine sub-path as a missing source.
+- **`Split` / `Layer` / `Scroll` kept legacy deliberately** in 0.5.0 — semantics (static ratio + mobile collapse / backdrop + focus trap / scrollbar toggle) have no equivalent in `engines/layout/`. Do NOT force-delegate without consumer demand.
+- **`resolveBreakpoint` and `ZoneContent`** still module-exported from `engines/layout.tsx` (for `layout.test.tsx` boundary tests) but only the latter is in the public barrel.
+- **Arbor `feat/prism-advisory`** holds 12 orphaned maintenance commits with `pyproject.toml`/`uv.lock` drift vs origin/main — separate untangling, do NOT mix into Prism PRs.
+- **0.4.0 upgrade branch needs rebase onto squashed-PR-#17 commit** before push. G-1 changes and lint refactor touch disjoint regions of `documents-prism/page.tsx` → conflict-free.
+- **Spec sweep before deletion**: `web/src/` audits miss `docs/specs/**` and `specs/**`. A symbol with 0 code consumers but a spec mention is contract-bound, not vestigial.
 
-Round 1 (4 parallel agents — spec / security / code / tests):
-- 0 CRIT / 3 HIGH / 8 MED / 12 LOW
+## Open questions for the human
 
-Round 1 HIGH blockers + dispositions (PR #17):
-- HIGH-1 Layout orphan → sub-path gate (full migration deferred)
-- HIGH-2 Layout* barrel drag → 30-line re-export removed
-- HIGH-3 `data-table.yaml` v0.3.0 vs 0.4.0 code → spec bumped + regen
-
-Round 2 (single analyst re-validation):
-- 0 new CRIT/HIGH/MED/LOW — all round-1 resolutions AST/grep verified
-- Declared converged
-
-## Deferred workstreams (by size)
-
-1. **Layout engine legacy→new unification** — journal 0021. ~2-3
-   sessions. Scope: grow `engines/layout/` with orchestration
-   (LayoutProvider/useLayout/useResponsive/Zone) OR have legacy
-   delegate to new primitives. Then migrate 10 templates. Then
-   delete `engines/layout.tsx`.
-
-2. **Flutter parity** — journal 0020. Multi-session. Compiler's
-   Flutter output is orphan (`compiler/generated/flutter/*.dart`
-   never imported); `flutter/lib/theme/prism_colors.dart` is
-   hand-authored and diverges. Riverpod absent. All 5 engines
-   violate 200-LOC cap (k_chat.dart is 1,694 LOC). 1 failing test
-   (`KConversationSidebar` date-group label) — zero-tolerance carry.
-
-3. **Arbor wave-1/2/3 commitment + wave-4** — prerequisite gap
-   surfaced in 2026-04-21 wrap-up. Arbor main at `d1a6c44` has NO
-   Prism integration. The wave-1/2/3 work from prior sessions lives
-   on local branch `feat/prism-advisory` + one git stash on that
-   branch (`arbor-wip-prism-and-sync`). Wave-4 `/clients` cannot
-   start until wave-3 is landed on arbor main. Scope: either (a)
-   PR feat/prism-advisory into arbor main and ship the stash, or
-   (b) re-scope from scratch targeting the current 0.4.0 API.
-
-## Traps (for the next session)
-
-- **Arbor state mismatch.** Previous `.session-notes` said "wave-3
-  shipped end-to-end" — that was in the working tree. It was
-  stashed, never committed, never PR'd. Arbor main has zero Prism.
-  Before promising wave-4, unstash on `feat/prism-advisory`, decide
-  to ship or abandon.
-- **`engines/layout.tsx` is the canonical Layout import.** New
-  `engines/layout/` primitives are at the sub-path only. Do NOT
-  import Layout primitives from the top-level barrel — they aren't
-  there anymore.
-- **Distribution via GitHub Release assets is live but unused.**
-  The `.github/workflows/release-web.yml` fires on `web-v*` tags.
-  No `web-v0.4.0` tag has been pushed yet. Cut the release tag
-  before telling a consumer to use the release asset URL.
-- **Spec-loader is strict on `version:`.** All 70 component specs
-  have it now. Don't introduce a new atom spec without `version:` —
-  batch codegen will refuse with SCHEMA_VIOLATION.
-- **`specs-authority.md` Rule 5b** (sibling-spec sweep on edits) is
-  now codified — every future spec edit triggers a full sibling
-  grep across the same domain.
-- **Stale `.spec-coverage-v2.md` Layout claim.** Line 126 still says
-  "PASS" on a removed alias. Non-blocking, refresh on next codify.
-
-## Next candidate threads (ranked by leverage)
-
-1. **~~Ship the 0.4.0 GitHub Release~~** — DONE 2026-04-21. `web-v0.4.0`
-   tag cut; `.github/workflows/release-web.yml` fired successfully
-   (run #24704781006); tarball published at
-   `https://github.com/terrene-foundation/kailash-prism/releases/download/web-v0.4.0/kailash-prism-web-0.4.0.tgz`.
-   Node 20 deprecation warning noted in workflow annotations
-   (action runtime migration to Node 24 required before 2026-09-16) —
-   track as a future hardening pass.
-2. **Arbor feat/prism-advisory resolution** — decide ship vs abandon.
-   If ship: PR into arbor main, then wave-4 `/clients` can start.
-3. **Layout migration shard** (journal 0021) — 2-3 sessions.
-4. **Flutter parity wave** (journal 0020) — multi-session.
-
-## Memory + env pointers
-
-- `memory/MEMORY.md`: Prism = GitHub-only distribution; squash-merge
-  preference; arbor Prism integration pattern.
-- `.claude/rules/` full complement loaded; rule 5b (specs) and
-  pytest plugin+marker rule (testing) codified this week.
-- Deferred items are tracked in journal, not as todos — workspace
-  has no active todos as of this session.
+- Two PRs ready to push for Prism BUILD repo:
+  1. `feat/prism-web-0.5.0-layout-delegation` → PR A (code only, ~3 commits)
+  2. `release/v0.5.0` → PR B (metadata-only: package.json + CHANGELOG)
+  Push order: PR A first (admin-merge), then PR B (admin-merge), then push `web-v0.5.0` tag to trigger `release-web.yml`.
+- Admin-merge arbor PR #17 when ready (still MERGEABLE, OPEN). Independent of 0.5.0 release.
+- Wave-4 `/clients` cadence after PR #17 + 0.4.0 upgrade ship.
