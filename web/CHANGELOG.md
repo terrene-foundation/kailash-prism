@@ -2,37 +2,57 @@
 
 All notable changes to the Prism web engine package are documented here.
 
-## Unreleased — Layout engine (S5) — six composable primitives (sub-path only)
+## 0.5.0 — 2026-04-28 — Layout delegation + vestigial cleanup
 
-New engine available via sub-path import only: `@kailash/prism-web/engines/layout`. NOT re-exported from the top-level barrel, because all 10 existing templates still compose against the legacy `engines/layout.tsx` and exposing a `Layout*`-aliased subset at the top level would drag a public API with zero production consumers. A follow-up migration shard will unify the two engines.
+Closes part of journal 0021's HIGH-1 (Layout engine orphan). The legacy `VStack`, `Row`, and `Grid` primitives at the top-level barrel are now thin delegates over the composable primitives in `@kailash/prism-web/engines/layout`. Six unused symbols are removed from the public surface (three further candidates were retained because the spec mandates them — see Retained list below).
 
-Adds six composable primitives organised per `docs/specs/04-layout-grammar.md`:
+Public-API stays source-compatible for in-scope consumers — `gap: number` on legacy primitives still accepts raw px values; `LayoutProvider` / `useLayout` / `Zone` orchestration continues to work as-is. The new engine remains available via sub-path for tokenized callers.
 
-- **L1 — `Stack`**: vertical/horizontal arrangement with token-driven spacing. Props: `direction`, `spacing` (SpacingToken), `align`, `justify`, `wrap`. Default `direction="vertical"`.
-- **L2 — `Row`**: intent-revealing alias for `<Stack direction="horizontal">`. Accepts all Stack props except `direction`.
-- **L3 — `Grid`**: N-column responsive grid. Props: `columns` (number or per-breakpoint map), `gap`, `minChildWidth` (auto-fill). SSR-safe CSS-only media queries — no JS breakpoint detection, no hydration flash.
-- **L4 — `Split`**: two-panel layout with draggable divider. Mouse + touch + keyboard (arrows 5%, PageUp/PageDown 20%, Home/End snap). Divider is `role="separator"` with full `aria-valuenow`/`aria-valuemin`/`aria-valuemax`/`aria-orientation`. Honors `minSize` (px) as dynamic minimum ratio.
-- **L5 — `Layer`**: absolutely-positioned overlay with tier-based z-index. Positions: `center`, `top-left`, `top-right`, `bottom-left`, `bottom-right`. Tier map (`page`/`popover`/`modal`/`toast`/`tooltip`) resolves through `var(--prism-layer-z-{tier}, <fallback>)`. `onDismiss` fires on Escape.
-- **L6 — `Scroll`**: overflow container with token-driven styled scrollbar. Per-instance scoped via `data-prism-scroll` (no cross-sibling bleed). `maxHeight`/`maxWidth` accept `number | string | SpacingToken`.
+### Changed
 
-### Coexistence rationale
+- **`VStack`, `Row`, `Grid` delegate to `engines/layout/`** in `engines/layout.tsx`. The legacy `gap: number` API is preserved at this surface; canonical values (0/4/8/16/24/32/48) translate to SpacingTokens (`none`/`xs`/`sm`/`md`/`lg`/`xl`/`2xl`); non-canonical values pass through as inline `style.gap` overrides on the new primitive's wrapper div, preserving exact-px legacy behaviour. Templates and external consumers (arbor pages) require no source changes.
+- **`Row` default `align` stays `center`** at the legacy surface — the wrapper passes the legacy default explicitly so behaviour does not silently shift to the new engine's `stretch` default.
+- **`Grid` `rowGap` separate from `gap`** preserved via inline-style override when the consumer requests a different rowGap (single-prop `gap` in the new engine is otherwise used).
 
-- The legacy `engines/layout.tsx` provides `LayoutProvider`, `useLayout`, `useResponsive`, `Zone`, `VStack`, and narrower primitives — all 10 templates depend on it and it stays the top-level API.
-- The new engine lives at `web/src/engines/layout/` and is opt-in via sub-path import. A future migration shard will grow the new engine to feature-parity and retire the legacy file.
+### Removed (public API surface)
 
-### Token discipline
+Per `rules/orphan-detection.md` Rule 3, removed where every consumer audit AND spec sweep found zero references. The surviving public-API surface is whatever `docs/specs/04-layout-grammar.md` and `docs/specs/05-engine-specifications.md` mandate.
 
-All values resolve through `var(--prism-*, <fallback>)`. No hardcoded px/hex/rgb in the engine source. The `var(...)` fallback is the sole permitted literal.
+- `useResponsive` (hook) — no spec mention; no consumers
+- `LayoutContextValue` (type) — no spec mention; consumers used type inference from `useLayout()`
+- `VStackProps` (type) — no spec mention; no consumers
+- `ZoneProps` (type) — no spec mention; no consumers
+- `resolveBreakpoint` (helper) — no JS-export spec mention (the spec's `resolveBreakpoint(double)` documents the Flutter primitive); no consumers (`organisms/card-grid.tsx` has its own local copy)
+- `BREAKPOINTS` (constant) — no spec mention; no consumers
+
+These remain MODULE-internal in `engines/layout.tsx` (so the file's own tests can keep direct boundary coverage) but are no longer re-exported through the top-level barrel `@kailash/prism-web`.
+
+**Retained** (spec-mandated, even though current code has zero consumers):
+
+- `LayoutEngineConfig` (type) — declared in `docs/specs/05-engine-specifications.md` § 5.4
+- `ZoneContent` (type) — declared in `docs/specs/05-engine-specifications.md` § 5.4
+- `ResponsiveValue<T>` (type) — declared in `docs/specs/04-layout-grammar.md` § 4.4
+
+Per `rules/specs-authority.md`, the spec is the contract. Symbols whose names appear in spec-as-public-API must remain in the public barrel even when current code does not import them.
+
+### Unchanged (intentional, see scoping doc)
+
+- `Split`, `Layer`, `Scroll` keep legacy implementations. Each has semantics the new engine does not yet replicate: `Split` = static ratio + `useLayout()`-driven mobile collapse; `Layer` = backdrop + focus trap + viewport/parent anchor; `Scroll` = `indicator` toggle. Future migration when consumer needs justify the API change.
+- `LayoutProvider`, `useLayout`, `useLayoutMaybe`, `Zone` — orchestration surface the new "primitives" engine deliberately omits. Stay legacy.
 
 ### Tests
 
-- 49 new Vitest cases across 7 files (`stack.test.tsx` + `row.test.tsx` + `grid.test.tsx` + `split.test.tsx` + `layer.test.tsx` + `scroll.test.tsx` + `layout-engine.wiring.test.tsx`).
-- The wiring test composes all six primitives and asserts keyboard (Split arrows) + dismissal (Layer Escape) + render paths end-to-end per `.claude/rules/orphan-detection.md` Rule 2.
+- 16 new delegation parity tests in `engines/layout-delegation.test.tsx`. Verify that legacy primitives render through the new engine code path (via `data-prism-stack` / `data-prism-grid` attributes), translate canonical gap values to tokens, preserve non-canonical px via inline style override, and forward all legacy-only props (padding, align, justify, wrap, rowGap).
+- Existing 387 tests continue to pass; total 403 across 26 test files.
 
 ### Migration notes
 
-- Zero-impact for existing consumers. Templates continue to import from `engines/layout.js` unchanged.
-- New consumers opt in via `import { Stack } from '@kailash/prism-web/engines/layout'`.
+- **Zero-impact for in-scope downstream consumers.** Arbor pages importing `LayoutProvider`, `VStack`, `Row`, `Grid` from `@kailash/prism-web` continue to work without source changes.
+- Consumers that imported any of the 9 removed symbols (none observed in the audit) will see a TypeScript error and need to either inline the type (it is structurally trivial) or read the breakpoint via `useLayout().breakpoint` instead of `resolveBreakpoint(width)` directly.
+
+### Origin
+
+`workspaces/fe-codegen-platform/01-analysis/layout-migration-scoping.md` (Option 2 — delegation wrapper). The 0.5.0 work closes journal 0021's HIGH-1 partially: 3 of 6 new-engine primitives now have production call sites; the remaining 3 (Split / Layer / Scroll) await a future shard with consumer demand.
 
 ## 0.4.0 — 2026-04-20 — TId generics + controlled globalSearch + defaultSortComparator export
 
@@ -55,7 +75,6 @@ not be lifted into a parent URL-state store.
   and `DataTableConfig.onRowClick(row, id: TId)`. Consumers with numeric
   primary keys can now declare `DataTable<Row, number>` and drop the
   `Number(id)` coercion at every call site.
-
   - **Non-breaking**: the default `TId = string` preserves 0.3.1
     behavior verbatim. Existing consumers that typed `DataSource<Row>`
     or called `rowAction.onExecute(row, id: string)` continue to
@@ -208,6 +227,7 @@ releases may break public API.
 ### Migration
 
 The 0.2.2 CHANGELOG cheatsheet applies verbatim:
+
 ```diff
 - const dataSource: ServerDataSource<Doc> = {
 -   fetchData: async (params) => { /* ... */ return { items, totalCount }; },
@@ -391,7 +411,7 @@ consumer to re-implement the `{values, result}` state machine around
      in the wild.
   2. `FormState.submission: FormSubmission | null` is a new state field.
      Tests that snapshot the full state object MUST add `submission:
-     null` to their expected shape; typed consumers of `FormState` will
+null` to their expected shape; typed consumers of `FormState` will
      see the new field in autocomplete but existing code compiles.
   3. The `SET_SUBMISSION` reducer action is new. Consumers that
      pattern-match on `FormAction` via `switch` without a `default`
