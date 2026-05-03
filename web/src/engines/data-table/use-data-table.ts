@@ -9,15 +9,54 @@
  * params change.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ColumnDef,
   DataTableBulkAction,
   DataTableConfig,
   DataTableRow,
   DataTableRowAction,
   SortState,
-} from './types.js';
-import { resolveDataSource } from './adapter.js';
+} from "./types.js";
+import { resolveDataSource } from "./adapter.js";
+
+/**
+ * Assert that no column declared `sortable: true` is a synthetic field
+ * (a `field` that does not appear as a key on the row object).
+ *
+ * Synthetic fields with `sortable: true` produce semantically wrong sort:
+ * the engine reads `row[col.field]` → `undefined` for every row → every
+ * comparison resolves equal → meaningless stable order. Throwing converts
+ * a silent display bug into a loud, fixable error.
+ *
+ * Idempotent and cheap (O(columns × 1)) — runs once per first non-empty
+ * render per `columns` identity (see `useDataTable` for the wiring).
+ *
+ * @param columns Column definitions to validate.
+ * @param firstRow A representative row from the data source. When
+ *   `undefined`, the assertion is deferred (we cannot tell synthetic from
+ *   typed without a row to inspect).
+ *
+ * @throws Error when any column has `sortable: true` AND its `field` is
+ *   not a property on `firstRow`.
+ */
+function assertNoSyntheticSortable<T extends DataTableRow>(
+  columns: ColumnDef<T>[],
+  firstRow: T | undefined,
+): void {
+  if (firstRow === undefined) return;
+  for (const col of columns) {
+    if (col.sortable !== true) continue;
+    if (!(col.field in (firstRow as object))) {
+      throw new Error(
+        `column "${col.field}" has sortable: true but is a synthetic field ` +
+          `(no row[field] lookup). Synthetic columns MUST set sortable: false. ` +
+          `To sort by a derived value, pre-compute it into the row data before ` +
+          `passing to DataTable.`,
+      );
+    }
+  }
+}
 
 export interface UseDataTableResult<T extends DataTableRow, TId = string> {
   /** Rows to display on the current page */
@@ -147,10 +186,7 @@ export function useDataTable<T extends DataTableRow, TId = string>(
   // NOT called per render — an adapter that needs to change capabilities
   // must be replaced with a new instance. We stabilize via adapter identity
   // so a memoized adapter produces a stable capabilities object.
-  const capabilities = useMemo(
-    () => adapter?.capabilities() ?? {},
-    [adapter],
-  );
+  const capabilities = useMemo(() => adapter?.capabilities() ?? {}, [adapter]);
   void capabilities; // reserved for client-side fallback gating in 0.4.0
 
   // --- Sorting state ---
@@ -166,11 +202,11 @@ export function useDataTable<T extends DataTableRow, TId = string>(
   // Uncontrolled-mode global-search state. When the parent supplies BOTH
   // `globalSearchValue` and `onGlobalSearchChange` the engine ignores this
   // state and reflects the parent's value.
-  const [uncontrolledGlobalSearch, setUncontrolledGlobalSearch] = useState('');
+  const [uncontrolledGlobalSearch, setUncontrolledGlobalSearch] = useState("");
   const isGlobalSearchControlled =
     globalSearchValue !== undefined && onGlobalSearchChange !== undefined;
   const globalSearch = isGlobalSearchControlled
-    ? (globalSearchValue ?? '')
+    ? (globalSearchValue ?? "")
     : uncontrolledGlobalSearch;
   // Dev-mode one-sided-control warning (React convention). Fires ONCE
   // per hook instance when exactly one of the two fields is present —
@@ -183,11 +219,11 @@ export function useDataTable<T extends DataTableRow, TId = string>(
     // in Node/SSR and is a silent no-op in a pure browser where
     // `process` is undefined.
     const g =
-      typeof globalThis !== 'undefined'
+      typeof globalThis !== "undefined"
         ? (globalThis as { process?: { env?: { NODE_ENV?: string } } })
         : undefined;
     const nodeEnv = g?.process?.env?.NODE_ENV;
-    if (nodeEnv === 'production') return;
+    if (nodeEnv === "production") return;
     if (oneSidedGlobalSearchWarnedRef.current) return;
     const hasValue = globalSearchValue !== undefined;
     const hasSetter = onGlobalSearchChange !== undefined;
@@ -195,10 +231,10 @@ export function useDataTable<T extends DataTableRow, TId = string>(
       oneSidedGlobalSearchWarnedRef.current = true;
       // eslint-disable-next-line no-console
       console.warn(
-        '[prism-web DataTable] `globalSearchValue` and `onGlobalSearchChange` ' +
-          'must be supplied together to opt into controlled mode. ' +
-          `Got ${hasValue ? 'value without setter' : 'setter without value'}. ` +
-          'Falling back to uncontrolled mode.',
+        "[prism-web DataTable] `globalSearchValue` and `onGlobalSearchChange` " +
+          "must be supplied together to opt into controlled mode. " +
+          `Got ${hasValue ? "value without setter" : "setter without value"}. ` +
+          "Falling back to uncontrolled mode.",
       );
     }
   }, [globalSearchValue, onGlobalSearchChange]);
@@ -224,6 +260,22 @@ export function useDataTable<T extends DataTableRow, TId = string>(
   // Tick used to force a refetch on retry
   const [retryTick, setRetryTick] = useState(0);
 
+  // --- Synthetic-sortable assertion (since 0.6.0) ---
+  // Tracks which `columns` array reference has been validated. Re-runs only
+  // when (a) the `columns` reference changes OR (b) data populates after an
+  // initial empty render. Uses the columns array identity (not deep
+  // equality) to avoid validating on every render — the typical consumer
+  // pattern is a stable `const columns = [...]` declared at module scope or
+  // via `useMemo`.
+  const validatedColumnsRef = useRef<unknown>(null);
+  useEffect(() => {
+    const firstRow = clientData[0] ?? serverRows[0];
+    if (firstRow === undefined) return;
+    if (validatedColumnsRef.current === columns) return;
+    assertNoSyntheticSortable(columns, firstRow);
+    validatedColumnsRef.current = columns;
+  }, [columns, clientData, serverRows]);
+
   // --- Row ID resolution ---
   // Precedence: adapter.getRowId > config.getRowId > row['id'] > index.
   // The adapter form takes precedence because it's part of the adapter's
@@ -239,11 +291,11 @@ export function useDataTable<T extends DataTableRow, TId = string>(
         // that return '' on a missing field (legacy shim pattern) fall
         // through to the engine's default instead of collapsing every
         // empty-id row into the same selection key.
-        if (aid != null && String(aid) !== '') return String(aid);
+        if (aid != null && String(aid) !== "") return String(aid);
       }
       if (configGetRowId) return configGetRowId(row, index);
       const asRecord = row as Record<string, unknown>;
-      const id = asRecord['id'];
+      const id = asRecord["id"];
       if (id != null) return String(id);
       return String(index);
     },
@@ -259,7 +311,7 @@ export function useDataTable<T extends DataTableRow, TId = string>(
     (row: T, index: number): TId => {
       if (adapter) {
         const aid = adapter.getRowId(row);
-        if (aid != null && String(aid) !== '') return aid;
+        if (aid != null && String(aid) !== "") return aid;
       }
       // No typed adapter — fall back to the string surface (TId defaults
       // to string in that case). The cast is safe: when no adapter is
@@ -294,7 +346,7 @@ export function useDataTable<T extends DataTableRow, TId = string>(
         if (seq !== fetchSeqRef.current) return;
         setServerRows([...result.rows]);
         setServerTotal(
-          typeof result.totalCount === 'number' && result.totalCount >= 0
+          typeof result.totalCount === "number" && result.totalCount >= 0
             ? result.totalCount
             : result.rows.length,
         );
@@ -313,7 +365,7 @@ export function useDataTable<T extends DataTableRow, TId = string>(
         if (seq !== fetchSeqRef.current) return;
         // AbortError from an in-flight cancellation is expected, not a user
         // error. Leave the previous serverRows / serverError in place.
-        if (err instanceof Error && err.name === 'AbortError') {
+        if (err instanceof Error && err.name === "AbortError") {
           return;
         }
         const raw = err instanceof Error ? err.message : String(err);
@@ -325,7 +377,16 @@ export function useDataTable<T extends DataTableRow, TId = string>(
     return () => {
       controller.abort();
     };
-  }, [adapter, page, pageSize, sorts, filters, globalSearch, retryTick, pagination?.enabled]);
+  }, [
+    adapter,
+    page,
+    pageSize,
+    sorts,
+    filters,
+    globalSearch,
+    retryTick,
+    pagination?.enabled,
+  ]);
 
   const retryServerFetch = useCallback(() => {
     if (adapter === null) return;
@@ -351,12 +412,17 @@ export function useDataTable<T extends DataTableRow, TId = string>(
     }
 
     // Column filters
-    const activeFilters = Object.entries(filters).filter(([, v]) => v.trim() !== '');
+    const activeFilters = Object.entries(filters).filter(
+      ([, v]) => v.trim() !== "",
+    );
     if (activeFilters.length > 0) {
       result = result.filter((row) =>
         activeFilters.every(([field, filterVal]) => {
           const val = (row as Record<string, unknown>)[field];
-          return val != null && String(val).toLowerCase().includes(filterVal.toLowerCase());
+          return (
+            val != null &&
+            String(val).toLowerCase().includes(filterVal.toLowerCase())
+          );
         }),
       );
     }
@@ -369,12 +435,7 @@ export function useDataTable<T extends DataTableRow, TId = string>(
 
     return [...filteredData].sort((a, b) => {
       for (const sort of sorts) {
-        const cmp = defaultSortComparator(
-          a,
-          b,
-          sort.field as keyof T,
-          sort.direction,
-        );
+        const cmp = defaultSortComparator(a, b, sort.field, sort.direction);
         if (cmp !== 0) return cmp;
       }
       return 0;
@@ -396,11 +457,17 @@ export function useDataTable<T extends DataTableRow, TId = string>(
   // --- Selected row objects ---
   const selectedRows = useMemo(() => {
     if (selectedIds.size === 0) return [];
-    return displayRows.filter((row, index) => selectedIds.has(getRowId(row, index)));
+    return displayRows.filter((row, index) =>
+      selectedIds.has(getRowId(row, index)),
+    );
   }, [displayRows, selectedIds, getRowId]);
 
-  const allSelected = displayRows.length > 0 && displayRows.every((row, i) => selectedIds.has(getRowId(row, i)));
-  const someSelected = !allSelected && displayRows.some((row, i) => selectedIds.has(getRowId(row, i)));
+  const allSelected =
+    displayRows.length > 0 &&
+    displayRows.every((row, i) => selectedIds.has(getRowId(row, i)));
+  const someSelected =
+    !allSelected &&
+    displayRows.some((row, i) => selectedIds.has(getRowId(row, i)));
 
   // --- Handlers ---
 
@@ -411,11 +478,9 @@ export function useDataTable<T extends DataTableRow, TId = string>(
         let next: SortState[];
         if (existing) {
           next =
-            existing.direction === 'asc'
-              ? [{ field, direction: 'desc' }]
-              : []; // Remove sort on third click
+            existing.direction === "asc" ? [{ field, direction: "desc" }] : []; // Remove sort on third click
         } else {
-          next = [{ field, direction: 'asc' }];
+          next = [{ field, direction: "asc" }];
         }
         onSort?.(next);
         return next;
@@ -426,7 +491,7 @@ export function useDataTable<T extends DataTableRow, TId = string>(
 
   const handleMultiSort = useCallback(
     (field: string) => {
-      if (sorting?.mode !== 'multi') {
+      if (sorting?.mode !== "multi") {
         handleSort(field);
         return;
       }
@@ -437,13 +502,13 @@ export function useDataTable<T extends DataTableRow, TId = string>(
           const existing = prev[existingIndex];
           if (!existing) return prev;
           next = [...prev];
-          if (existing.direction === 'asc') {
-            next[existingIndex] = { field, direction: 'desc' };
+          if (existing.direction === "asc") {
+            next[existingIndex] = { field, direction: "desc" };
           } else {
             next.splice(existingIndex, 1);
           }
         } else {
-          next = [...prev, { field, direction: 'asc' }];
+          next = [...prev, { field, direction: "asc" }];
         }
         onSort?.(next);
         return next;
@@ -503,13 +568,15 @@ export function useDataTable<T extends DataTableRow, TId = string>(
         if (next.has(id)) {
           next.delete(id);
         } else {
-          if (selection?.mode === 'single') {
+          if (selection?.mode === "single") {
             next.clear();
           }
           next.add(id);
         }
         // Compute new selection for callback
-        const newSelected = displayRows.filter((r, i) => next.has(getRowId(r, i)));
+        const newSelected = displayRows.filter((r, i) =>
+          next.has(getRowId(r, i)),
+        );
         onSelectionChange?.(newSelected);
         return next;
       });
@@ -562,12 +629,18 @@ export function useDataTable<T extends DataTableRow, TId = string>(
   // engine does NOT swallow them. Consumers that want centralised error
   // UI should await these and show their own toast / banner.
 
-  const rowActions: ReadonlyArray<DataTableRowAction<T, TId>> = adapter?.rowActions ?? [];
-  const adapterBulkActions: ReadonlyArray<DataTableBulkAction<T, TId>> = adapter?.bulkActions ?? [];
+  const rowActions: ReadonlyArray<DataTableRowAction<T, TId>> =
+    adapter?.rowActions ?? [];
+  const adapterBulkActions: ReadonlyArray<DataTableBulkAction<T, TId>> =
+    adapter?.bulkActions ?? [];
   const adapterOnRowActivate = adapter?.onRowActivate;
 
   const executeRowAction = useCallback(
-    async (action: DataTableRowAction<T, TId>, row: T, rowIndex: number): Promise<void> => {
+    async (
+      action: DataTableRowAction<T, TId>,
+      row: T,
+      rowIndex: number,
+    ): Promise<void> => {
       if (!action.onExecute) return;
       const id = getTypedRowId(row, rowIndex);
       await action.onExecute(row, id);
@@ -644,7 +717,9 @@ export function useDataTable<T extends DataTableRow, TId = string>(
     getRowId,
     expandedIds,
     handleToggleExpand,
-    ...(adapterOnRowActivate !== undefined ? { onRowActivate: adapterOnRowActivate } : {}),
+    ...(adapterOnRowActivate !== undefined
+      ? { onRowActivate: adapterOnRowActivate }
+      : {}),
     rowActions,
     adapterBulkActions,
     executeRowAction,
@@ -666,22 +741,29 @@ export function useDataTable<T extends DataTableRow, TId = string>(
  *  - Both values numeric-coercible: compared numerically.
  *  - Otherwise: stringified + `localeCompare` (locale-aware string sort).
  *
- * The comparator operates on the ROW shape (`T[keyof T]`), NOT on the row
- * id — this is why the function is TId-independent and can be exported
- * without the engine's TId generic.
+ * The comparator operates on the ROW shape (`Record<string, unknown>`),
+ * NOT on the row id — this is why the function is TId-independent and can
+ * be exported without the engine's TId generic.
+ *
+ * `key` is `string` (not `keyof T`) since 0.6.0 to align with the relaxed
+ * `ColumnDef.field` contract. When the key is a synthetic id with no
+ * corresponding row property, both `aVal` and `bVal` are `undefined` and
+ * the comparator returns `0` (every row equal). Sorting by a synthetic
+ * field is rejected upstream by `assertNoSyntheticSortable`; this
+ * behavior here is the no-op fallback for the empty-data window.
  */
 export function defaultSortComparator<T>(
   a: T,
   b: T,
-  key: keyof T,
-  direction: 'asc' | 'desc',
+  key: string,
+  direction: "asc" | "desc",
 ): number {
-  const aVal = (a as Record<string, unknown>)[key as string];
-  const bVal = (b as Record<string, unknown>)[key as string];
+  const aVal = (a as Record<string, unknown>)[key];
+  const bVal = (b as Record<string, unknown>)[key];
 
   if (aVal == null && bVal == null) return 0;
-  if (aVal == null) return direction === 'asc' ? -1 : 1;
-  if (bVal == null) return direction === 'asc' ? 1 : -1;
+  if (aVal == null) return direction === "asc" ? -1 : 1;
+  if (bVal == null) return direction === "asc" ? 1 : -1;
 
   const aStr = String(aVal);
   const bStr = String(bVal);
@@ -691,10 +773,10 @@ export function defaultSortComparator<T>(
   const bNum = Number(bStr);
   if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
     const diff = aNum - bNum;
-    if (diff !== 0) return direction === 'asc' ? diff : -diff;
+    if (diff !== 0) return direction === "asc" ? diff : -diff;
     return 0;
   }
 
   const cmp = aStr.localeCompare(bStr);
-  return direction === 'asc' ? cmp : -cmp;
+  return direction === "asc" ? cmp : -cmp;
 }

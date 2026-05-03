@@ -3,7 +3,7 @@
  * Spec: docs/specs/05-engine-specifications.md § 5.1
  */
 
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
 // --- Row type ---
 
@@ -21,12 +21,36 @@ export type DataTableRow = object;
 // --- Column definition ---
 
 export interface ColumnDef<T extends DataTableRow> {
-  /** Data field key */
-  field: string & keyof T;
+  /**
+   * Data field key.
+   *
+   * Dual contract since 0.6.0:
+   *
+   * - **`field` is a key of `T`** — the engine reads `row[field]` and passes
+   *   the value as the first argument to `render`. Sorting / filtering /
+   *   global-search all use this lookup. This is the typed path.
+   * - **`field` is a synthetic id** — any string the engine has never seen as
+   *   a key on `T` (e.g. `"_profile"`, `"completeness"`, `"actions"`). No
+   *   value lookup occurs; `render` receives `undefined` as `value` and is
+   *   expected to compute its own display from `row`. `sortable` MUST be
+   *   `false` for synthetic columns (the engine throws at first non-empty
+   *   render if a synthetic field is marked sortable — see
+   *   `assertNoSyntheticSortable` in `use-data-table.ts`). Synthetic columns
+   *   are how consumers express derived totals, profile-completeness bars,
+   *   action menus, and other display columns that don't correspond to a
+   *   single field on the row.
+   *
+   * Was `string & keyof T` prior to 0.6.0; relaxed to `string` to support
+   * synthetic computed columns. Every `row[col.field]` read site in the
+   * engine already coalesces or casts via `Record<string, unknown>` so the
+   * change is type-system-only — no runtime behavior change for existing
+   * keyed columns.
+   */
+  field: string;
   /** Display header text */
   header: string;
   /** Column width in px, or "auto" to fill remaining space */
-  width?: number | 'auto';
+  width?: number | "auto";
   /** Minimum width in px. Default: 80 */
   minWidth?: number;
   /** Whether this column is sortable. Default: inherits from config.sorting.enabled */
@@ -34,24 +58,26 @@ export interface ColumnDef<T extends DataTableRow> {
   /** Whether this column is filterable. Default: inherits from config.filtering.enabled */
   filterable?: boolean;
   /** Filter input type for this column */
-  filterType?: 'text' | 'select' | 'number' | 'boolean';
+  filterType?: "text" | "select" | "number" | "boolean";
   /** Options for select filter type */
   filterOptions?: string[];
   /**
    * Custom cell renderer.
    *
-   * `value` is typed as `T[keyof T] | undefined` so a renderer receives the
-   * statically-typed field value rather than an opaque `unknown`. This
-   * eliminates the `Number(value as unknown)` coercion pattern at call sites
-   * where the column's `field` already names a specific typed property on T.
+   * `value` is typed as `unknown` since 0.6.0 to support synthetic computed
+   * columns, where `field` is not a key of `T` and the engine passes
+   * `undefined` rather than a typed field value. For keyed columns the
+   * runtime value is still `row[field]` — consumers may cast (`value as
+   * Foo`) or guard (`typeof value === "string" && ...`) to narrow.
    *
-   * Breaking change in 0.2.0: callbacks previously typed `(value: unknown, row: T)`
-   * remain assignable (a function accepting `unknown` can handle any narrower
-   * type) but new callbacks can take advantage of the tighter typing.
+   * Migration from 0.5.x: callbacks that destructured the previously-narrow
+   * `T[keyof T] | undefined` type may need a cast or guard. Most call sites
+   * already use `value ?? defaultValue` and require no change. See the
+   * 0.6.0 CHANGELOG migration section for examples.
    */
-  render?: (value: T[keyof T] | undefined, row: T) => ReactNode;
+  render?: (value: unknown, row: T) => ReactNode;
   /** Text alignment. Default: "left" */
-  align?: 'left' | 'center' | 'right';
+  align?: "left" | "center" | "right";
 }
 
 // --- Sorting ---
@@ -60,14 +86,14 @@ export interface SortingConfig {
   /** Default: true */
   enabled?: boolean;
   /** Default: "single" */
-  mode?: 'single' | 'multi';
+  mode?: "single" | "multi";
   /** Default sort to apply on mount */
-  defaultSort?: { field: string; direction: 'asc' | 'desc' };
+  defaultSort?: { field: string; direction: "asc" | "desc" };
 }
 
 export interface SortState {
   field: string;
-  direction: 'asc' | 'desc';
+  direction: "asc" | "desc";
 }
 
 // --- Filtering ---
@@ -98,7 +124,7 @@ export interface SelectionConfig {
   /** Default: false */
   enabled?: boolean;
   /** Default: "multi" */
-  mode?: 'single' | 'multi';
+  mode?: "single" | "multi";
   /** Show select-all checkbox. Default: true */
   showSelectAll?: boolean;
 }
@@ -109,7 +135,7 @@ export interface BulkAction<T extends DataTableRow> {
   /** Button label */
   label: string;
   /** Visual variant */
-  variant: 'primary' | 'destructive' | 'ghost';
+  variant: "primary" | "destructive" | "ghost";
   /** Handler receiving selected rows */
   onExecute: (selectedRows: T[]) => void;
 }
@@ -152,7 +178,7 @@ export interface DataTableCapabilities {
   /** Whether the server honors limit/offset (or page/pageSize) pagination. Default: false. */
   readonly serverPagination?: boolean;
   /** Pagination model the server speaks. Default: "offset". */
-  readonly paginationMode?: 'offset' | 'cursor';
+  readonly paginationMode?: "offset" | "cursor";
   /** Per-column filterable fields. Empty/missing → engine filters client-side. */
   readonly filterableFields?: ReadonlyArray<string>;
   /** Whether the server supports a free-text search across fields. Default: false. */
@@ -169,7 +195,7 @@ export interface DataTableCapabilities {
  */
 export interface DataTableSort {
   readonly field: string;
-  readonly direction: 'asc' | 'desc';
+  readonly direction: "asc" | "desc";
 }
 
 /**
@@ -219,7 +245,7 @@ export interface DataTableRowAction<T extends DataTableRow, TId = string> {
   /** Optional leading icon. */
   readonly icon?: ReactNode;
   /** Visual variant. Default: "ghost". */
-  readonly variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
+  readonly variant?: "primary" | "secondary" | "ghost" | "destructive";
   /** Navigation target. Renders as anchor. Mutually exclusive with onExecute. */
   readonly href?: (row: T, id: TId) => string;
   /**
@@ -246,8 +272,11 @@ export interface DataTableBulkAction<T extends DataTableRow, TId = string> {
   readonly id: string;
   readonly label: string;
   readonly icon?: ReactNode;
-  readonly variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
-  readonly onExecute: (rows: ReadonlyArray<T>, ids: ReadonlyArray<TId>) => void | Promise<void>;
+  readonly variant?: "primary" | "secondary" | "ghost" | "destructive";
+  readonly onExecute: (
+    rows: ReadonlyArray<T>,
+    ids: ReadonlyArray<TId>,
+  ) => void | Promise<void>;
   /** Disable when fewer rows are selected. Default: 1. */
   readonly minSelection?: number;
   /** Disable when more rows are selected. Default: Infinity. */
@@ -398,7 +427,7 @@ export interface DataTableConfig<T extends DataTableRow, TId = string> {
   /** Additional CSS class for composition */
   className?: string;
   /** Accessible label for the table */
-  'aria-label'?: string;
+  "aria-label"?: string;
   /** Row height in px for virtual scrolling. Default: 48 */
   rowHeight?: number;
   /**
@@ -410,7 +439,7 @@ export interface DataTableConfig<T extends DataTableRow, TId = string> {
    *
    * Since 0.3.1.
    */
-  display?: 'table' | 'card-grid';
+  display?: "table" | "card-grid";
   /**
    * Custom card renderer for `display="card-grid"`. Optional. When
    * omitted, the engine uses a reasonable default: first column's value
@@ -507,5 +536,5 @@ export interface ResolvedTableState<T extends DataTableRow> {
    */
   selectedIds: Set<string>;
   /** Current data state */
-  status: 'idle' | 'loading' | 'error' | 'empty';
+  status: "idle" | "loading" | "error" | "empty";
 }

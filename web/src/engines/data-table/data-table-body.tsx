@@ -3,31 +3,34 @@
  * Sub-component of DataTable engine
  */
 
-import { useRef, useCallback, type KeyboardEvent, type ReactNode } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import type { ColumnDef, DataTableRow, DataTableRowAction } from './types.js';
-import { sanitizeHref } from './sanitize-href.js';
+import { useRef, useCallback, type KeyboardEvent, type ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import type { ColumnDef, DataTableRow, DataTableRowAction } from "./types.js";
+import { sanitizeHref } from "./sanitize-href.js";
 
 // --- Styles ---
 
 const rowStyle: React.CSSProperties = {
-  backgroundColor: 'var(--prism-data-table-row-bg, var(--prism-color-surface-page, #FFFFFF))',
-  borderBottom: '1px solid var(--prism-data-table-row-border, var(--prism-color-border-default, #E2E8F0))',
-  transition: 'background-color 0.15s ease',
+  backgroundColor:
+    "var(--prism-data-table-row-bg, var(--prism-color-surface-page, #FFFFFF))",
+  borderBottom:
+    "1px solid var(--prism-data-table-row-border, var(--prism-color-border-default, #E2E8F0))",
+  transition: "background-color 0.15s ease",
 };
 
 const selectedRowStyle: React.CSSProperties = {
   ...rowStyle,
-  backgroundColor: 'var(--prism-data-table-row-selected-bg, var(--prism-color-interactive-primary-subtle, #EFF6FF))',
+  backgroundColor:
+    "var(--prism-data-table-row-selected-bg, var(--prism-color-interactive-primary-subtle, #EFF6FF))",
 };
 
 const cellStyle: React.CSSProperties = {
-  padding: 'var(--prism-data-table-cell-padding, 12px 16px)',
-  fontSize: 'var(--prism-typography-body-size, 0.875rem)',
-  color: 'var(--prism-color-text-primary, #0F172A)',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
+  padding: "var(--prism-data-table-cell-padding, 12px 16px)",
+  fontSize: "var(--prism-typography-body-size, 0.875rem)",
+  color: "var(--prism-color-text-primary, #0F172A)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 };
 
 // --- Props ---
@@ -56,7 +59,13 @@ interface DataTableBodyProps<T extends DataTableRow, TId = string> {
    * Invoked when a user clicks an action button. The engine awaits the
    * action's onExecute, calls adapter.invalidate(), and refetches.
    */
-  executeRowAction?: ((action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>) | undefined;
+  executeRowAction?:
+    | ((
+        action: DataTableRowAction<T, TId>,
+        row: T,
+        rowIndex: number,
+      ) => Promise<void>)
+    | undefined;
 }
 
 // --- Component ---
@@ -150,7 +159,13 @@ interface VirtualBodyProps<T extends DataTableRow, TId = string> {
   getRowId: (row: T, index: number) => string;
   getTypedRowId: (row: T, index: number) => TId;
   rowActions?: ReadonlyArray<DataTableRowAction<T, TId>> | undefined;
-  executeRowAction?: ((action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>) | undefined;
+  executeRowAction?:
+    | ((
+        action: DataTableRowAction<T, TId>,
+        row: T,
+        rowIndex: number,
+      ) => Promise<void>)
+    | undefined;
 }
 
 function VirtualBody<T extends DataTableRow, TId = string>({
@@ -179,13 +194,19 @@ function VirtualBody<T extends DataTableRow, TId = string>({
     <tbody
       ref={parentRef}
       style={{
-        display: 'block',
-        height: '400px',
-        overflow: 'auto',
+        display: "block",
+        height: "400px",
+        overflow: "auto",
       }}
     >
-      <tr style={{ height: `${String(virtualizer.getTotalSize())}px`, display: 'block', position: 'relative' }}>
-        <td style={{ padding: 0, border: 'none' }}>
+      <tr
+        style={{
+          height: `${String(virtualizer.getTotalSize())}px`,
+          display: "block",
+          position: "relative",
+        }}
+      >
+        <td style={{ padding: 0, border: "none" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index];
             if (!row) return null;
@@ -197,14 +218,14 @@ function VirtualBody<T extends DataTableRow, TId = string>({
                 key={id}
                 data-index={virtualRow.index}
                 style={{
-                  position: 'absolute',
+                  position: "absolute",
                   top: 0,
                   left: 0,
-                  width: '100%',
+                  width: "100%",
                   height: `${String(virtualRow.size)}px`,
                   transform: `translateY(${String(virtualRow.start)}px)`,
-                  display: 'table',
-                  tableLayout: 'fixed',
+                  display: "table",
+                  tableLayout: "fixed",
                 }}
               >
                 <TableRow<T, TId>
@@ -246,7 +267,13 @@ interface TableRowProps<T extends DataTableRow, TId = string> {
   expandContent?: ((row: T) => ReactNode) | undefined;
   columnCount?: number;
   rowActions?: ReadonlyArray<DataTableRowAction<T, TId>> | undefined;
-  executeRowAction?: ((action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>) | undefined;
+  executeRowAction?:
+    | ((
+        action: DataTableRowAction<T, TId>,
+        row: T,
+        rowIndex: number,
+      ) => Promise<void>)
+    | undefined;
 }
 
 function TableRow<T extends DataTableRow, TId = string>({
@@ -274,7 +301,7 @@ function TableRow<T extends DataTableRow, TId = string>({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTableRowElement>) => {
-      if (e.key === 'Enter' && onRowClick) {
+      if (e.key === "Enter" && onRowClick) {
         e.preventDefault();
         void onRowClick(row, typedId);
       }
@@ -307,19 +334,31 @@ function TableRow<T extends DataTableRow, TId = string>({
         data-testid={`data-table-row-${String(index)}`}
       >
         {expandable && (
-          <td style={{ ...cellStyle, width: '36px', textAlign: 'center', cursor: 'pointer', padding: '8px' }}>
+          <td
+            style={{
+              ...cellStyle,
+              width: "36px",
+              textAlign: "center",
+              cursor: "pointer",
+              padding: "8px",
+            }}
+          >
             <button
               onClick={handleExpandClick}
-              aria-label={isExpanded ? `Collapse row ${String(index + 1)}` : `Expand row ${String(index + 1)}`}
+              aria-label={
+                isExpanded
+                  ? `Collapse row ${String(index + 1)}`
+                  : `Expand row ${String(index + 1)}`
+              }
               style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
+                background: "none",
+                border: "none",
+                cursor: "pointer",
                 fontSize: 12,
-                color: 'var(--prism-color-text-secondary, #64748B)',
+                color: "var(--prism-color-text-secondary, #64748B)",
                 padding: 4,
-                transition: 'transform 150ms',
-                transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                transition: "transform 150ms",
+                transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
               }}
             >
               ▶
@@ -327,35 +366,37 @@ function TableRow<T extends DataTableRow, TId = string>({
           </td>
         )}
         {selectionEnabled && (
-          <td style={{ ...cellStyle, width: '48px', textAlign: 'center' }}>
+          <td style={{ ...cellStyle, width: "48px", textAlign: "center" }}>
             <input
               type="checkbox"
               checked={isSelected}
               onChange={handleCheckboxChange}
-              onClick={(e) => { e.stopPropagation(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
               aria-label={`Select row ${String(index + 1)}`}
             />
           </td>
         )}
         {columns.map((col) => {
-          const value = row[col.field];
+          const value = (row as Record<string, unknown>)[col.field];
           return (
             <td
               key={col.field}
-              style={{ ...cellStyle, textAlign: col.align ?? 'left' }}
+              style={{ ...cellStyle, textAlign: col.align ?? "left" }}
               role="gridcell"
             >
-              {col.render
-                ? col.render(value, row)
-                : String(value ?? '')}
+              {col.render ? col.render(value, row) : String(value ?? "")}
             </td>
           );
         })}
         {hasActions && rowActions && (
           <td
-            style={{ ...cellStyle, textAlign: 'right', whiteSpace: 'nowrap' }}
+            style={{ ...cellStyle, textAlign: "right", whiteSpace: "nowrap" }}
             role="gridcell"
-            onClick={(e) => { e.stopPropagation(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
             data-testid={`data-table-row-actions-${String(index)}`}
           >
             <RowActionsCell<T, TId>
@@ -374,8 +415,9 @@ function TableRow<T extends DataTableRow, TId = string>({
             colSpan={columnCount}
             style={{
               padding: 16,
-              backgroundColor: 'var(--prism-color-surface-elevated, #F8FAFC)',
-              borderBottom: '1px solid var(--prism-color-border-default, #E2E8F0)',
+              backgroundColor: "var(--prism-color-surface-elevated, #F8FAFC)",
+              borderBottom:
+                "1px solid var(--prism-color-border-default, #E2E8F0)",
             }}
           >
             {expandContent(row)}
@@ -398,43 +440,51 @@ interface RowActionsCellProps<T extends DataTableRow, TId = string> {
   actions: ReadonlyArray<DataTableRowAction<T, TId>>;
   row: T;
   rowIndex: number;
-  executeRowAction?: ((action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>) | undefined;
+  executeRowAction?:
+    | ((
+        action: DataTableRowAction<T, TId>,
+        row: T,
+        rowIndex: number,
+      ) => Promise<void>)
+    | undefined;
 }
 
 const actionButtonBaseStyle: React.CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 'var(--prism-data-table-default-radius, 4px)',
-  fontSize: 'var(--prism-typography-caption-size, 0.75rem)',
-  cursor: 'pointer',
-  background: 'transparent',
-  border: '1px solid var(--prism-color-border-default, #CBD5E1)',
-  color: 'var(--prism-color-text-primary, #0F172A)',
+  padding: "4px 10px",
+  borderRadius: "var(--prism-data-table-default-radius, 4px)",
+  fontSize: "var(--prism-typography-caption-size, 0.75rem)",
+  cursor: "pointer",
+  background: "transparent",
+  border: "1px solid var(--prism-color-border-default, #CBD5E1)",
+  color: "var(--prism-color-text-primary, #0F172A)",
   marginLeft: 4,
-  textDecoration: 'none',
-  display: 'inline-block',
+  textDecoration: "none",
+  display: "inline-block",
 };
 
 const destructiveStyle: React.CSSProperties = {
   ...actionButtonBaseStyle,
-  borderColor: 'var(--prism-color-status-error, #DC2626)',
-  color: 'var(--prism-color-status-error, #DC2626)',
+  borderColor: "var(--prism-color-status-error, #DC2626)",
+  color: "var(--prism-color-status-error, #DC2626)",
 };
 
 const primaryStyle: React.CSSProperties = {
   ...actionButtonBaseStyle,
-  backgroundColor: 'var(--prism-color-interactive-primary, #2563EB)',
-  borderColor: 'var(--prism-color-interactive-primary, #2563EB)',
-  color: 'var(--prism-color-text-on-primary, #FFFFFF)',
+  backgroundColor: "var(--prism-color-interactive-primary, #2563EB)",
+  borderColor: "var(--prism-color-interactive-primary, #2563EB)",
+  color: "var(--prism-color-text-on-primary, #FFFFFF)",
 };
 
-function variantStyle(variant: DataTableRowAction<DataTableRow>['variant']): React.CSSProperties {
+function variantStyle(
+  variant: DataTableRowAction<DataTableRow>["variant"],
+): React.CSSProperties {
   switch (variant) {
-    case 'primary':
+    case "primary":
       return primaryStyle;
-    case 'destructive':
+    case "destructive":
       return destructiveStyle;
-    case 'secondary':
-    case 'ghost':
+    case "secondary":
+    case "ghost":
     default:
       return actionButtonBaseStyle;
   }
@@ -451,7 +501,11 @@ function RowActionsCell<T extends DataTableRow, TId = string>({
   executeRowAction,
 }: RowActionsCellProps<T, TId> & { typedId: TId }) {
   return (
-    <div role="group" aria-label="Row actions" style={{ display: 'inline-flex', gap: 4 }}>
+    <div
+      role="group"
+      aria-label="Row actions"
+      style={{ display: "inline-flex", gap: 4 }}
+    >
       {actions.map((action) => {
         if (action.visible && !action.visible(row)) return null;
         const disabled = action.disabled?.(row) ?? false;
@@ -468,11 +522,14 @@ function RowActionsCell<T extends DataTableRow, TId = string>({
               style={{
                 ...variantStyle(action.variant),
                 opacity: disabled ? 0.5 : 1,
-                pointerEvents: disabled ? 'none' : 'auto',
+                pointerEvents: disabled ? "none" : "auto",
               }}
-              onClick={(e) => { e.stopPropagation(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
             >
-              {action.icon}{action.label}
+              {action.icon}
+              {action.label}
             </a>
           );
         }
@@ -493,7 +550,8 @@ function RowActionsCell<T extends DataTableRow, TId = string>({
               void executeRowAction(action, row, rowIndex);
             }}
           >
-            {action.icon}{action.label}
+            {action.icon}
+            {action.label}
           </button>
         );
       })}
