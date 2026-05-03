@@ -119,3 +119,17 @@ The horizontal `FilterBar` molecule that wraps search input + filter dimensions 
 - Plan: `02-plans/01-prism-0.6.0-design.md` § Feature 1
 - Journal: `journal/0002-DISCOVERY-filterbar-absorbs-derived-options-and-effective-fallback.md`
 - Issue: terrene-foundation/kailash-prism#24
+
+## Verification
+
+- **Merged**: PR #29 (squash commit `73e8c90` on main, 2026-05-03)
+- **Commits on feat/prism-0.6.0-shard3-filter-bar-molecule**:
+  - `83e2c4b` feat(filter-bar): FilterBar molecule with search + dimensions + view-mode
+  - `4c8b2f0` feat(filter-bar): a11y — keyboard nav + ARIA roles + screen reader labels
+  - `0c86a20` test(filter-bar): unit tests covering 3 shapes + interactions
+  - `c7fac1e` test(filter-bar): storybook stories for 3 shapes + DataTable composition
+- **Plan match**: per `02-plans/01-prism-0.6.0-design.md` § Feature 1 — molecule + 3 shape stories + DataTable composite story + top-level barrel ✓
+- **Tests**: 14 new (3 shapes × interaction matrix); tsc --noEmit clean
+- **Atom inventory adaptation**: minimal token-driven inline elements (no Select/IconButton/Tag/Input atoms exist in 0.5.0; documented in JSDoc as future-promotion candidates)
+- **Journal constraints**: journal/0004 Finding 2 phantom `__rowType` field preserved in `UseFilterBarStateResult` consumer types
+- **Coordination**: zero edits to package.json / CHANGELOG / specs / M02 surface
