@@ -26,6 +26,17 @@ export {
   type CardVariant,
 } from "./atoms/index.js";
 
+// Molecules
+export {
+  FilterBar,
+  useFilterBarState,
+  type FilterBarProps,
+  type FilterBarDimension,
+  type FilterBarViewMode,
+  type UseFilterBarStateInput,
+  type UseFilterBarStateResult,
+} from "./molecules/filter-bar/index.js";
+
 // Organisms
 export {
   CardGrid,
