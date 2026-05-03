@@ -19,7 +19,15 @@
  * Issue: terrene-foundation/kailash-prism#24
  */
 
-import { forwardRef, useId, type CSSProperties, type ReactNode } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useId,
+  useRef,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
 // --- Public types -----------------------------------------------------------
 
@@ -30,7 +38,7 @@ import { forwardRef, useId, type CSSProperties, type ReactNode } from "react";
  * it. Consumers typically pass `state.options[key]` from `useFilterBarState`.
  */
 export interface FilterBarDimension {
-  /** Stable identifier (used for keyed lists). */
+  /** Stable identifier (used for keyed lists and ARIA attributes). */
   key: string;
   /** Visible label rendered next to the control. */
   label: string;
@@ -270,16 +278,29 @@ function SearchInput({
   onChange,
   placeholder,
 }: SearchInputProps): ReactNode {
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onChange("");
+      }
+    },
+    [onChange],
+  );
+  const ariaLabel = placeholder ?? "Search";
   return (
     <div style={SEARCH_WRAPPER_STYLE}>
       <span style={SEARCH_ICON_STYLE}>{SEARCH_ICON}</span>
       <input
         type="search"
+        role="searchbox"
         value={value}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         onChange={(e) => {
           onChange(e.target.value);
         }}
+        onKeyDown={handleKeyDown}
         style={SEARCH_INPUT_STYLE}
       />
     </div>
@@ -303,6 +324,7 @@ function DimensionDropdown({ dimension }: DimensionDropdownProps): ReactNode {
         onChange={(e) => {
           dimension.onChange(e.target.value);
         }}
+        aria-label={dimension.label}
         style={DROPDOWN_STYLE}
       >
         {dimension.options.map((opt) => (
@@ -320,17 +342,54 @@ interface DimensionChipsProps {
 }
 
 function DimensionChips({ dimension }: DimensionChipsProps): ReactNode {
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") {
+        return;
+      }
+      e.preventDefault();
+      const len = dimension.options.length;
+      const nextIdx =
+        e.key === "ArrowRight" ? (idx + 1) % len : (idx - 1 + len) % len;
+      const next = dimension.options[nextIdx];
+      if (next === undefined) {
+        return;
+      }
+      dimension.onChange(next);
+      // Move focus to the new chip so the screen-reader follows the
+      // selection (radiogroup contract).
+      const buttons = groupRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button[role="radio"]',
+      );
+      buttons?.[nextIdx]?.focus();
+    },
+    [dimension],
+  );
+
   return (
-    <div style={CHIP_ROW_STYLE}>
+    <div
+      ref={groupRef}
+      role="radiogroup"
+      aria-label={dimension.label}
+      style={CHIP_ROW_STYLE}
+    >
       <span style={DIMENSION_LABEL_STYLE}>{dimension.label}</span>
-      {dimension.options.map((opt) => {
+      {dimension.options.map((opt, idx) => {
         const active = opt === dimension.value;
         return (
           <button
             key={opt}
             type="button"
+            role="radio"
+            aria-checked={active}
+            tabIndex={active ? 0 : -1}
             onClick={() => {
               dimension.onChange(opt);
+            }}
+            onKeyDown={(e) => {
+              handleKeyDown(e, idx);
             }}
             style={chipStyle(active)}
           >
@@ -347,16 +406,52 @@ interface ViewModeToggleProps {
 }
 
 function ViewModeToggle({ viewMode }: ViewModeToggleProps): ReactNode {
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") {
+        return;
+      }
+      e.preventDefault();
+      const len = viewMode.options.length;
+      const nextIdx =
+        e.key === "ArrowRight" ? (idx + 1) % len : (idx - 1 + len) % len;
+      const next = viewMode.options[nextIdx];
+      if (next === undefined) {
+        return;
+      }
+      viewMode.onChange(next);
+      const buttons = groupRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button[role="radio"]',
+      );
+      buttons?.[nextIdx]?.focus();
+    },
+    [viewMode],
+  );
+
   return (
-    <div style={{ display: "inline-flex", gap: 0 }}>
-      {viewMode.options.map((opt) => {
+    <div
+      ref={groupRef}
+      role="radiogroup"
+      aria-label="View mode"
+      style={{ display: "inline-flex", gap: 0 }}
+    >
+      {viewMode.options.map((opt, idx) => {
         const active = opt === viewMode.active;
         return (
           <button
             key={opt}
             type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={opt}
+            tabIndex={active ? 0 : -1}
             onClick={() => {
               viewMode.onChange(opt);
+            }}
+            onKeyDown={(e) => {
+              handleKeyDown(e, idx);
             }}
             style={viewModeBtnStyle(active)}
           >
