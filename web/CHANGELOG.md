@@ -2,6 +2,66 @@
 
 All notable changes to the Prism web engine package are documented here.
 
+## 0.6.0 — 2026-05-03 — FilterBar molecule + ColumnDef.field relaxation
+
+Two API gaps surfaced by arbor `*-prism` migration waves 1–5 land together. Both shipped under `workspaces/prism-0.6.0/`'s analyze→todos→implement cycle. Closes [#24](https://github.com/terrene-foundation/kailash-prism/issues/24) and [#25](https://github.com/terrene-foundation/kailash-prism/issues/25).
+
+### Added
+
+- **`FilterBar` molecule** (`@kailash/prism-web`) — horizontal filter bar with search input + filter dimensions (chip-row OR dropdown) + optional view-mode toggle. Three observed arbor consumer shapes covered: search-only, search+chip-row, search+dropdown+toggle. Composes with `DataTable` via existing controlled `globalSearchValue` (0.4.0 G-2). Closes #24.
+- **`useFilterBarState<T, TFilters>()`** hook — typed state machine with `search`/`setSearch`/`filters`/`setFilter`/`options`. Internally absorbs derive-options-from-data (3 arbor consumers hand-rolled) + effective-filter-fallback (2 arbor consumers hand-rolled), so the molecule replaces ~120 LOC of consumer boilerplate per route. Co-located with the molecule, exported from the top-level barrel.
+- **Storybook stories** for the three FilterBar shapes plus a composite `FilterBar + DataTable` integration story (with the M01 synthetic Profile-completeness column from #25).
+
+### Changed
+
+- **`ColumnDef.field` relaxed** from `string & keyof T` to `string`. Dual contract: keyed columns work as before; synthetic ids (e.g. `"_profile"`) are now legal — engine skips `row[field]` lookup, passes `undefined` to `render`, and `sortable` MUST be `false`. Closes #25.
+- **`ColumnDef.render` value param widened** from `T[keyof T] | undefined` to `unknown`. Necessary for synthetic-field support — see Migration below.
+- **`defaultSortComparator` key param relaxed** from `keyof T` to `string`. Backward-compatible widening.
+- **Top-level barrel re-exports** `FilterBar`, `useFilterBarState`, `FilterBarProps`, `FilterBarDimension`, `FilterBarViewMode`, `UseFilterBarStateInput`, `UseFilterBarStateResult`. Existing exports unchanged.
+
+### Fixed
+
+- **Runtime guard for `sortable + synthetic` field** — prior to 0.6.0 a synthetic-key column with `sortable: true` would silently produce wrong-sort (every row's value extracts to `undefined`, lexical sort of `"undefined"` strings on every row). 0.6.0 throws at first non-empty render with an actionable error message. Catches a class of latent display bugs.
+- **Latent unguarded `row[col.field]` reads** in `data-table-body.tsx` and `data-table-mobile.tsx` — surfaced by the type relaxation; lifted typed casts at value-extraction sites. Same-shard fix per `autonomous-execution.md` Rule 4. Detail in `workspaces/prism-0.6.0/journal/0004-DISCOVERY-*.md`.
+- **16 pre-existing lint findings** (7 errors + 9 warnings) — `eslint` had been declared in `package.json::scripts.lint` but absent from `devDependencies`. 0.6.0 adds the toolchain (`eslint`, `@typescript-eslint/*`, `eslint-plugin-react`, `eslint-plugin-react-hooks`, `@eslint/js`) and resolves all 16 findings. Real bugs surfaced and fixed: `useLayout` hook called conditionally in `conversation-template.tsx`, missing `key` prop on JSX-array in `form-template.tsx`. Per `zero-tolerance.md` Rule 1, pre-existing failures are owed in the session that discovered them.
+- **postcss CVE GHSA-qx2v-qp2m-jg93** — patched via `npm audit fix` while installing the eslint toolchain.
+
+### Migration
+
+The `ColumnDef.render` value-type widening (`T[keyof T] | undefined` → `unknown`) is a TypeScript-only break. No runtime change. Three consumer call shapes:
+
+```tsx
+// 1) Already-coalesced — NO change needed
+{ field: "name", render: (value, row) => value ?? "—" }
+
+// 2) Destructured / typed access — cast or guard
+- { field: "amount", render: (value, row) => value.toLocaleString() }
++ { field: "amount", render: (value, row) => (value as number).toLocaleString() }
+
+// 3) Synthetic-field NEW pattern (was previously rejected by TS narrowing)
+{ field: "_profile",
+  sortable: false,                              // MUST be false (runtime-checked)
+  render: (_value, row) => <ProfileBar pct={profileCompleteness(row)}/> }
+```
+
+`render` callbacks that ignore `value` and read from `row` directly need no change.
+
+### Internal
+
+- New ESLint v9 flat config (`web/eslint.config.js`) matching the repo's `tsconfig.json` (strict + `noUnusedLocals` + `noUnusedParameters`). Lint is now part of the pre-FIRST-push CI parity discipline per `git.md`.
+- `specs/components/data-table.yaml` — 0.6.0 changelog entry.
+- `specs/components/filter-bar.yaml` — NEW (FilterBar contract + state hook signature + a11y + tokens + migration LOC).
+- `docs/specs/05-engine-specifications.md` — appended § Filter Engine + § DataTable § ColumnDef relaxation. Future split recommended (file is now 2200+ lines; out of M04 scope).
+- `workspaces/prism-0.6.0/` — full analyze/todos/implement/journal artefact set for the release cycle.
+
+### Out of scope (deferred to 0.7.0+)
+
+- `DataTableAdapter.filterDimensions` engine wiring stays vapourware (declared in v0.2.2 spec, never implemented; per `orphan-detection.md` Rule 1, no consumer demand surfaced through 5 migration waves).
+- Form engine result-render slot (`BLOCKING-2` from migration findings — separate FormAdapter cycle).
+- Form custom field render escape hatch (`BLOCKING-1` from migration findings — bundled into the FormAdapter cycle).
+- Layout engine consumer migration (architectural debt, not API gap).
+- Typed renderer library (`BadgeRenderer` / `FormattedDateRenderer` / `MultilineTextRenderer` — 2-consumer pattern; below the 3+ promotion bar).
+
 ## 0.5.0 — 2026-04-28 — Layout delegation + vestigial cleanup
 
 Closes part of journal 0021's HIGH-1 (Layout engine orphan). The legacy `VStack`, `Row`, and `Grid` primitives at the top-level barrel are now thin delegates over the composable primitives in `@kailash/prism-web/engines/layout`. Six unused symbols are removed from the public surface (three further candidates were retained because the spec mandates them — see Retained list below).
