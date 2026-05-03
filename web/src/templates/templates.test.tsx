@@ -19,6 +19,7 @@ import { WizardTemplate } from "./wizard-template.js";
 import { KanbanTemplate } from "./kanban-template.js";
 import { CalendarTemplate } from "./calendar-template.js";
 import type { ReactNode } from "react";
+import type { ChatMessage } from "../engines/ai-chat/types.js";
 
 function withLayout(children: ReactNode) {
   return <LayoutProvider>{children}</LayoutProvider>;
@@ -229,7 +230,7 @@ describe("ConversationTemplate (wired mode)", () => {
           onToken: (cb: (token: string) => void) => {
             callbacks.token = cb as (...args: unknown[]) => void;
           },
-          onComplete: (cb: (full: string) => void) => {
+          onComplete: (cb: (msg: ChatMessage) => void) => {
             callbacks.complete = cb as (...args: unknown[]) => void;
           },
           onError: (cb: (err: Error) => void) => {
