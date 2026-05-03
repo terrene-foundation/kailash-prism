@@ -9,53 +9,57 @@
  * Per spec: docs/specs/05-engine-specifications.md § 5.1 Responsive Contract
  */
 
-import { useCallback } from 'react';
-import type { ColumnDef, DataTableRow } from './types.js';
+import { useCallback } from "react";
+import type { ColumnDef, DataTableRow } from "./types.js";
 
 // --- Styles ---
 
 const cardStyle: React.CSSProperties = {
-  padding: '16px',
-  backgroundColor: 'var(--prism-data-table-row-bg, var(--prism-color-surface-page, #FFFFFF))',
-  borderRadius: 'var(--prism-data-table-default-radius, 8px)',
-  border: '1px solid var(--prism-data-table-row-border, var(--prism-color-border-default, #E2E8F0))',
-  marginBottom: '8px',
+  padding: "16px",
+  backgroundColor:
+    "var(--prism-data-table-row-bg, var(--prism-color-surface-page, #FFFFFF))",
+  borderRadius: "var(--prism-data-table-default-radius, 8px)",
+  border:
+    "1px solid var(--prism-data-table-row-border, var(--prism-color-border-default, #E2E8F0))",
+  marginBottom: "8px",
 };
 
 const selectedCardStyle: React.CSSProperties = {
   ...cardStyle,
-  backgroundColor: 'var(--prism-data-table-row-selected-bg, var(--prism-color-interactive-primary-subtle, #EFF6FF))',
-  borderColor: 'var(--prism-color-interactive-primary, #1E3A5F)',
+  backgroundColor:
+    "var(--prism-data-table-row-selected-bg, var(--prism-color-interactive-primary-subtle, #EFF6FF))",
+  borderColor: "var(--prism-color-interactive-primary, #1E3A5F)",
 };
 
 const cardTitleStyle: React.CSSProperties = {
   fontWeight: 600,
-  fontSize: 'var(--prism-typography-body-size, 0.875rem)',
-  color: 'var(--prism-color-text-primary, #0F172A)',
+  fontSize: "var(--prism-typography-body-size, 0.875rem)",
+  color: "var(--prism-color-text-primary, #0F172A)",
   margin: 0,
 };
 
 const cardSubtitleStyle: React.CSSProperties = {
-  fontSize: 'var(--prism-typography-body-small-size, 0.75rem)',
-  color: 'var(--prism-color-text-secondary, #475569)',
-  margin: '2px 0 0',
+  fontSize: "var(--prism-typography-body-small-size, 0.75rem)",
+  color: "var(--prism-color-text-secondary, #475569)",
+  margin: "2px 0 0",
 };
 
 const cardFieldStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  fontSize: 'var(--prism-typography-body-small-size, 0.75rem)',
-  padding: '4px 0',
-  borderTop: '1px solid var(--prism-data-table-row-border, var(--prism-color-border-default, #E2E8F0))',
+  display: "flex",
+  justifyContent: "space-between",
+  fontSize: "var(--prism-typography-body-small-size, 0.75rem)",
+  padding: "4px 0",
+  borderTop:
+    "1px solid var(--prism-data-table-row-border, var(--prism-color-border-default, #E2E8F0))",
 };
 
 const cardFieldLabelStyle: React.CSSProperties = {
-  color: 'var(--prism-color-text-secondary, #475569)',
+  color: "var(--prism-color-text-secondary, #475569)",
   fontWeight: 500,
 };
 
 const cardFieldValueStyle: React.CSSProperties = {
-  color: 'var(--prism-color-text-primary, #0F172A)',
+  color: "var(--prism-color-text-primary, #0F172A)",
 };
 
 // --- Props ---
@@ -148,6 +152,12 @@ function MobileCard<T extends DataTableRow, TId = string>({
     onToggleRow(index);
   }, [index, onToggleRow]);
 
+  // Cast once per render — `ColumnDef.field` relaxed to `string` in 0.6.0
+  // so `row[col.field]` is no longer typed. This cast is the standard
+  // boundary access pattern used throughout the engine (see
+  // use-data-table.ts filteredData / sortedData and data-table-body.tsx).
+  const rowRecord = row as Record<string, unknown>;
+
   return (
     <div
       role="listitem"
@@ -155,43 +165,45 @@ function MobileCard<T extends DataTableRow, TId = string>({
       onClick={onRowClick ? handleClick : undefined}
       data-testid={`data-table-card-${String(index)}`}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
         {selectionEnabled && (
           <input
             type="checkbox"
             checked={isSelected}
             onChange={handleCheckbox}
-            onClick={(e) => { e.stopPropagation(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
             aria-label={`Select row ${String(index + 1)}`}
-            style={{ marginTop: '2px' }}
+            style={{ marginTop: "2px" }}
           />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           {titleCol && (
             <p style={cardTitleStyle}>
               {titleCol.render
-                ? titleCol.render(row[titleCol.field], row)
-                : String(row[titleCol.field] ?? '')}
+                ? titleCol.render(rowRecord[titleCol.field], row)
+                : String(rowRecord[titleCol.field] ?? "")}
             </p>
           )}
           {subtitleCol && (
             <p style={cardSubtitleStyle}>
               {subtitleCol.render
-                ? subtitleCol.render(row[subtitleCol.field], row)
-                : String(row[subtitleCol.field] ?? '')}
+                ? subtitleCol.render(rowRecord[subtitleCol.field], row)
+                : String(rowRecord[subtitleCol.field] ?? "")}
             </p>
           )}
         </div>
       </div>
       {detailCols.length > 0 && (
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ marginTop: "8px" }}>
           {detailCols.map((col) => (
             <div key={col.field} style={cardFieldStyle}>
               <span style={cardFieldLabelStyle}>{col.header}</span>
               <span style={cardFieldValueStyle}>
                 {col.render
-                  ? col.render(row[col.field], row)
-                  : String(row[col.field] ?? '')}
+                  ? col.render(rowRecord[col.field], row)
+                  : String(rowRecord[col.field] ?? "")}
               </span>
             </div>
           ))}
