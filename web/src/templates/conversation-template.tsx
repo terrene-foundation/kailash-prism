@@ -12,11 +12,20 @@
  *    Full control, no internal state management.
  */
 
-import { useState, useCallback, type ReactNode, type CSSProperties } from 'react';
-import { useLayout, useLayoutMaybe, LayoutProvider } from '../engines/layout.js';
-import { ChatEngine } from '../engines/ai-chat/chat-engine.js';
-import { ConversationSidebar } from '../engines/ai-chat/conversation-sidebar.js';
-import { useChatState } from '../engines/ai-chat/use-chat-state.js';
+import {
+  useState,
+  useCallback,
+  type ReactNode,
+  type CSSProperties,
+} from "react";
+import {
+  useLayout,
+  useLayoutMaybe,
+  LayoutProvider,
+} from "../engines/layout.js";
+import { ChatEngine } from "../engines/ai-chat/chat-engine.js";
+import { ConversationSidebar } from "../engines/ai-chat/conversation-sidebar.js";
+import { useChatState } from "../engines/ai-chat/use-chat-state.js";
 import type {
   ChatAdapter,
   ChatMessage,
@@ -27,8 +36,8 @@ import type {
   ActionPlanStep,
   Citation,
   SourceOption,
-} from '../engines/ai-chat/types.js';
-import type { ChatStateOptions } from '../engines/ai-chat/use-chat-state.js';
+} from "../engines/ai-chat/types.js";
+import type { ChatStateOptions } from "../engines/ai-chat/use-chat-state.js";
 
 // --- Shared layout props ---
 
@@ -60,7 +69,7 @@ export interface ConversationTemplateWiredProps extends LayoutProps {
   adapter: ChatAdapter;
 
   /** useChatState options override */
-  chatStateOptions?: Omit<ChatStateOptions, 'adapter'>;
+  chatStateOptions?: Omit<ChatStateOptions, "adapter">;
 
   /** Detail panel (e.g. citation panel) */
   detailPanel?: ReactNode;
@@ -105,7 +114,11 @@ export interface ConversationTemplateWiredProps extends LayoutProps {
   renderMessageActions?: (message: ChatMessage) => ReactNode;
 
   /** Callbacks for advanced consumers */
-  onActionPlanResponse?: (response: { stepIndex: number; action: ActionPlanAction; modification?: string }) => void;
+  onActionPlanResponse?: (response: {
+    stepIndex: number;
+    action: ActionPlanAction;
+    modification?: string;
+  }) => void;
   onCitationClick?: (citation: Citation) => void;
   onSuggestionClick?: (suggestion: SuggestionChip) => void;
   onRetry?: (messageId: string) => void;
@@ -153,23 +166,23 @@ export type ConversationTemplateProps =
 // --- Styles ---
 
 const containerStyle: CSSProperties = {
-  display: 'flex',
-  height: '100%',
+  display: "flex",
+  height: "100%",
   minHeight: 0,
-  overflow: 'hidden',
+  overflow: "hidden",
 };
 
 const sidebarPanelStyle: CSSProperties = {
-  borderRight: '1px solid var(--prism-color-border-default, #E2E8F0)',
-  backgroundColor: 'var(--prism-color-surface-card, #FFFFFF)',
-  overflowY: 'auto',
+  borderRight: "1px solid var(--prism-color-border-default, #E2E8F0)",
+  backgroundColor: "var(--prism-color-surface-card, #FFFFFF)",
+  overflowY: "auto",
   flexShrink: 0,
 };
 
 const detailPanelStyle: CSSProperties = {
-  borderLeft: '1px solid var(--prism-color-border-default, #E2E8F0)',
-  backgroundColor: 'var(--prism-color-surface-card, #FFFFFF)',
-  overflowY: 'auto',
+  borderLeft: "1px solid var(--prism-color-border-default, #E2E8F0)",
+  backgroundColor: "var(--prism-color-surface-card, #FFFFFF)",
+  overflowY: "auto",
   flexShrink: 0,
 };
 
@@ -241,7 +254,9 @@ function WiredConversation({
   };
 
   // Sidebar
-  const sidebarNode = renderSidebar ? renderSidebar(exposedState) : (
+  const sidebarNode = renderSidebar ? (
+    renderSidebar(exposedState)
+  ) : (
     <ConversationSidebar
       conversations={chatState.conversations}
       activeId={chatState.activeConversationId}
@@ -257,7 +272,9 @@ function WiredConversation({
   );
 
   // Content
-  const contentNode = renderContent ? renderContent(exposedState) : (
+  const contentNode = renderContent ? (
+    renderContent(exposedState)
+  ) : (
     <ChatEngine
       messages={chatState.messages}
       isStreaming={chatState.isStreaming}
@@ -280,11 +297,23 @@ function WiredConversation({
   return (
     <div style={containerStyle} className={className}>
       {!hideList && (
-        <div style={{ ...sidebarPanelStyle, width: sidebarCollapsed ? undefined : listWidth }}>
+        <div
+          style={{
+            ...sidebarPanelStyle,
+            width: sidebarCollapsed ? undefined : listWidth,
+          }}
+        >
           {sidebarNode}
         </div>
       )}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         {contentNode}
       </div>
       {detailPanel && !hideDetail && (
@@ -315,6 +344,10 @@ export function ConversationTemplate(props: ConversationTemplateProps) {
 }
 
 function ConversationTemplateInner(props: ConversationTemplateProps) {
+  // Hook MUST be called unconditionally on every render — both adapter and
+  // manual paths share this component (react-hooks/rules-of-hooks).
+  const { isMobile, isTablet } = useLayout();
+
   if (props.adapter) {
     return <WiredConversation {...props} />;
   }
@@ -329,7 +362,6 @@ function ConversationTemplateInner(props: ConversationTemplateProps) {
     className,
   } = props;
 
-  const { isMobile, isTablet } = useLayout();
   const hideList = isMobile;
   const hideDetail = isMobile || isTablet;
 
@@ -340,7 +372,14 @@ function ConversationTemplateInner(props: ConversationTemplateProps) {
           {conversationList}
         </div>
       )}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         {content}
       </div>
       {detailPanel && !hideDetail && (

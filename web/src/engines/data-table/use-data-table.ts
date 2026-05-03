@@ -229,7 +229,6 @@ export function useDataTable<T extends DataTableRow, TId = string>(
     const hasSetter = onGlobalSearchChange !== undefined;
     if (hasValue !== hasSetter) {
       oneSidedGlobalSearchWarnedRef.current = true;
-      // eslint-disable-next-line no-console
       console.warn(
         "[prism-web DataTable] `globalSearchValue` and `onGlobalSearchChange` " +
           "must be supplied together to opt into controlled mode. " +
