@@ -3,21 +3,26 @@
  * Spec: docs/specs/05-engine-specifications.md § 5.2
  */
 
-import type { ReactNode } from 'react';
-import { type ZodSchema } from 'zod';
+import type { ReactNode } from "react";
+import { type ZodSchema } from "zod";
 
 // --- Public types ---
 
 export type FieldType =
-  | 'text' | 'email' | 'password' | 'url' | 'tel'
-  | 'number'
-  | 'textarea'
-  | 'select'
-  | 'radio' | 'checkbox'
-  | 'toggle'
-  | 'date'
-  | 'file'
-  | 'hidden';
+  | "text"
+  | "email"
+  | "password"
+  | "url"
+  | "tel"
+  | "number"
+  | "textarea"
+  | "select"
+  | "radio"
+  | "checkbox"
+  | "toggle"
+  | "date"
+  | "file"
+  | "hidden";
 
 export interface Option {
   value: string | number;
@@ -26,9 +31,15 @@ export interface Option {
 }
 
 export type ConditionOperator =
-  | 'equals' | 'notEquals' | 'contains'
-  | 'greaterThan' | 'lessThan'
-  | 'in' | 'notIn' | 'isEmpty' | 'isNotEmpty';
+  | "equals"
+  | "notEquals"
+  | "contains"
+  | "greaterThan"
+  | "lessThan"
+  | "in"
+  | "notIn"
+  | "isEmpty"
+  | "isNotEmpty";
 
 export interface ConditionExpression {
   field: string;
@@ -39,7 +50,15 @@ export interface ConditionExpression {
 }
 
 export interface FieldValidationRule {
-  rule: 'required' | 'email' | 'url' | 'min' | 'max' | 'minLength' | 'maxLength' | 'pattern';
+  rule:
+    | "required"
+    | "email"
+    | "url"
+    | "min"
+    | "max"
+    | "minLength"
+    | "maxLength"
+    | "pattern";
   value?: unknown;
   message: string;
 }
@@ -114,7 +133,12 @@ export interface SectionDef {
   defaultCollapsed?: boolean;
 }
 
-export type FormStatus = 'idle' | 'validating' | 'submitting' | 'success' | 'error';
+export type FormStatus =
+  | "idle"
+  | "validating"
+  | "submitting"
+  | "success"
+  | "error";
 
 /**
  * State snapshot passed to `renderActions` and `submitDisabledWhen`.
@@ -220,7 +244,9 @@ export interface FormAdapter<
    * Returns a map of fieldName → message for any invalid fields. An empty
    * object (or absent key) means valid. Called on submit BEFORE `submit()`.
    */
-  validate?(values: TValues): Promise<Record<string, string>> | Record<string, string>;
+  validate?(
+    values: TValues,
+  ): Promise<Record<string, string>> | Record<string, string>;
 
   /** Required. Perform the actual submit (API call, local computation). */
   submit(values: TValues): Promise<TResult> | TResult;
@@ -240,10 +266,12 @@ export interface FormAdapter<
 export interface FormConfig {
   fields: FieldDef[];
   sections?: SectionDef[] | undefined;
-  validation?: {
-    mode?: 'onBlur' | 'onSubmit';
-    schema?: ZodSchema;
-  } | undefined;
+  validation?:
+    | {
+        mode?: "onBlur" | "onSubmit";
+        schema?: ZodSchema;
+      }
+    | undefined;
   /**
    * Fire-and-forget submit handler. Required unless `adapter` is provided —
    * when `adapter` is present, `adapter.submit` supersedes `onSubmit` and
@@ -265,9 +293,9 @@ export interface FormConfig {
   submitLabel?: string | undefined;
   resetLabel?: string | undefined;
   showReset?: boolean;
-  layout?: 'single-column' | 'two-column';
+  layout?: "single-column" | "two-column";
   className?: string | undefined;
-  'aria-label'?: string | undefined;
+  "aria-label"?: string | undefined;
   /**
    * Render the form's action row (submit / reset / anything else) in place of
    * the built-in submit+reset buttons. Receives the full form state plus the
@@ -282,7 +310,9 @@ export interface FormConfig {
    * behaviour — if either rule says disable, the button is disabled. Useful
    * for "submit disabled until form is valid" patterns.
    */
-  submitDisabledWhen?: (state: Omit<FormActionsState, 'submitDisabled' | 'submit' | 'reset'>) => boolean;
+  submitDisabledWhen?: (
+    state: Omit<FormActionsState, "submitDisabled" | "submit" | "reset">,
+  ) => boolean;
   /**
    * Per-element className overrides for branded styling. See `FormClassNames`.
    * When an override is present, the corresponding inline style fallback is
@@ -317,58 +347,70 @@ export interface FormState {
 }
 
 export type FormAction =
-  | { type: 'SET_VALUE'; field: string; value: unknown }
-  | { type: 'SET_ERROR'; field: string; error: string }
-  | { type: 'CLEAR_ERROR'; field: string }
-  | { type: 'SET_ERRORS'; errors: Record<string, string> }
-  | { type: 'TOUCH'; field: string }
-  | { type: 'SET_STATUS'; status: FormStatus }
-  | { type: 'SET_SUBMIT_ERROR'; error: string | null }
-  | { type: 'SET_SUBMISSION'; submission: FormSubmission | null }
-  | { type: 'RESET'; values: Record<string, unknown>; collapsedSections: Record<string, boolean> }
-  | { type: 'TOGGLE_SECTION'; section: string };
+  | { type: "SET_VALUE"; field: string; value: unknown }
+  | { type: "SET_ERROR"; field: string; error: string }
+  | { type: "CLEAR_ERROR"; field: string }
+  | { type: "SET_ERRORS"; errors: Record<string, string> }
+  | { type: "TOUCH"; field: string }
+  | { type: "SET_STATUS"; status: FormStatus }
+  | { type: "SET_SUBMIT_ERROR"; error: string | null }
+  | { type: "SET_SUBMISSION"; submission: FormSubmission | null }
+  | {
+      type: "RESET";
+      values: Record<string, unknown>;
+      collapsedSections: Record<string, boolean>;
+    }
+  | { type: "TOGGLE_SECTION"; section: string };
 
 export function formReducer(state: FormState, action: FormAction): FormState {
   switch (action.type) {
-    case 'SET_VALUE':
+    case "SET_VALUE":
       return {
         ...state,
         values: { ...state.values, [action.field]: action.value },
-        status: state.status === 'error' || state.status === 'success' ? 'idle' : state.status,
+        status:
+          state.status === "error" || state.status === "success"
+            ? "idle"
+            : state.status,
         // Editing after a successful adapter submit invalidates the cached
         // result — dropping it prevents the post-submit UI from drifting out
         // of sync with pending edits.
-        submission: state.submission !== null && state.status === 'success' ? null : state.submission,
+        submission:
+          state.submission !== null && state.status === "success"
+            ? null
+            : state.submission,
       };
-    case 'SET_ERROR':
-      return { ...state, errors: { ...state.errors, [action.field]: action.error } };
-    case 'CLEAR_ERROR': {
+    case "SET_ERROR":
+      return {
+        ...state,
+        errors: { ...state.errors, [action.field]: action.error },
+      };
+    case "CLEAR_ERROR": {
       const next = { ...state.errors };
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete next[action.field];
       return { ...state, errors: next };
     }
-    case 'SET_ERRORS':
+    case "SET_ERRORS":
       return { ...state, errors: action.errors };
-    case 'TOUCH':
+    case "TOUCH":
       return { ...state, touched: { ...state.touched, [action.field]: true } };
-    case 'SET_STATUS':
+    case "SET_STATUS":
       return { ...state, status: action.status };
-    case 'SET_SUBMIT_ERROR':
+    case "SET_SUBMIT_ERROR":
       return { ...state, submitError: action.error };
-    case 'SET_SUBMISSION':
+    case "SET_SUBMISSION":
       return { ...state, submission: action.submission };
-    case 'RESET':
+    case "RESET":
       return {
         values: action.values,
         errors: {},
         touched: {},
-        status: 'idle',
+        status: "idle",
         submitError: null,
         collapsedSections: action.collapsedSections,
         submission: null,
       };
-    case 'TOGGLE_SECTION':
+    case "TOGGLE_SECTION":
       return {
         ...state,
         collapsedSections: {
@@ -392,46 +434,57 @@ export function evaluateCondition(
   let result = true;
 
   switch (condition.operator) {
-    case 'equals':
+    case "equals":
       result = fieldValue === condition.value;
       break;
-    case 'notEquals':
+    case "notEquals":
       result = fieldValue !== condition.value;
       break;
-    case 'contains':
-      result = typeof fieldValue === 'string' && typeof condition.value === 'string'
-        ? fieldValue.includes(condition.value)
+    case "contains":
+      result =
+        typeof fieldValue === "string" && typeof condition.value === "string"
+          ? fieldValue.includes(condition.value)
+          : false;
+      break;
+    case "greaterThan":
+      result =
+        typeof fieldValue === "number" && typeof condition.value === "number"
+          ? fieldValue > condition.value
+          : false;
+      break;
+    case "lessThan":
+      result =
+        typeof fieldValue === "number" && typeof condition.value === "number"
+          ? fieldValue < condition.value
+          : false;
+      break;
+    case "in":
+      result = Array.isArray(condition.value)
+        ? condition.value.includes(fieldValue)
         : false;
       break;
-    case 'greaterThan':
-      result = typeof fieldValue === 'number' && typeof condition.value === 'number'
-        ? fieldValue > condition.value
-        : false;
+    case "notIn":
+      result = Array.isArray(condition.value)
+        ? !condition.value.includes(fieldValue)
+        : true;
       break;
-    case 'lessThan':
-      result = typeof fieldValue === 'number' && typeof condition.value === 'number'
-        ? fieldValue < condition.value
-        : false;
+    case "isEmpty":
+      result =
+        fieldValue === undefined || fieldValue === null || fieldValue === "";
       break;
-    case 'in':
-      result = Array.isArray(condition.value) ? condition.value.includes(fieldValue) : false;
-      break;
-    case 'notIn':
-      result = Array.isArray(condition.value) ? !condition.value.includes(fieldValue) : true;
-      break;
-    case 'isEmpty':
-      result = fieldValue === undefined || fieldValue === null || fieldValue === '';
-      break;
-    case 'isNotEmpty':
-      result = fieldValue !== undefined && fieldValue !== null && fieldValue !== '';
+    case "isNotEmpty":
+      result =
+        fieldValue !== undefined && fieldValue !== null && fieldValue !== "";
       break;
   }
 
   if (condition.and) {
-    result = result && condition.and.every(c => evaluateCondition(c, values, depth + 1));
+    result =
+      result &&
+      condition.and.every((c) => evaluateCondition(c, values, depth + 1));
   }
   if (condition.or && !result) {
-    result = condition.or.some(c => evaluateCondition(c, values, depth + 1));
+    result = condition.or.some((c) => evaluateCondition(c, values, depth + 1));
   }
 
   return result;
@@ -439,8 +492,14 @@ export function evaluateCondition(
 
 // --- Per-field validation ---
 
-export function validateFieldRules(fieldDef: FieldDef, value: unknown): string | null {
-  if (fieldDef.required && (value === undefined || value === null || value === '')) {
+export function validateFieldRules(
+  fieldDef: FieldDef,
+  value: unknown,
+): string | null {
+  if (
+    fieldDef.required &&
+    (value === undefined || value === null || value === "")
+  ) {
     return `${fieldDef.label} is required`;
   }
 
@@ -448,41 +507,70 @@ export function validateFieldRules(fieldDef: FieldDef, value: unknown): string |
 
   for (const rule of fieldDef.validation) {
     switch (rule.rule) {
-      case 'required':
-        if (value === undefined || value === null || value === '') return rule.message;
+      case "required":
+        if (value === undefined || value === null || value === "")
+          return rule.message;
         break;
-      case 'email':
-        if (typeof value === 'string' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      case "email":
+        if (
+          typeof value === "string" &&
+          value &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+        ) {
           return rule.message;
         }
         break;
-      case 'url':
-        if (typeof value === 'string' && value) {
-          try { new URL(value); } catch { return rule.message; }
+      case "url":
+        if (typeof value === "string" && value) {
+          try {
+            new URL(value);
+          } catch {
+            return rule.message;
+          }
         }
         break;
-      case 'min':
-        if (typeof value === 'number' && typeof rule.value === 'number' && value < rule.value) {
+      case "min":
+        if (
+          typeof value === "number" &&
+          typeof rule.value === "number" &&
+          value < rule.value
+        ) {
           return rule.message;
         }
         break;
-      case 'max':
-        if (typeof value === 'number' && typeof rule.value === 'number' && value > rule.value) {
+      case "max":
+        if (
+          typeof value === "number" &&
+          typeof rule.value === "number" &&
+          value > rule.value
+        ) {
           return rule.message;
         }
         break;
-      case 'minLength':
-        if (typeof value === 'string' && typeof rule.value === 'number' && value.length < rule.value) {
+      case "minLength":
+        if (
+          typeof value === "string" &&
+          typeof rule.value === "number" &&
+          value.length < rule.value
+        ) {
           return rule.message;
         }
         break;
-      case 'maxLength':
-        if (typeof value === 'string' && typeof rule.value === 'number' && value.length > rule.value) {
+      case "maxLength":
+        if (
+          typeof value === "string" &&
+          typeof rule.value === "number" &&
+          value.length > rule.value
+        ) {
           return rule.message;
         }
         break;
-      case 'pattern':
-        if (typeof value === 'string' && rule.value instanceof RegExp && !rule.value.test(value)) {
+      case "pattern":
+        if (
+          typeof value === "string" &&
+          rule.value instanceof RegExp &&
+          !rule.value.test(value)
+        ) {
           return rule.message;
         }
         break;

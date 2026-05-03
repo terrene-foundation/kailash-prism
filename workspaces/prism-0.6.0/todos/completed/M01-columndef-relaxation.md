@@ -80,3 +80,16 @@ Relax `ColumnDef.field` from `string & keyof T` to `string` so consumers can dec
 - Analysis: `01-analysis/02-issue-25-synthetic-columns-surface.md`
 - Plan: `02-plans/01-prism-0.6.0-design.md` § Feature 2
 - Issue: terrene-foundation/kailash-prism#25
+
+## Verification
+
+- **Merged**: PR #27 (squash commit `b509b22` on main, 2026-05-03)
+- **Commits on feat/prism-0.6.0-shard1-columndef-relaxation**:
+  - `f8f76f9` feat(data-table): relax ColumnDef.field for synthetic computed columns
+  - `322f84f` test(data-table): regression + synthetic-field cases for ColumnDef.field
+  - `2bf4017` test(data-table): Profile-completeness synthetic-column storybook
+- **Plan match**: per `02-plans/01-prism-0.6.0-design.md` § Feature 2 — type widening (3 sites), runtime guard, 6 unit cases, Profile-completeness storybook ✓
+- **Tests**: 6 new + all 27-file/409-test data-table suite pass; tsc --noEmit clean
+- **Journal constraints**: journal/0003 trade-off (clean type narrowing without deprecation cycle) honoured — no parameterised `<T, V>` shim added
+- **Discovery**: 7 latent unguarded `row[col.field]` reads surfaced + fixed same-shard per autonomous-execution Rule 4 (journal/0004 Finding 1)
+- **Coordination**: zero edits to package.json / CHANGELOG / specs (M04 owns)

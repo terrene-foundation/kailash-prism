@@ -97,3 +97,14 @@ Implement the typed state hook that owns FilterBar's search + filter dimensions.
 - Plan: `02-plans/01-prism-0.6.0-design.md` § Feature 1 § API surface
 - Journal: `journal/0002-DISCOVERY-filterbar-absorbs-derived-options-and-effective-fallback.md`
 - Issue: terrene-foundation/kailash-prism#24
+
+## Verification
+
+- **Merged**: PR #28 (squash commit `1b89205` on main, 2026-05-03)
+- **Commits on feat/prism-0.6.0-shard2-use-filter-bar-state**:
+  - `c240564` feat(filter-bar): useFilterBarState hook with derive + effective fallback
+  - `7d9f3a3` test(filter-bar): useFilterBarState unit tests covering derive + fallback
+- **Plan match**: per `02-plans/01-prism-0.6.0-design.md` § Feature 1 § API surface — search/filters/options/derive/effective-fallback all present
+- **Tests**: 9 new pass; full web suite 412 (was 403); tsc --noEmit clean
+- **Journal constraints**: journal/0002 absorption (derive + effective-fallback inside hook) honoured ✓; journal/0004 Finding 2 phantom `__rowType` field added for type-param symmetry
+- **Coordination**: zero edits to package.json / CHANGELOG / specs / FilterBar molecule (M03/M04 own)

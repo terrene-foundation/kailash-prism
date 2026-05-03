@@ -5,10 +5,10 @@
  * Zones: page-header, form-content, sidebar-help
  */
 
-import type { ReactNode } from 'react';
-import { useLayout, VStack, Split } from '../engines/layout.js';
-import { TemplateHeader } from './template-shell.js';
-import type { BaseTemplateProps } from './types.js';
+import type { ReactNode } from "react";
+import { useLayout, VStack, Split } from "../engines/layout.js";
+import { TemplateHeader } from "./template-shell.js";
+import type { BaseTemplateProps } from "./types.js";
 
 export interface FormTemplateProps extends BaseTemplateProps {
   /** The form itself (Form engine or FormWizard) */
@@ -33,18 +33,26 @@ export function FormTemplate({
 
   return (
     <VStack gap={24} padding={0} className={className}>
-      <TemplateHeader title={title} subtitle={subtitle} headerActions={headerActions} />
+      <TemplateHeader
+        title={title}
+        subtitle={subtitle}
+        headerActions={headerActions}
+      />
 
       {sidebar && !stackSidebar ? (
         <Split ratio="2:1" gap={24}>
           {[
-            <div style={{ maxWidth }}>{content}</div>,
-            sidebar,
+            <div key="content" style={{ maxWidth }}>
+              {content}
+            </div>,
+            <div key="sidebar">{sidebar}</div>,
           ]}
         </Split>
       ) : (
         <VStack gap={24}>
-          <div style={{ maxWidth: stackSidebar ? undefined : maxWidth }}>{content}</div>
+          <div style={{ maxWidth: stackSidebar ? undefined : maxWidth }}>
+            {content}
+          </div>
           {sidebar}
         </VStack>
       )}

@@ -8,46 +8,61 @@
  * All styling via CSS custom properties from the Theme engine.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { DataTableConfig, DataTableRow, DataTableRowAction } from './types.js';
-import { useDataTable } from './use-data-table.js';
-import { DataTableHeader } from './data-table-header.js';
-import { DataTableBody } from './data-table-body.js';
-import { DataTablePagination } from './data-table-pagination.js';
-import { DataTableBulkActions } from './data-table-bulk-actions.js';
-import { DataTableLoading, DataTableEmpty, DataTableError } from './data-table-states.js';
-import { DataTableMobile } from './data-table-mobile.js';
-import { sanitizeHref } from './sanitize-href.js';
-import { Card } from '../../atoms/card.js';
-import { CardGrid } from '../../organisms/card-grid.js';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import type {
+  DataTableConfig,
+  DataTableRow,
+  DataTableRowAction,
+} from "./types.js";
+import { useDataTable } from "./use-data-table.js";
+import { DataTableHeader } from "./data-table-header.js";
+import { DataTableBody } from "./data-table-body.js";
+import { DataTablePagination } from "./data-table-pagination.js";
+import { DataTableBulkActions } from "./data-table-bulk-actions.js";
+import {
+  DataTableLoading,
+  DataTableEmpty,
+  DataTableError,
+} from "./data-table-states.js";
+import { DataTableMobile } from "./data-table-mobile.js";
+import { sanitizeHref } from "./sanitize-href.js";
+import { Card } from "../../atoms/card.js";
+import { CardGrid } from "../../organisms/card-grid.js";
 
 // --- Styles ---
 
 const tableContainerStyle: React.CSSProperties = {
-  width: '100%',
-  overflow: 'auto',
-  backgroundColor: 'var(--prism-color-surface-page, #FFFFFF)',
-  borderRadius: 'var(--prism-data-table-default-radius, 8px)',
-  border: '1px solid var(--prism-data-table-row-border, var(--prism-color-border-default, #E2E8F0))',
+  width: "100%",
+  overflow: "auto",
+  backgroundColor: "var(--prism-color-surface-page, #FFFFFF)",
+  borderRadius: "var(--prism-data-table-default-radius, 8px)",
+  border:
+    "1px solid var(--prism-data-table-row-border, var(--prism-color-border-default, #E2E8F0))",
 };
 
 const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  tableLayout: 'fixed',
+  width: "100%",
+  borderCollapse: "collapse",
+  tableLayout: "fixed",
 };
 
 const globalSearchStyle: React.CSSProperties = {
-  width: '100%',
-  maxWidth: '320px',
-  padding: '8px 12px',
-  border: '1px solid var(--prism-color-border-default, #CBD5E1)',
-  borderRadius: 'var(--prism-data-table-default-radius, 4px)',
-  fontSize: 'var(--prism-typography-body-size, 0.875rem)',
-  backgroundColor: 'var(--prism-color-surface-page, #FFFFFF)',
-  color: 'var(--prism-color-text-primary, #0F172A)',
-  outline: 'none',
-  boxSizing: 'border-box' as const,
+  width: "100%",
+  maxWidth: "320px",
+  padding: "8px 12px",
+  border: "1px solid var(--prism-color-border-default, #CBD5E1)",
+  borderRadius: "var(--prism-data-table-default-radius, 4px)",
+  fontSize: "var(--prism-typography-body-size, 0.875rem)",
+  backgroundColor: "var(--prism-color-surface-page, #FFFFFF)",
+  color: "var(--prism-color-text-primary, #0F172A)",
+  outline: "none",
+  boxSizing: "border-box" as const,
 };
 
 const MOBILE_BREAKPOINT = 768;
@@ -72,11 +87,11 @@ export function DataTable<T extends DataTableRow, TId = string>(
     emptyState: customEmptyState,
     errorState: customErrorState,
     className,
-    'aria-label': ariaLabel,
+    "aria-label": ariaLabel,
     rowHeight = 48,
     expandable = false,
     expandContent,
-    display = 'table',
+    display = "table",
     renderCard,
     cardGridColumns,
     globalSearchPlaceholder,
@@ -91,11 +106,13 @@ export function DataTable<T extends DataTableRow, TId = string>(
   // Discrimination: anything non-array-shaped is treated as adapter-driven;
   // the hook's `resolveDataSource` surfaces serverLoading / serverError.
   const isServerSource =
-    typeof props.data === 'object' &&
+    typeof props.data === "object" &&
     props.data !== null &&
     !Array.isArray(props.data);
-  const effectiveLoading = isServerSource ? loading || state.serverLoading : loading;
-  const effectiveError = isServerSource ? error ?? state.serverError : error;
+  const effectiveLoading = isServerSource
+    ? loading || state.serverLoading
+    : loading;
+  const effectiveError = isServerSource ? (error ?? state.serverError) : error;
   const effectiveRetry = isServerSource
     ? (onRetry ?? state.retryServerFetch)
     : onRetry;
@@ -103,21 +120,29 @@ export function DataTable<T extends DataTableRow, TId = string>(
   // Merge adapter-driven bulk actions with consumer-supplied bulkActions.
   // Adapter's actions come first so consumers can extend (not override)
   // the adapter's declared set.
+  // Extract methods to stable refs so exhaustive-deps lint is satisfied
+  // without listing the entire `state` object (which would over-invalidate).
+  const adapterBulkActions = state.adapterBulkActions;
+  const executeBulkAction = state.executeBulkAction;
   const mergedBulkActions = useMemo(() => {
-    if (state.adapterBulkActions.length === 0) return bulkActions;
+    if (adapterBulkActions.length === 0) return bulkActions;
     return [
-      ...state.adapterBulkActions.map(a => ({
+      ...adapterBulkActions.map((a) => ({
         label: a.label,
-        variant: (a.variant === 'destructive' ? 'destructive' : a.variant === 'primary' ? 'primary' : 'ghost') as 'primary' | 'destructive' | 'ghost',
+        variant: (a.variant === "destructive"
+          ? "destructive"
+          : a.variant === "primary"
+            ? "primary"
+            : "ghost") as "primary" | "destructive" | "ghost",
         onExecute: (_rows: T[]) => {
           // Fire-and-forget wrapper; adapter-side onExecute may return a
           // Promise. Engine handles invalidate+refetch via executeBulkAction.
-          void state.executeBulkAction(a);
+          void executeBulkAction(a);
         },
       })),
       ...bulkActions,
     ];
-  }, [state.adapterBulkActions, state.executeBulkAction, bulkActions]);
+  }, [adapterBulkActions, executeBulkAction, bulkActions]);
 
   // Prefer adapter.onRowActivate over consumer's onRowClick. Both fire on
   // row click; adapter path takes precedence because it's part of the
@@ -136,7 +161,9 @@ export function DataTable<T extends DataTableRow, TId = string>(
   // clarification accompanying this wiring.)
   const adapterOnRowActivate = state.onRowActivate;
   const configOnRowClick = props.onRowClick;
-  const effectiveRowClick: ((row: T, id: TId) => void | Promise<void>) | undefined =
+  const effectiveRowClick:
+    | ((row: T, id: TId) => void | Promise<void>)
+    | undefined =
     adapterOnRowActivate !== undefined
       ? (row: T, _id: TId) => adapterOnRowActivate(row)
       : configOnRowClick;
@@ -144,36 +171,43 @@ export function DataTable<T extends DataTableRow, TId = string>(
   // --- Responsive: detect mobile ---
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const check = () => { setIsMobile(window.innerWidth < MOBILE_BREAKPOINT); };
+    const check = () => {
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    };
     check();
-    window.addEventListener('resize', check);
-    return () => { window.removeEventListener('resize', check); };
+    window.addEventListener("resize", check);
+    return () => {
+      window.removeEventListener("resize", check);
+    };
   }, []);
 
   // --- Derived booleans ---
   const sortingEnabled = sorting?.enabled !== false;
   const filteringEnabled = filtering?.enabled !== false;
-  const globalSearchEnabled = filtering?.globalSearch !== false && filteringEnabled;
+  const globalSearchEnabled =
+    filtering?.globalSearch !== false && filteringEnabled;
   const paginationEnabled = pagination?.enabled !== false;
   const selectionEnabled = selection?.enabled === true;
   const pageSizeOptions = pagination?.pageSizeOptions ?? [10, 25, 50, 100];
 
   // --- Column count for colSpan ---
-  const columnCount = columns.length + (selectionEnabled ? 1 : 0) + (expandable ? 1 : 0);
+  const columnCount =
+    columns.length + (selectionEnabled ? 1 : 0) + (expandable ? 1 : 0);
 
   // --- Global search handler (debounced concept — immediate for now, consumer can debounce) ---
+  const handleGlobalSearch = state.handleGlobalSearch;
   const handleGlobalSearchInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      state.handleGlobalSearch(e.target.value);
+      handleGlobalSearch(e.target.value);
     },
-    [state.handleGlobalSearch],
+    [handleGlobalSearch],
   );
 
   // --- Live announcement for selection changes ---
   const selectionAnnouncement = useMemo(() => {
-    if (!selectionEnabled) return '';
-    if (state.selectedIds.size === 0) return '';
-    return `${String(state.selectedIds.size)} row${state.selectedIds.size !== 1 ? 's' : ''} selected`;
+    if (!selectionEnabled) return "";
+    if (state.selectedIds.size === 0) return "";
+    return `${String(state.selectedIds.size)} row${state.selectedIds.size !== 1 ? "s" : ""} selected`;
   }, [selectionEnabled, state.selectedIds.size]);
 
   // --- Render ---
@@ -185,18 +219,15 @@ export function DataTable<T extends DataTableRow, TId = string>(
   const hasData = !isLoading && !hasError && state.displayRows.length > 0;
 
   return (
-    <div
-      className={className}
-      style={{ width: '100%' }}
-    >
+    <div className={className} style={{ width: "100%" }}>
       {/* Global search */}
       {globalSearchEnabled && (
-        <div style={{ marginBottom: '12px' }}>
+        <div style={{ marginBottom: "12px" }}>
           <input
             type="search"
             value={state.globalSearch}
             onChange={handleGlobalSearchInput}
-            placeholder={globalSearchPlaceholder ?? 'Search all columns...'}
+            placeholder={globalSearchPlaceholder ?? "Search all columns..."}
             aria-label="Search all columns"
             style={globalSearchStyle}
           />
@@ -217,11 +248,13 @@ export function DataTable<T extends DataTableRow, TId = string>(
           of a tabular grid. Takes precedence over both mobile and desktop
           table rendering when display === 'card-grid'. Mobile still gets
           the single-column default from CardGrid's responsive config. */}
-      {display === 'card-grid' && hasData ? (
+      {display === "card-grid" && hasData ? (
         <>
           <CardGrid
-            {...(ariaLabel !== undefined ? { 'aria-label': ariaLabel } : {})}
-            {...(cardGridColumns !== undefined ? { columns: cardGridColumns } : {})}
+            {...(ariaLabel !== undefined ? { "aria-label": ariaLabel } : {})}
+            {...(cardGridColumns !== undefined
+              ? { columns: cardGridColumns }
+              : {})}
           >
             {state.displayRows.map((row, index) => {
               const typedId = state.getTypedRowId(row, index);
@@ -236,7 +269,11 @@ export function DataTable<T extends DataTableRow, TId = string>(
                   rowActions={state.rowActions}
                   executeRowAction={state.executeRowAction}
                   {...(effectiveRowClick !== undefined
-                    ? { onActivate: () => { void effectiveRowClick(row, typedId); } }
+                    ? {
+                        onActivate: () => {
+                          void effectiveRowClick(row, typedId);
+                        },
+                      }
                     : {})}
                 />
               );
@@ -253,11 +290,18 @@ export function DataTable<T extends DataTableRow, TId = string>(
             />
           )}
         </>
-      ) : display === 'card-grid' && isLoading ? (
-        <DataTableCardGridLoading columns={cardGridColumns} customContent={customLoadingState} />
-      ) : display === 'card-grid' && hasError ? (
-        <DataTableCardGridError error={effectiveError} onRetry={effectiveRetry} customContent={customErrorState} />
-      ) : display === 'card-grid' && isEmpty ? (
+      ) : display === "card-grid" && isLoading ? (
+        <DataTableCardGridLoading
+          columns={cardGridColumns}
+          customContent={customLoadingState}
+        />
+      ) : display === "card-grid" && hasError ? (
+        <DataTableCardGridError
+          error={effectiveError}
+          onRetry={effectiveRetry}
+          customContent={customErrorState}
+        />
+      ) : display === "card-grid" && isEmpty ? (
         <DataTableCardGridEmpty customContent={customEmptyState} />
       ) : /* Mobile card layout (table mode only) */
       isMobile && hasData ? (
@@ -288,7 +332,7 @@ export function DataTable<T extends DataTableRow, TId = string>(
         <div style={tableContainerStyle}>
           <table
             role="grid"
-            aria-label={ariaLabel ?? 'Data table'}
+            aria-label={ariaLabel ?? "Data table"}
             aria-busy={isLoading}
             aria-rowcount={state.totalCount}
             style={tableStyle}
@@ -371,7 +415,13 @@ export function DataTable<T extends DataTableRow, TId = string>(
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)' }}
+        style={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+        }}
       >
         {selectionAnnouncement}
       </div>
@@ -394,10 +444,14 @@ interface CardItemProps<T extends DataTableRow, TId = string> {
   rowIndex: number;
   /** Typed row id — forwarded to `action.href(row, id)` for TId parity. */
   typedId: TId;
-  columns: DataTableConfig<T, TId>['columns'];
+  columns: DataTableConfig<T, TId>["columns"];
   renderCard?: ((row: T, rowIndex: number) => ReactNode) | undefined;
   rowActions: ReadonlyArray<DataTableRowAction<T, TId>>;
-  executeRowAction: (action: DataTableRowAction<T, TId>, row: T, rowIndex: number) => Promise<void>;
+  executeRowAction: (
+    action: DataTableRowAction<T, TId>,
+    row: T,
+    rowIndex: number,
+  ) => Promise<void>;
   onActivate?: (() => void) | undefined;
 }
 
@@ -411,86 +465,106 @@ function CardItem<T extends DataTableRow, TId = string>({
   executeRowAction,
   onActivate,
 }: CardItemProps<T, TId>) {
-  const body = renderCard ? renderCard(row, rowIndex) : defaultCardBody(row, columns);
+  const body = renderCard
+    ? renderCard(row, rowIndex)
+    : defaultCardBody(row, columns);
   const titleColumn = columns[0];
   const subtitleColumn = columns[1];
 
-  const title = titleColumn && !renderCard
-    ? String((row as Record<string, unknown>)[titleColumn.field] ?? '')
-    : undefined;
-  const subtitle = subtitleColumn && !renderCard
-    ? String((row as Record<string, unknown>)[subtitleColumn.field] ?? '')
-    : undefined;
+  const title =
+    titleColumn && !renderCard
+      ? String((row as Record<string, unknown>)[titleColumn.field] ?? "")
+      : undefined;
+  const subtitle =
+    subtitleColumn && !renderCard
+      ? String((row as Record<string, unknown>)[subtitleColumn.field] ?? "")
+      : undefined;
 
-  const footer = rowActions.length > 0 ? (
-    <div
-      role="group"
-      aria-label="Row actions"
-      style={{ display: 'inline-flex', gap: 4 }}
-      onClick={(e) => { e.stopPropagation(); }}
-    >
-      {rowActions.map((action) => {
-        if (action.visible && !action.visible(row)) return null;
-        const disabled = action.disabled?.(row) ?? false;
-        const actionStyle: React.CSSProperties = {
-          padding: '4px 10px',
-          borderRadius: 'var(--prism-radius-md, 4px)',
-          fontSize: 'var(--prism-typography-caption-size, 0.75rem)',
-          background: action.variant === 'primary' ? 'var(--prism-color-interactive-primary, #2563EB)' : 'transparent',
-          color: action.variant === 'primary' ? 'var(--prism-color-text-on-primary, #FFFFFF)' : 'var(--prism-color-text-primary, #0F172A)',
-          border: action.variant === 'destructive' ? '1px solid var(--prism-color-status-error, #DC2626)' : '1px solid var(--prism-color-border-default, #CBD5E1)',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.5 : 1,
-          textDecoration: 'none',
-          display: 'inline-block',
-        };
+  const footer =
+    rowActions.length > 0 ? (
+      <div
+        role="group"
+        aria-label="Row actions"
+        style={{ display: "inline-flex", gap: 4 }}
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+      >
+        {rowActions.map((action) => {
+          if (action.visible && !action.visible(row)) return null;
+          const disabled = action.disabled?.(row) ?? false;
+          const actionStyle: React.CSSProperties = {
+            padding: "4px 10px",
+            borderRadius: "var(--prism-radius-md, 4px)",
+            fontSize: "var(--prism-typography-caption-size, 0.75rem)",
+            background:
+              action.variant === "primary"
+                ? "var(--prism-color-interactive-primary, #2563EB)"
+                : "transparent",
+            color:
+              action.variant === "primary"
+                ? "var(--prism-color-text-on-primary, #FFFFFF)"
+                : "var(--prism-color-text-primary, #0F172A)",
+            border:
+              action.variant === "destructive"
+                ? "1px solid var(--prism-color-status-error, #DC2626)"
+                : "1px solid var(--prism-color-border-default, #CBD5E1)",
+            cursor: disabled ? "not-allowed" : "pointer",
+            opacity: disabled ? 0.5 : 1,
+            textDecoration: "none",
+            display: "inline-block",
+          };
 
-        // Anchor branch — parity with table-mode RowActionsCell. `href` is
-        // sanitized against scheme allowlist; click stopPropagation
-        // prevents card activation.
-        if (action.href) {
-          const href = sanitizeHref(action.href(row, typedId));
+          // Anchor branch — parity with table-mode RowActionsCell. `href` is
+          // sanitized against scheme allowlist; click stopPropagation
+          // prevents card activation.
+          if (action.href) {
+            const href = sanitizeHref(action.href(row, typedId));
+            return (
+              <a
+                key={action.id}
+                href={href}
+                aria-label={action.label}
+                aria-disabled={disabled || undefined}
+                tabIndex={disabled ? -1 : 0}
+                style={{
+                  ...actionStyle,
+                  pointerEvents: disabled ? "none" : "auto",
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+              >
+                {action.icon}
+                {action.label}
+              </a>
+            );
+          }
+
           return (
-            <a
+            <button
               key={action.id}
-              href={href}
+              type="button"
               aria-label={action.label}
-              aria-disabled={disabled || undefined}
-              tabIndex={disabled ? -1 : 0}
-              style={{
-                ...actionStyle,
-                pointerEvents: disabled ? 'none' : 'auto',
+              disabled={disabled}
+              style={actionStyle}
+              onClick={(e) => {
+                e.stopPropagation();
+                void executeRowAction(action, row, rowIndex);
               }}
-              onClick={(e) => { e.stopPropagation(); }}
             >
-              {action.icon}{action.label}
-            </a>
+              {action.icon}
+              {action.label}
+            </button>
           );
-        }
-
-        return (
-          <button
-            key={action.id}
-            type="button"
-            aria-label={action.label}
-            disabled={disabled}
-            style={actionStyle}
-            onClick={(e) => {
-              e.stopPropagation();
-              void executeRowAction(action, row, rowIndex);
-            }}
-          >
-            {action.icon}{action.label}
-          </button>
-        );
-      })}
-    </div>
-  ) : undefined;
+        })}
+      </div>
+    ) : undefined;
 
   return (
     <Card
       {...(title !== undefined ? { title } : {})}
-      {...(subtitle !== undefined && subtitle !== '' ? { subtitle } : {})}
+      {...(subtitle !== undefined && subtitle !== "" ? { subtitle } : {})}
       {...(footer !== undefined ? { footer } : {})}
       {...(onActivate !== undefined ? { onActivate } : {})}
       data-testid={`data-table-card-${String(rowIndex)}`}
@@ -502,21 +576,42 @@ function CardItem<T extends DataTableRow, TId = string>({
 
 function defaultCardBody<T extends DataTableRow>(
   row: T,
-  columns: DataTableConfig<T>['columns'],
+  columns: DataTableConfig<T>["columns"],
 ): ReactNode {
   // Skip first two columns — used as title + subtitle. Rest render as
   // key: value pairs for a minimum-viable card body.
   const bodyColumns = columns.slice(2);
   if (bodyColumns.length === 0) return null;
   return (
-    <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {bodyColumns.map(col => {
+    <dl style={{ margin: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+      {bodyColumns.map((col) => {
         const value = (row as Record<string, unknown>)[col.field];
         return (
-          <div key={col.field} style={{ display: 'flex', gap: 8, fontSize: 'var(--prism-font-size-caption, 12px)' }}>
-            <dt style={{ color: 'var(--prism-color-text-secondary, #64748B)', margin: 0 }}>{col.header}:</dt>
-            <dd style={{ color: 'var(--prism-color-text-primary, #0F172A)', margin: 0 }}>
-              {col.render ? col.render(value as T[keyof T] | undefined, row) : String(value ?? '')}
+          <div
+            key={col.field}
+            style={{
+              display: "flex",
+              gap: 8,
+              fontSize: "var(--prism-font-size-caption, 12px)",
+            }}
+          >
+            <dt
+              style={{
+                color: "var(--prism-color-text-secondary, #64748B)",
+                margin: 0,
+              }}
+            >
+              {col.header}:
+            </dt>
+            <dd
+              style={{
+                color: "var(--prism-color-text-primary, #0F172A)",
+                margin: 0,
+              }}
+            >
+              {col.render
+                ? col.render(value as T[keyof T] | undefined, row)
+                : String(value ?? "")}
             </dd>
           </div>
         );
@@ -529,15 +624,24 @@ function DataTableCardGridLoading({
   columns,
   customContent,
 }: {
-  columns?: { mobile?: number; tablet?: number; desktop?: number; wide?: number } | undefined;
+  columns?:
+    | { mobile?: number; tablet?: number; desktop?: number; wide?: number }
+    | undefined;
   customContent?: ReactNode | undefined;
 }) {
   if (customContent !== undefined) {
-    return <div role="status" aria-busy="true">{customContent}</div>;
+    return (
+      <div role="status" aria-busy="true">
+        {customContent}
+      </div>
+    );
   }
   return (
-    <CardGrid aria-label="Loading" {...(columns !== undefined ? { columns } : {})}>
-      {[0, 1, 2, 3].map(i => (
+    <CardGrid
+      aria-label="Loading"
+      {...(columns !== undefined ? { columns } : {})}
+    >
+      {[0, 1, 2, 3].map((i) => (
         <Card
           key={i}
           title="Loading..."
@@ -565,26 +669,26 @@ function DataTableCardGridError({
     <div
       role="alert"
       style={{
-        padding: 'var(--prism-spacing-md, 16px)',
-        backgroundColor: 'var(--prism-color-surface-error, #FEF2F2)',
-        border: '1px solid var(--prism-color-status-error, #DC2626)',
-        borderRadius: 'var(--prism-radius-md, 6px)',
-        color: 'var(--prism-color-status-error, #DC2626)',
+        padding: "var(--prism-spacing-md, 16px)",
+        backgroundColor: "var(--prism-color-surface-error, #FEF2F2)",
+        border: "1px solid var(--prism-color-status-error, #DC2626)",
+        borderRadius: "var(--prism-radius-md, 6px)",
+        color: "var(--prism-color-status-error, #DC2626)",
       }}
     >
-      <div>{error ?? 'An error occurred'}</div>
+      <div>{error ?? "An error occurred"}</div>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
           style={{
             marginTop: 8,
-            padding: '4px 12px',
-            borderRadius: 'var(--prism-radius-md, 4px)',
-            border: '1px solid var(--prism-color-status-error, #DC2626)',
-            background: 'transparent',
-            color: 'var(--prism-color-status-error, #DC2626)',
-            cursor: 'pointer',
+            padding: "4px 12px",
+            borderRadius: "var(--prism-radius-md, 4px)",
+            border: "1px solid var(--prism-color-status-error, #DC2626)",
+            background: "transparent",
+            color: "var(--prism-color-status-error, #DC2626)",
+            cursor: "pointer",
           }}
         >
           Retry
@@ -594,16 +698,20 @@ function DataTableCardGridError({
   );
 }
 
-function DataTableCardGridEmpty({ customContent }: { customContent?: ReactNode | undefined }) {
+function DataTableCardGridEmpty({
+  customContent,
+}: {
+  customContent?: ReactNode | undefined;
+}) {
   if (customContent !== undefined) return <>{customContent}</>;
   return (
     <div
       role="region"
       aria-label="Empty"
       style={{
-        padding: 'var(--prism-spacing-lg, 32px)',
-        textAlign: 'center',
-        color: 'var(--prism-color-text-secondary, #64748B)',
+        padding: "var(--prism-spacing-lg, 32px)",
+        textAlign: "center",
+        color: "var(--prism-color-text-secondary, #64748B)",
       }}
     >
       No items to display
