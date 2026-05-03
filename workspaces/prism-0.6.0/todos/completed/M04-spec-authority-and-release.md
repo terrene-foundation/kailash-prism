@@ -113,3 +113,25 @@ Lock the spec authority surfaces, document the migration, bump the version, and 
 - Plan: `02-plans/01-prism-0.6.0-design.md`
 - Analysis: `01-analysis/01-issue-24-filterbar-evidence.md`, `02-issue-25-synthetic-columns-surface.md`
 - Journal: `journal/0001-DECISION-prism-0.6.0-scope-two-features.md`
+
+## Verification
+
+- **Merged**: PR #30 (squash commit `78add91` on main, 2026-05-03)
+- **Commits on release/v0.6.0**:
+  - `ee66817` chore(web): add ESLint + TypeScript ESLint toolchain (T-ESLINT-1/2)
+  - `f60afad` style(web): resolve 16 pre-existing lint findings
+  - `2c02e7a` docs(specs): 0.6.0 — data-table relaxation + new filter-bar molecule contract
+  - `5173ba9` docs(changelog): 0.6.0 release notes
+  - `5477f0d` release(prism-web): bump web/0.5.0 → 0.6.0
+  - `5b2c78c` chore(workspace): close M01-M03 todos with merge audit trail
+  - `d9e0660` fix(test): correct onComplete signature in templates.test mock adapter
+- **Plan match**: per `02-plans/01-prism-0.6.0-design.md` § Shard 4 — spec authority + CHANGELOG + version bump + eslint addition + release-prep PR. All T01-T14 + T-ESLINT-1/2/3 + T-CLEAN tasks landed.
+- **CI parity (pre-FIRST-push)** per `git.md`:
+  - `npm run lint -- src/` → 0 problems
+  - `npx tsc --noEmit` → 0 errors
+  - `npx vitest run` → 432 tests passed (29 files)
+  - `npm run build` → 0 errors
+- **Spec-accuracy audit** (`spec-accuracy.md` Rule 1): `rg -i 'phase-?1.*phase-?2|TBD|backend.follow-?up'` zero hits on new spec content
+- **Zero-tolerance Rule 1c**: pre-existing eslint gap fixed in same release per journal/0004 Finding 3
+- **Zero-tolerance Rule 5**: `web/package.json::version` is the only version anchor for this release; compiler/, flutter/, tauri-rs/ unchanged ✓
+- **Coordination**: M04 owned package.json + CHANGELOG + specs + eslint config, as documented in M00 launch plan
