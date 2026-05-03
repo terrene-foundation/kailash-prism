@@ -2,20 +2,28 @@
 # Source: docs/specs/03-component-contracts.md § 3.4.3
 # Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll.
 
-version: "0.4.0"
+version: "0.6.0"
 
 name: DataTable
 category: organism
 description: "Full-featured data table with sorting, filtering, selection, pagination, and virtual scroll."
 
 changelog:
+  - version: "0.6.0"
+    date: "2026-05-03"
+    changes:
+      - "ColumnDef.field relaxed from `string & keyof T` to `string` to support synthetic computed columns (Profile-completeness bars, aggregate badges, derived totals, cross-field labels). Dual contract: if `field` is a key of T, the engine reads `row[field]` and passes it as `value` to render; if `field` is a synthetic id, no value lookup occurs and `render` receives `undefined`."
+      - "ColumnDef.render value param widened from `T[keyof T] | undefined` to `unknown` — necessary for synthetic-field support. Existing render callbacks that destructure the typed value may need an explicit `as` cast or guard at consumer recompile (most consumers use `value ?? default` and need no change). Migration documented in CHANGELOG."
+      - "defaultSortComparator key param relaxed from `keyof T` to `string`. Backward-compatible widening (every existing keyof-T site is also a string)."
+      - 'Runtime guard: a column declaring sortable=true with a synthetic field throws at first non-empty render with an actionable error message. Catches what would otherwise be a silent wrong-sort bug (synthetic key → undefined value → meaningless lexical order on `"undefined"`).'
+      - "Latent unguarded `row[col.field]` reads in data-table-body.tsx and data-table-mobile.tsx surfaced by the type relaxation; lifted to `Record<string, unknown>` casts at the value-extraction sites. Same-shard fix per autonomous-execution.md Rule 4. (See workspaces/prism-0.6.0/journal/0004-DISCOVERY-*.md.)"
   - version: "0.4.0"
     date: "2026-04-20"
     changes:
       - "G-1 (non-breaking, type-only): DataSource, DataTableConfig, DataTableAdapter, DataTableRowAction, DataTableBulkAction, useDataTable, DataTable now carry a second generic TId (default string). TId reaches callback boundaries — rowAction.onExecute(row, id: TId), rowAction.href(row, id: TId), bulkAction.onExecute(rows, ids: TId[]), onRowClick(row, id: TId). selectedIds: Set<string> stays string-keyed internally (DOM/cache stability — deliberate asymmetry)."
       - "G-2 (additive): controlled globalSearch via DataTableConfig.globalSearchValue + onGlobalSearchChange + globalSearchPlaceholder. Single-side supply logs dev-mode warning and falls back to uncontrolled."
       - "G-4: defaultSortComparator<T>(a, b, key, direction) exported from the engine barrel and top-level index — reusable by consumers building custom virtualised row layouts."
-      - "G-5 (docs-only): DataTableConfig.onRowClick JSDoc clarifies that display=\"card-grid\" wires onRowClick to Card.onActivate — wiring itself introduced in 0.3.1."
+      - 'G-5 (docs-only): DataTableConfig.onRowClick JSDoc clarifies that display="card-grid" wires onRowClick to Card.onActivate — wiring itself introduced in 0.3.1.'
       - "New public surface: getTypedRowId on UseDataTableResult — callback-surface counterpart to getRowId."
   - version: "0.3.0"
     date: "2026-04-18"
@@ -44,12 +52,12 @@ changelog:
 
 composed_of:
   atoms:
-    - Checkbox        # Row selection checkboxes
-    - IconButton      # Sort indicators, action buttons
+    - Checkbox # Row selection checkboxes
+    - IconButton # Sort indicators, action buttons
   molecules:
-    - Pagination      # Page navigation
-    - Toolbar         # Bulk action bar
-    - FilterPanel     # Optional filter panel
+    - Pagination # Page navigation
+    - Toolbar # Bulk action bar
+    - FilterPanel # Optional filter panel
 
 props:
   - name: columns
@@ -235,7 +243,7 @@ tokens:
 adapter:
   name: DataTableAdapter
   version_introduced: "0.2.2"
-  supersedes: ServerDataSource  # removed in 0.3.0
+  supersedes: ServerDataSource # removed in 0.3.0
   authority: "docs/specs/05-engine-specifications.md § 5.1.1"
   migration_findings:
     - "workspaces/fe-codegen-platform/04-validate/migration-m02-findings.md"

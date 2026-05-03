@@ -1,0 +1,215 @@
+# Kailash Prism — FilterBar Molecule Contract
+# Source: docs/specs/05-engine-specifications.md § Filter Engine
+# Horizontal filter bar with search input + filter dimensions (chip-row or
+# dropdown) + optional view-mode toggle. Composes with DataTable via
+# consumer-managed adapter rebuild on filter delta.
+
+version: "0.6.0"
+
+name: FilterBar
+category: molecule
+description: "Horizontal filter bar with search input + filter dimensions (chip-row or dropdown) + optional view-mode toggle."
+
+changelog:
+  - version: "0.6.0"
+    date: "2026-05-03"
+    changes:
+      - "Initial release. Promotes the G-2 documented workaround (search input + dimension dropdown/chip-row + view-mode toggle hand-rolled outside DataTable) to a composable molecule. Three observed arbor consumer shapes covered: search-only (payslips), search+chip-row category (documents), search+dropdown sector+view-mode toggle (clients/employees)."
+      - "useFilterBarState<T, TFilters>() hook: typed state + derive-options-from-data + effective-filter-fallback. Absorbs two recurring sub-patterns (3-consumer derive, 2-consumer fallback) per workspaces/prism-0.6.0/journal/0002-DISCOVERY-*.md."
+      - "Composes with DataTable via existing controlled globalSearchValue (0.4.0 G-2). No engine-side wiring of DataTableAdapter.filterDimensions — that surface stays vapourware per orphan-detection.md until a consumer demands it."
+
+# Atom dependencies — minimal token-driven inline elements within filter-bar.tsx
+# because the atom inventory currently ships only Button/Badge/Avatar/Spinner/Card.
+# Future promotion candidates: Input, Select, IconButton, Tag, Icon — these would
+# replace the current inline elements without API change.
+composed_of:
+  atoms:
+    - "(none — inline native elements)"
+  molecules:
+    - "(none)"
+
+props:
+  - name: search
+    type: string
+    required: true
+    default: null
+    description: "Current search query value. The molecule is fully controlled — parent owns state; molecule reflects."
+  - name: onSearchChange
+    type: "(value: string) => void"
+    required: true
+    default: null
+    description: "Called on every search-input keystroke and on Escape (which clears to empty string)."
+  - name: searchPlaceholder
+    type: string
+    required: false
+    default: "Search…"
+    description: "Placeholder text for the search input."
+  - name: dimensions
+    type: "FilterBarDimension[]"
+    required: false
+    default: "[]"
+    description: "Per-dimension filter declarations: key, label, options (option list to render), value (current selection), onChange callback, shape ('dropdown' or 'chips'). Multiple dimensions render side-by-side. Empty/missing → no dimension filters rendered."
+  - name: viewMode
+    type: "FilterBarViewMode | undefined"
+    required: false
+    default: null
+    description: "Optional view-mode toggle (e.g. grid/list switch). Rendered on the right of the bar. Object: active (current), options (string[] of mode labels), onChange callback."
+  - name: className
+    type: string
+    required: false
+    default: null
+    description: "Additional CSS class for composition."
+  - name: sticky
+    type: boolean
+    required: false
+    default: false
+    description: "When true, applies position: sticky; top: 0; z-index: var(--prism-z-sticky). Useful when the bar sits above a tall scrollable list."
+
+# State hook — colocated with the molecule, exported alongside.
+state_hook:
+  name: useFilterBarState
+  signature: |
+    function useFilterBarState<T, TFilters extends Record<string, string>>(input: {
+      data: T[];
+      initial: TFilters;
+      searchInitial?: string;
+      derive?: { [K in keyof TFilters]?: (rows: T[]) => string[] };
+    }): {
+      search: string;
+      setSearch: (v: string) => void;
+      filters: TFilters;                                   # EFFECTIVE values (fallback applied)
+      setFilter: <K extends keyof TFilters>(k: K, v: string) => void;
+      options: { [K in keyof TFilters]: string[] };
+      readonly __rowType?: T;                              # phantom (load-bearing for type-param symmetry; do NOT remove)
+    };
+  contract:
+    derive: "When derive[K] is provided, options[K] is computed by invoking the callback with input.data, deduping, sorting, and prepending 'All' if absent. When derive[K] is absent, options[K] is []."
+    effective_fallback: "filters[K] is the *effective* value: if the raw setFilter-stored value is in options[K], it is used; otherwise it falls back to input.initial[K]. Default-on per journal 0002 § For Discussion #2."
+    phantom_field: "__rowType: T is a load-bearing phantom field (always undefined at runtime) that keeps T in the public type signature for symmetry with UseFilterBarStateInput<T, ...>. Required by TS strict noUnusedLocals. M03/M04 must NOT remove or rename. See workspaces/prism-0.6.0/journal/0004-DISCOVERY-*.md Finding 2."
+  rationale: "Three of four arbor *-prism consumers (documents, clients, employees) hand-roll the derive-options-from-data pattern; two of four hand-roll the effective-filter-fallback. Putting both inside useFilterBarState collapses three pieces a consumer must wire (state hook + derive helper + fallback util) into one call. The hook is also useful standalone (consumers using a custom layout but the same state semantics)."
+
+states:
+  initial: idle
+  states:
+    - name: idle
+      description: "Search empty, all dimensions at initial values, no active filtering."
+    - name: searching
+      description: "Search input has a non-empty value; consumer's adapter or filter pipeline narrows the result set."
+    - name: filtering
+      description: "One or more dimensions has a non-initial value; consumer's adapter narrows the result set."
+  transitions:
+    - from: idle
+      to: searching
+      trigger: "User types in search input → onSearchChange invoked with non-empty value."
+      visual_change: "Search field shows the typed text; clear-on-Escape becomes effective."
+    - from: searching
+      to: idle
+      trigger: "User presses Escape OR clears the input → onSearchChange invoked with empty string."
+      visual_change: "Search field clears; downstream filter pipeline restores full result set."
+
+composition_slots:
+  - name: search
+    description: "Search input field. Native <input type=search>; molecule controls value/onChange via props."
+  - name: dimensions
+    description: "Per-dimension filter UIs. Shape determined by FilterBarDimension.shape ('dropdown' | 'chips')."
+  - name: viewMode
+    description: "Optional view-mode toggle on the right side. Renders only when viewMode prop is supplied."
+
+accessibility:
+  role: "(none — semantic children carry their own roles; FilterBar is a layout wrapper)"
+  aria_attributes:
+    - attribute: aria-label
+      source: "Each dimension's label is paired with its control via htmlFor/id (dropdown) or rendered as the radiogroup's aria-label (chips)."
+      required: true
+  keyboard:
+    - key: Escape
+      action: "Clears the search input (calls onSearchChange with empty string)."
+    - key: ArrowLeft / ArrowRight
+      action: "Navigates between chips within a dimension chip-row (when shape='chips')."
+    - key: ArrowLeft / ArrowRight
+      action: "Navigates between view-mode options when present."
+    - key: Tab
+      action: "Moves focus from search → dimensions (in declared order) → viewMode."
+  focus:
+    tabindex: "0 (standard form-element focus)"
+    focus_visible: true
+    trap: false
+  screen_reader:
+    label_source: "Per-control aria-label or paired <label> (dropdown), aria-label on radiogroup (chips/viewMode)."
+    announcements:
+      - "Search input: announced as a search field (native role=search)."
+      - "Dimension chip selection: announced as 'X selected' via role=radio aria-checked transition."
+      - "View-mode change: announced as the new mode label."
+
+responsive:
+  - breakpoint: mobile
+    behavior: "Bar wraps to multiple lines; search takes full width; dimensions stack."
+  - breakpoint: tablet
+    behavior: "Bar may wrap depending on dimension count; sticky:true is most useful here."
+  - breakpoint: desktop
+    behavior: "Single-line horizontal layout: search (flex) + dimensions + viewMode (right-aligned)."
+  - breakpoint: wide
+    behavior: "Same as desktop with extra spacing."
+
+tokens:
+  consumes:
+    - filter-bar.default.bg
+    - filter-bar.default.border
+    - filter-bar.default.radius
+    - filter-bar.default.padding
+    - filter-bar.default.gap
+    - filter-bar.search.bg
+    - filter-bar.search.border
+    - filter-bar.dimension.bg
+    - filter-bar.dimension.text
+    - filter-bar.dimension.active_bg
+    - filter-bar.dimension.active_text
+    - filter-bar.viewMode.bg
+    - filter-bar.viewMode.active_bg
+    - filter-bar.sticky.z_index
+  inherits_from: null
+
+# Storybook stories shipped with 0.6.0
+stories:
+  - name: SearchOnly
+    description: "Matches my-payslips-prism use case post-migration."
+  - name: SearchPlusChipRow
+    description: "Matches documents-prism (search + category chip-row)."
+  - name: SearchPlusDropdownPlusViewMode
+    description: "Matches clients-prism / employees-prism (search + sector dropdown + grid/list toggle)."
+  - name: FilterBarAboveDataTable
+    description: "Composite: FilterBar + DataTable with adapter rebuild on filter delta. Demonstrates end-to-end 0.6.0 use including M01 synthetic Profile-completeness column."
+
+# Consumer migration pattern (post-0.6.0)
+consumer_migration:
+  before:
+    description: "Hand-rolled in arbor *-prism routes (waves 3-5)."
+    boilerplate_loc:
+      documents-prism: 135
+      clients-prism: 122
+      payslips-prism: 0
+      employees-prism: 80
+    pattern:
+      - "useState for search, activeCategory/sector, view"
+      - "useMemo deriving options from data"
+      - "useMemo for effective fallback"
+      - "useMemo rebuilding adapter on filter tuple change"
+      - "Inline CSS for search input + chip row OR dropdown + toggle"
+  after:
+    description: "FilterBar molecule + useFilterBarState hook (0.6.0)."
+    boilerplate_loc:
+      documents-prism: 15
+      clients-prism: 15
+      payslips-prism: 5
+      employees-prism: 15
+    pattern:
+      - "useFilterBarState({ data, initial, derive }) returns search/setSearch/filters/setFilter/options"
+      - "<FilterBar search dimensions viewMode /> declarative layout"
+      - "Adapter useMemo dep tuple shrinks to (data, state.search, state.filters)"
+      - "Inline CSS removed; tokens applied via molecule's class"
+
+# Out of scope for 0.6.0 (per analysis 03)
+out_of_scope:
+  - "DataTableAdapter.filterDimensions engine wiring (stays vapourware until a consumer demands faceted server-side filtering)."
+  - "FilterPanel collapsible-form variant (separate use case; existing 0.1.0 component unchanged)."
+  - "Per-column header text-input filters in DataTable (separate, untouched in 0.6.0)."
