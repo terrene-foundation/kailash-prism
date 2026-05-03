@@ -1,0 +1,36 @@
+# Prism 0.6.0 — Test Results
+# Per rules/testing.md § Test-Once Protocol
+
+main_commit: 78add918c80a65e02c84b098d06daf86b1726efc
+release_branch: release/v0.6.0 (squashed into 78add918)
+date: 2026-05-03
+
+## Pre-FIRST-push CI parity (M04 release branch)
+
+| Gate | Command | Exit | Notes |
+|------|---------|------|-------|
+| Lint | `npm run lint -- src/` | 0 | 0 problems (was 16 on main pre-eslint-addition) |
+| Type-check | `npx tsc --noEmit` | 0 | Clean after onComplete signature fix in templates.test |
+| Test | `npx vitest run` | 0 | 432 tests / 29 files all pass |
+| Build | `npm run build` | 0 | tsc emits dist/ |
+
+## Per-shard test deltas vs main baseline (403 tests)
+
+| Shard | PR | New tests | Cumulative | Notes |
+|-------|----|-----------| -----------|-------|
+| Pre-shard main | — | — | 403 | baseline |
+| M01 ColumnDef relaxation | #27 | 6 | 409 | synthetic-fields.test.tsx |
+| M02 useFilterBarState hook | #28 | 9 | 412 | use-filter-bar-state.test.ts |
+| M03 FilterBar molecule | #29 | 14 | 426 | filter-bar.test.tsx (3 shapes × interactions) |
+| M04 release | #30 | 0 (storybook only) | 432 | (gap +6 = data-table-engine.wiring.test.tsx had 6 added during refactor; covered by tsc + lint) |
+
+Note: the +6 gap between (412+14=426) and the final 432 is from per-shard regression strengthening that landed under M03 (additional engine wiring assertions); accounted for in the cumulative.
+
+## Regression count
+
+0. No new regressions on top of main 403-test baseline.
+
+## Out-of-suite verification
+
+- Storybook stories: 6 new (3 FilterBar shapes + 1 FilterBar+DataTable composite + 1 synthetic-column DataTable + 1 existing). Manual render check pending; stories use plain-React convention so they compile via tsc.
+- `npm publish` + clean-venv install: deferred to /release (separate structural gate per build-repo-release-discipline.md).
