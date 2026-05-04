@@ -1,5 +1,5 @@
 ---
-name: claude-code-architect
+name: cc-architect
 description: CC artifact architect. Use for auditing, designing, or improving agents, skills, rules, commands, hooks.
 tools: Read, Write, Edit, Grep, Glob, Bash, Task
 model: opus

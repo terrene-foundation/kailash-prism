@@ -1,0 +1,34 @@
+# COC Sync Marker — kailash-prism
+timestamp: 2026-04-29T11:17:46Z
+source: loom/.claude
+loom_version: 2.10.2
+variant: prism
+clis: ["claude"]
+stats:
+  files_updated_this_sync:
+    - .claude/commands/codify.md (cc-architect rename completion; loom 2.10.2 source fix)
+    - .claude/guides/co-setup/05-variant-architecture.md (cc-architect rename; loom-source-current pull)
+    - .claude/rules/cc-artifacts.md (cc-architect rename; loom-source-current pull)
+    - .claude/skills/30-claude-code-patterns/SKILL.md (cc-architect rename; loom-source-current pull)
+  files_added_this_sync: []
+  files_purged:
+    - .claude/agents/claude-code-architect.md (obsoleted)
+    - .claude/projects/ (obsoleted)
+    - .claude/scheduled_tasks.lock (obsoleted)
+    - .claude/test-harness/ (obsoleted)
+  manifest_changes:
+    obsoleted_added:
+      - .claude/agents/claude-code-architect.md
+      - .claude/projects/
+      - .claude/scheduled_tasks.lock
+      - .claude/test-harness/
+    exclude_added:
+      - "projects/**"
+      - "scheduled_tasks.lock"
+      - "test-harness/**"
+  coc_obsoleted_emitted: 13 paths (16-line file with header)
+notes: |
+  Surgical sync-hygiene patch (loom 2.10.2). Only modified artifact is
+  commands/codify.md (cc-architect rename completion). Stale state purged
+  across all 8 BUILD/USE consumers via new .coc-obsoleted entries.
+  No SDK pin updates this cycle (pure metadata + sync-hygiene patch).

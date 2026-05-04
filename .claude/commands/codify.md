@@ -13,7 +13,7 @@ description: "Load phase 05 (codify) for the current workspace. Update existing 
 ## Phase Check
 
 - Read `workspaces/<project>/04-validate/` to confirm validation passed
-- Read `docs/` and `docs/specs/` for knowledge base
+- Read `docs/` and `docs/00-authority/` for knowledge base
 - Output: update existing agents and skills in their canonical locations (e.g., `agents/frameworks/`, `skills/01-core-sdk/`, `skills/02-dataflow/`, etc.)
 
 ## Execution Model
@@ -66,19 +66,21 @@ This closes the feedback loop: observe → digest → **codify into real artifac
 
 ### 2. Deep knowledge extraction
 
-Using as many subagents as required, peruse `docs/`, especially `docs/specs/`.
+Using as many subagents as required, peruse `docs/`, especially `docs/00-authority/`, and `specs/` for domain specifications.
 
 - Read beyond the docs into the intent of this project/product
+- Read `specs/` to understand the detailed domain truth — specs contain the nuanced decisions, contracts, and constraints that should inform agent and skill updates
 - Understand the roles and use of agents, skills, docs:
   - **Agents** — What to do, how to think about this, following procedural directives
   - **Skills** — Distilled knowledge for 100% situational awareness
   - **`docs/`** — Full knowledge base
+  - **`specs/`** — Detailed domain specifications (authority on what the system does)
 
 ### 3. Update existing agents
 
 Improve agents in their canonical locations.
 
-- Reference `.claude/agents/_subagent-guide.md` for agent format
+- Reference `rules/cc-artifacts.md` for agent format (desc <120 chars, body <400 lines, frontmatter + trigger phrases); see `agents/frameworks/ml-specialist.md` as an example
 - Identify which existing agent(s) should absorb the new knowledge
 - If no existing agent covers the domain, create a new agent in the appropriate directory
 
@@ -96,59 +98,15 @@ Ensure user-facing documentation reflects new capabilities. Verify README.md, do
 
 ### 6. Red team the agents and skills
 
-Validate that generated agents and skills are correct, complete, and secure. **claude-code-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure).
+Validate that generated agents and skills are correct, complete, and secure. **cc-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure).
 
-### 7. Create upstream proposal (BUILD repos only)
+### 7. Create upstream proposal (BUILD repos) / 8. Upstream to atelier (loom only)
 
-**This step applies ONLY to BUILD repos** (kailash-py, kailash-rs, kailash-prism). Detect by checking:
+Follow the proposal protocol in `guides/co-setup/09-proposal-protocol.md`. Key rules:
 
-- Git remote contains `kailash-py`, `kailash-rs`, or `kailash-prism`, OR
-- `pyproject.toml` contains `name = "kailash"` or `Cargo.toml` contains `name = "kailash"`, OR
-- `web/package.json` contains `"name": "@kailash/prism-web"`
-
-**If this is a downstream project repo** (anything else): SKIP this step. Downstream repos consume COC artifacts from templates — they do not propose changes upstream. Artifact changes from `/codify` in downstream repos stay local to that project. Report:
-
-> Artifacts updated locally. This is a downstream project repo — changes stay local.
-> Only BUILD repos (kailash-py, kailash-rs, kailash-prism) create upstream proposals.
-
-**If this is a BUILD repo**: Create a proposal for upstream review at loom/ (source of truth).
-
-**DO NOT sync directly to COC template repos.** All distribution flows through loom/ via `/sync`.
-
-1. Create `.claude/.proposals/` directory if it doesn't exist
-2. Read the SDK version from `pyproject.toml` (py), `Cargo.toml` (rs), or `web/package.json` (prism) and the COC artifact version from `.claude/VERSION`
-3. Generate `.claude/.proposals/latest.yaml` listing all artifact changes:
-
-```yaml
-source_repo: kailash-py # or kailash-rs or kailash-prism
-codify_date: YYYY-MM-DD
-codify_session: "type(scope): description of work"
-sdk_version: "2.2.1" # from pyproject.toml, Cargo.toml, or web/package.json
-coc_version: "1.0.0" # from .claude/VERSION
-
-changes:
-  - file: relative/path/to/artifact.md
-    action: created | modified
-    suggested_tier: cc | co | coc | coc-py | coc-rs
-    reason: "Why this artifact was created/changed"
-    diff_lines: "+N -N" # for modifications
-
-status: pending_review
-```
-
-4. For each changed artifact, suggest a tier:
-   - **cc**: Claude Code universal (guides, cc-audit)
-   - **co**: Methodology universal (CO principles, journal, communication)
-   - **coc**: Codegen, language-agnostic (workflow phases, analysis patterns)
-   - **coc-py** / **coc-rs** / **coc-prism**: Language/platform-specific (code examples, SDK patterns)
-
-5. Report to the developer:
-
-> Artifacts updated locally and available in this repo. Proposal created at
-> `.claude/.proposals/latest.yaml` with {N} changes for upstream review.
-> When ready, open loom/ and run `/sync {py|rs|prism}` to classify and distribute.
-
-See `rules/artifact-flow.md` for the full flow rules.
+- **BUILD repos** (kailash-py, kailash-rs): Create/append proposal at `.claude/.proposals/latest.yaml` for loom/ review. **Append, never overwrite** unprocessed proposals. See `rules/artifact-flow.md`.
+- **loom/**: Propose CC/CO-tier artifacts upstream to atelier/ using the same append-not-overwrite protocol.
+- **Downstream project repos**: SKIP. Changes stay local.
 
 ## Agent Teams
 
@@ -167,16 +125,10 @@ Deploy these agents as a team for codification:
 
 **Validation team (red team the agents and skills):**
 
-- **claude-code-architect** — Verify cc-artifacts compliance: descriptions <120 chars, agents <400 lines, commands <150 lines, rules have `paths:` frontmatter, SKILL.md progressive disclosure, no CLAUDE.md duplication
+- **cc-architect** — Verify cc-artifacts compliance: descriptions <120 chars, agents <400 lines, commands <150 lines, rules have `paths:` frontmatter, SKILL.md progressive disclosure, no CLAUDE.md duplication
 - **gold-standards-validator** — Terrene naming, licensing accuracy, terminology standards
 - **testing-specialist** — Verify any code examples in skills are testable
 - **security-reviewer** — Audit agents/skills for prompt injection, insecure patterns, secrets exposure
-
-**Upstream proposal (step 7 — BUILD repos only):**
-
-- Only in BUILD repos (kailash-py, kailash-rs, kailash-prism): generate `.claude/.proposals/latest.yaml` with tier suggestions
-- Downstream project repos: skip proposal creation, changes stay local
-- See `rules/artifact-flow.md` for the controlled flow: BUILD repo → loom/ → templates
 
 ### Journal (MUST — phase-complete gate)
 
