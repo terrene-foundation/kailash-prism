@@ -1,0 +1,91 @@
+{
+  "last_codified": "2026-05-04T00:00:00Z",
+  "digest_hash": "no-digest-present-fell-back-to-observations-sha256",
+  "observations_sha256": "6f850a19c0889fc4d23154b7436b60e92873b4c59eb9c871c5b20dd8b177b354",
+  "observations_line_count": 23,
+  "workspace": "prism-0.6.0",
+  "codify_session_summary": "prism-0.6.0 lessons routed via .claude/.proposals/latest.yaml (appended); zero local globals edited per cross-cli-parity + variant-authoring constraints",
+  "actions_taken": [
+    {
+      "type": "proposal_append",
+      "file": ".claude/.proposals/latest.yaml",
+      "entries_added": 16,
+      "breakdown": {
+        "source_file_entries": 9,
+        "journal_entries": 7,
+        "rule_candidates_initial": 4,
+        "rule_candidates_after_red_team": 3,
+        "withdrawn_candidates": 1
+      },
+      "reason": "Per artifact-flow.md MUST: append-not-overwrite. Status remains pending_review for loom Gate-1 classification."
+    },
+    {
+      "type": "journal_create",
+      "file": "workspaces/prism-0.6.0/journal/0006-DECISION-codify-pre-release-sweep-discipline.md",
+      "reason": "Codification of pre-release lint+type sweep as /release discipline (later REJECT-folded into agents.md mechanical-sweep clause-append per cc-architect red team)."
+    },
+    {
+      "type": "journal_create",
+      "file": "workspaces/prism-0.6.0/journal/0007-DECISION-codify-pass-complete.md",
+      "reason": "Codify-pass closure entry per /codify journal MUST gate. Documents the deliberate skip of /codify Steps 3-5 (local-globals edits) due to variant/parity constraints, and the red-team disposition for all four rule_candidate entries."
+    },
+    {
+      "type": "rule_candidate_revision",
+      "candidate": "type-relaxation-surface-sweep",
+      "trigger": "cc-architect red team NEEDS-REVISION verdict",
+      "changes": [
+        "added MUST clause + MUST NOT clauses",
+        "added verbatim BLOCKED rationalizations enumeration (6 phrases)",
+        "added paths frontmatter hint (TS/Py/Rust file globs)",
+        "added cross_cli_slot_partition (neutral_body vs examples_slot)",
+        "DROPPED Dart cross-language claim (sound null-safety lacks ambient-narrowing failure mode)"
+      ]
+    },
+    {
+      "type": "rule_candidate_reclassification",
+      "candidate": "phantom-field-noUnusedLocals",
+      "trigger": "cc-architect red team REJECT (re-scope) verdict",
+      "from_tier": "coc-global",
+      "to_tier": "skill-embedded",
+      "rationale": "TypeScript-only convention; Rust PhantomData is different mechanism, Dart has no analogue. Cross-language framing was unsupported."
+    },
+    {
+      "type": "rule_candidate_revision",
+      "candidate": "script-tool-manifest-sanity",
+      "trigger": "cc-architect red team NEEDS-REVISION verdict",
+      "changes": [
+        "added paths frontmatter (**/package.json, **/pyproject.toml, **/Cargo.toml)",
+        "added MUST NOT clause",
+        "added verbatim BLOCKED rationalizations enumeration (7 phrases)",
+        "added audit_protocol section (parse-intersect-diff sweep)"
+      ]
+    },
+    {
+      "type": "rule_candidate_withdrawal",
+      "candidate": "pre-release-sweep-discipline",
+      "trigger": "cc-architect red team REJECT (fold-into-existing) verdict",
+      "disposition": "fold-into-existing",
+      "target_existing_rule": "rules/agents.md § Reviewer Mechanical Sweeps",
+      "rationale": "Standalone rule duplicated zero-tolerance Rule 1 (warnings-as-errors) + existing mechanical-sweep gate. Folding as a clause-append to agents.md is the cheaper, non-duplicative fix."
+    }
+  ],
+  "actions_skipped": [
+    {
+      "step": "Step 3 — update existing agents",
+      "reason": "Local global edits to .claude/agents/* would violate cross-cli-parity.md MUST 1 (neutral-body byte-identical) and variant-authoring.md MUST 1 (slot-replacement only). Lessons routed via proposal."
+    },
+    {
+      "step": "Step 4 — update existing skills",
+      "reason": "Same as Step 3."
+    },
+    {
+      "step": "Step 5 — update README/docs",
+      "reason": "No user-facing docs added in prism-0.6.0; specs were updated during /implement (PR #29 web-v0.6.0 cycle)."
+    }
+  ],
+  "follow_ups_for_human": [
+    "Commit working-tree changes to a chore(codify): prism-0.6.0 lessons branch + PR (per BUILD-repo rule, agent does NOT commit).",
+    "Loom-side /sync Gate 1 reviewer classifies the three remaining rule_candidate entries (1 path-scoped global, 1 path-scoped global, 1 skill-embedded) and reviews the withdrawn candidate's clause-append for agents.md.",
+    "Decide whether to backport the cc-architect red-team verdict pattern (NEEDS-REVISION / REJECT-fold / REJECT-retier) into guides/co-setup/09-proposal-protocol.md as a recommended Gate-1 reviewer triage shape."
+  ]
+}
