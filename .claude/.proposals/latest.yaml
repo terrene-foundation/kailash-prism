@@ -332,4 +332,351 @@ changes:
       behavior require logged-in browser session).
     diff_lines: "+~N"
 
+  # --- Prism 0.6.0 release (2026-05-03): FilterBar + ColumnDef.field relaxation ---
+  # Bundle of two API gaps surfaced by arbor migration waves 1-5. /implement
+  # produced 5 merged PRs (#27 ColumnDef.field relaxation, #28 useFilterBarState
+  # hook, #29 FilterBar molecule, #30 release tag web-v0.6.0, #31 closure artefacts).
+  # Distribution: GitHub-only (npm pack tarball + GitHub Release asset), no npm publish.
+
+  - file: web/package.json
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      @kailash/prism-web 0.5.0 → 0.6.0. Added `eslint` to devDependencies
+      (was an undeclared dependency for the `lint` script — see Finding 3).
+      Closes the script-tool/manifest gap that had the lint script as
+      `command not found` for an unknown duration on main.
+    diff_lines: "+5 -1"
+
+  - file: web/src/engines/data-table/types.ts
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      ColumnDef.field relaxed from `string & keyof T` to `string` to admit
+      synthetic computed columns (derived %, aggregate badges, computed
+      monetary totals, cross-field labels — all blocked by the prior keyof
+      constraint). Runtime contract: if `keyof T` use `row[field]`, else
+      `undefined`; `sortable` MUST be false on synthetic fields.
+    diff_lines: "+~10 -3"
+
+  - file: web/src/engines/data-table/data-table-body.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Latent type-guard fix surfaced by the field relaxation: value-extraction
+      site `row[col.field]` was unguarded; the surrounding `String(value ?? '')`
+      coalesce protected the RENDER but the VALUE-EXTRACTION itself was an
+      untyped access. Lifted `(row as Record<string, unknown>)[col.field]` at
+      the extraction site. Same-shard fix per autonomous-execution Rule 4.
+    diff_lines: "+~5 -2"
+
+  - file: web/src/engines/data-table/data-table-mobile.tsx
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Same latent-guard class as data-table-body.tsx; 6 sites across
+      titleCol / subtitleCol / detailCols paths. Lifted a single
+      `const rowRecord = row as Record<string, unknown>` per render-row to
+      avoid per-cell cast cost.
+    diff_lines: "+~12 -8"
+
+  - file: web/src/molecules/filter-bar/use-filter-bar-state.ts
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      G-2 workaround promotion: arbor waves 3-5 hand-rolled the same
+      `(searchTerm, filterTuple)` reducer + adapter-rebuild pattern in 4
+      *-prism routes. Hook owns the state; `UseFilterBarStateResult<T, TFilters>`
+      preserves type-parameter symmetry with `UseFilterBarStateInput<T, TFilters>`
+      via phantom field `__rowType?: T` (load-bearing for noUnusedLocals
+      under TS strict — see Finding 2).
+    diff_lines: "+~150 -0"
+
+  - file: web/src/molecules/filter-bar/filter-bar.tsx
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      FilterBar molecule: search input + chip-row + dropdown + view-mode
+      toggle outside DataTable. DataTable.filtering accepts FilterBar adapter
+      so engine handles delta internally without consumer-level adapter
+      recreation. Replaces ~60 LOC of inline filter CSS per page.
+    diff_lines: "+~200 -0"
+
+  - file: docs/specs/05-engine-specifications.md
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      § Filter Engine added (FilterBar molecule contract +
+      useFilterBarState hook semantics). § DataTable extended with
+      ColumnDef.field synthetic-field allowance + sortable runtime check.
+      File now at ~2240 lines — exceeds specs-authority MUST 8 (300-line
+      cap); future edits should split into 05a-filter-engine.md /
+      05b-data-table-changes.md siblings rather than append.
+    diff_lines: "+~150 -5"
+
+  - file: web/CHANGELOG.md
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      0.6.0 entry: FilterBar + useFilterBarState (#24 part 1+2);
+      ColumnDef.field synthetic-field relaxation (#25); eslint added to
+      devDependencies (Finding 3 / journal 0004); 7 latent type-guards
+      lifted (Finding 1 / journal 0004).
+    diff_lines: "+~30 -0"
+
+  - file: workspaces/prism-0.6.0/journal/0001-DECISION-prism-0.6.0-scope-two-features.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      /analyze decision: scope to 2 features (FilterBar + ColumnDef.field).
+      Rejected 3rd-feature inclusion ("typed FilterBar adapter unification")
+      because the cross-wave pattern was 1-of-1, not the ≥2 threshold the
+      brief mandated. Captures the cap mechanism for future N-feature
+      release-cycle decisions.
+    diff_lines: "+~N"
+
+  - file: workspaces/prism-0.6.0/journal/0002-DISCOVERY-filterbar-absorbs-derived-options-and-effective-fallback.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Engine API design discovery: FilterBar absorbs derived options
+      (auto-derive from data when not supplied) AND effective-fallback
+      (`effectiveX = explicitX ?? derivedX`). Pattern is project-specific
+      to Prism's filter-engine but the absorption-and-fallback shape is
+      a generic design pattern worth capturing.
+    diff_lines: "+~N"
+
+  - file: workspaces/prism-0.6.0/journal/0003-TRADE-OFF-render-callback-type-narrowing-no-deprecation-cycle.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Type-narrowing trade-off: ColumnDef.render type narrowed from
+      `(value: unknown, row: T)` to `(value: T[keyof T] | undefined, row: T)`
+      in the same minor version (0.5 → 0.6) without deprecation cycle.
+      Rationale: TS parameter contravariance — narrower-input callers
+      remain compatible. Captures the "no-deprec-needed" decision for
+      future TS contract narrowings.
+    diff_lines: "+~N"
+
+  - file: workspaces/prism-0.6.0/journal/0004-DISCOVERY-implementation-surfaces-latent-type-guards-and-eslint-gap.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Three findings worth lifting cross-project (see § Cross-project rule
+      candidates below): (1) latent type-guard sweep pattern when relaxing
+      a type constraint, (2) phantom field convention for noUnusedLocals
+      type-parameter symmetry, (3) script-tool / devDependency manifest
+      sanity check (eslint was a no-op script for unknown duration).
+    diff_lines: "+~N"
+
+  - file: workspaces/prism-0.6.0/journal/0005-DECISION-implement-cycle-complete-pending-npm-publish.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      /implement closure: 5 PRs landed on main (b504b38, 78add91, 73e8c90,
+      1b89205, b509b22). Tag web-v0.6.0 cut; GitHub Release with
+      kailash-prism-web-0.6.0.tgz tarball asset live; clean-dir install
+      verified. Distribution model = npm pack tarball, NOT npm publish
+      (Foundation policy: GitHub-only, see project memory).
+    diff_lines: "+~N"
+
+  - file: workspaces/prism-0.6.0/journal/0006-DECISION-codify-pre-release-sweep-discipline.md
+    action: created
+    suggested_tier: coc-prism
+    reason: |
+      Codify decision: pre-release lint + type-guard sweep is a discipline
+      of /release, not a per-cycle decision. Dissolves the "frontload OR
+      surface-each-release" question. Three discussion items including a
+      counterfactual on whether zero-tolerance Rule 1 already implicitly
+      covers it (and the right fix is /redteam mechanical-sweep
+      strengthening rather than /release pre-flight).
+    diff_lines: "+~N"
+
+  # --- Cross-project rule candidates (loom Gate-1 classification target) ---
+  # Three rule_candidate entries below; revised after cc-architect red team
+  # (see workspaces/prism-0.6.0/journal/0007 § Red team). One prior candidate
+  # (`pre-release-sweep-discipline`) WITHDRAWN as standalone — restructured
+  # below as a clause-append to existing `agents.md § Reviewer Mechanical
+  # Sweeps`. One prior candidate (`phantom-field-noUnusedLocals`) reclassified
+  # from global rule → skill-tier (TypeScript-only; cross-language framing
+  # was dressing per cc-architect finding).
+
+  - rule_candidate: type-relaxation-surface-sweep
+    suggested_tier: coc-global
+    suggested_priority: 10
+    suggested_scope: path-scoped
+    suggested_paths: ["**/*.ts", "**/*.tsx", "**/*.py", "**/*.rs", "**/*.dart"]
+    target: new rules/type-relaxation-sweep.md
+    must_clauses:
+      - id: 1
+        title: "Type-Relaxation PRs MUST Sweep Value-Extraction Sites Separately From Render Sites"
+        body: |
+          When a PR relaxes a type constraint that was previously load-bearing
+          for runtime safety (e.g. `field: string & keyof T` → `field: string`,
+          `Optional[X]` → `X | None | Y`, `&'a str` → `&str`,
+          `String?` → `String`), reviewers MUST grep for value-extraction
+          sites SEPARATELY from rendering sites. A render-side coalesce or
+          null-check does NOT prove the value-extraction expression itself
+          is guarded — those are two distinct safety properties.
+    must_not_clauses:
+      - "MUST NOT classify a value-extraction site as 'already safe' based on a surrounding render-expression coalesce."
+      - "MUST NOT ship a type-relaxation PR without compile-against-proposed-type sweep at /analyze (not /implement) time."
+    blocked_rationalizations:
+      - "render coalesce protects it — value extraction is fine"
+      - "the type system narrows it everywhere — no runtime check needed"
+      - "the relaxation is just type-system, no runtime impact"
+      - "tsc / mypy / rustc would have caught it"
+      - "all sites pattern-match as already-safe in the existing inventory"
+      - "the surrounding code is well-tested, the extraction is implicit"
+    do_examples:
+      - desc: "Two-step sweep — value extraction THEN render"
+        slot_marker: examples
+        snippet: |
+          # 1. Value extraction sites (language-specific in slot:examples)
+          # 2. Render-coalesce sites
+          # The two MUST be inventoried separately; coverage on one does not
+          # imply coverage on the other.
+    do_not_examples:
+      - desc: "Single-pass classification using surrounding-context heuristic"
+        snippet: "(rejected — see prism-0.6.0 journal 0004 Finding 1: 7 latent guards survived single-pass sweep)"
+    origin: |
+      kailash-prism workspace prism-0.6.0 journal 0004 Finding 1 (M01).
+      Agent-B's analysis classified all 7 `row[col.field]` sites as
+      "Already safe — coalesce"; type-relaxation surfaced them as latent
+      because the safety was ambient (TS narrowed `T[col.field]` because
+      `col.field` was constrained to `keyof T`). Cross-language load-bearing
+      claim verified for: TS (`keyof T` relaxation), Python (Optional widening
+      with downstream `.attr` access), Rust (lifetime widening with downstream
+      `.unwrap()`). Dart claim DROPPED per cc-architect feedback — sound
+      null-safety doesn't have an analogous ambient-narrowing failure mode.
+    cross_cli_slot_partition:
+      neutral_body: "value-extraction guards are separate from render guards; sweep both"
+      examples_slot: "language-specific TS/Py/Rust patterns"
+
+  - rule_candidate: script-tool-manifest-sanity
+    suggested_tier: coc-global
+    suggested_priority: 10
+    suggested_scope: path-scoped
+    suggested_paths:
+      - "**/package.json"
+      - "**/pyproject.toml"
+      - "**/Cargo.toml"
+    target: new rules/script-tool-manifest-sanity.md
+    must_clauses:
+      - id: 1
+        title: "Every Declared Script Tool MUST Appear In Declared Dev-Dependencies"
+        body: |
+          Every named tool referenced in a project manifest's script section
+          MUST appear in that project's declared development dependencies.
+          Specifically: every `package.json` `scripts.<X>` value's first
+          token, every `pyproject.toml` `[project.scripts]` entry's
+          callable, every `Cargo.toml` `[workspace.metadata.scripts]` /
+          `cargo make` task that names an external cargo plugin MUST
+          resolve to a declared `devDependencies` (npm) / `[dev]` extra
+          (pip) / `[dev-dependencies]` (cargo) entry.
+    must_not_clauses:
+      - "MUST NOT ship a `scripts.X` entry whose first-token tool is absent from declared dev-dependencies."
+      - "MUST NOT defer the dev-dep addition to a follow-up PR — same-PR fix per autonomous-execution Rule 4."
+    blocked_rationalizations:
+      - "lint script is rarely run locally, low priority"
+      - "CI doesn't invoke lint — no blast radius"
+      - "we'll add the dep when someone notices"
+      - "it's a typo / leftover — delete the script later"
+      - "the tool is globally installed on most dev machines"
+      - "package-lock has it transitively — that's enough"
+      - "the gap is pre-existing, not introduced by this PR"
+    do_examples:
+      - "package.json scripts.lint = 'eslint src/' → devDependencies MUST include eslint"
+      - "pyproject.toml [project.scripts] referencing 'mypy' → [dev] MUST include mypy"
+      - "Cargo workspace task 'cargo deny check' → cargo-deny in [dev-dependencies] OR documented CI install-step"
+    do_not_examples:
+      - "lint script silently exits 'command not found' → CI passes because no test invokes it"
+      - "tool present in package-lock.json transitively but absent from devDependencies"
+    audit_protocol: |
+      Mechanical sweep at /redteam:
+      1. Parse manifest → enumerate script names + first-token tool.
+      2. Parse dev-deps section → enumerate declared tools.
+      3. Set difference (scripts) - (dev-deps) MUST be empty.
+      Any non-empty difference is a HIGH finding.
+    origin: |
+      kailash-prism workspace prism-0.6.0 journal 0004 Finding 3 (M02).
+      `eslint` was an undeclared dependency of the `lint` script in
+      `web/package.json` for unknown duration on main (verified at SHA
+      ead56a4 — predates session start). `npm run lint` exited
+      `sh: eslint: command not found` AND CI never caught it because no
+      test invokes the script. Cross-SDK applicable: identical shape in
+      py (pytest in scripts but pytest-* missing from [dev]) and rs
+      (cargo-make tasks naming missing plugins).
+    cross_cli_slot_partition:
+      neutral_body: "every script-tool-name MUST appear in declared dev-deps"
+      examples_slot: "manifest-format-specific examples (npm/pip/cargo)"
+
+  - rule_candidate: phantom-field-noUnusedLocals
+    suggested_tier: skill-embedded
+    suggested_priority: 20
+    suggested_scope: skill-embedded
+    target: skills/17-gold-standards/SKILL.md § TypeScript Patterns OR variants/prism/skills/17-gold-standards
+    reclassification_note: |
+      RECLASSIFIED from coc-global rule → skill-embedded (TypeScript-only).
+      cc-architect red team finding: Rust `PhantomData<T>` is a different
+      mechanism (zero-sized type, not optional field); Dart has no analogue;
+      sound null-safety eliminates the noUnusedLocals failure mode. The
+      "cross-language" framing was dressing. The pattern IS valuable as a
+      TypeScript convention — promote to a skill, not a rule.
+    skill_clause:
+      title: "TypeScript Phantom Fields For Type-Parameter Symmetry"
+      body: |
+        When TS strict mode (`noUnusedLocals` / TS6133) rejects an unused
+        type parameter in a paired interface declaration (e.g.
+        `Result<T, TFilters>` paired with `Input<T, TFilters>` for
+        symmetry), use a phantom `readonly __<concept>?: T` field. The
+        field is always `undefined` at runtime AND present only in the
+        type signature.
+      naming_convention: "`__<concept>: T` (e.g. `__rowType: T`, `__inputShape: TInputs`)"
+      jsdoc_tag: "`@phantom` — mark the field as type-system-only so readers don't 'clean up' what looks like dead code"
+      load_bearing_note: "MUST be documented as load-bearing in the source comment alongside the field declaration"
+    origin: |
+      kailash-prism workspace prism-0.6.0 journal 0004 Finding 2 (M02).
+      Second instance of the phantom-for-symmetry pattern in prism-web
+      (first: DataTableAdapter's TId default). Codify as a TS-specific
+      skill convention; cross-language generalization was unsupported.
+
+  # --- Withdrawn candidate (cc-architect red team disposition) ---
+
+  - withdrawn_candidate: pre-release-sweep-discipline
+    disposition: fold-into-existing
+    target_existing_rule: rules/agents.md § "Reviewer Mechanical Sweeps"
+    proposed_clause_append: |
+      ### MUST: /redteam Mechanical Sweep Includes Manifest Script-Tool Parity
+
+      Every /redteam round MUST mechanically verify (in the same shard as
+      AST/grep sweeps) that the project's declared script tools are
+      manifest-registered as dev-dependencies. Specifically:
+
+      - For TS projects: parse `package.json` `scripts` → first-token
+        tool names; intersect with declared `devDependencies`; missing-set
+        is a HIGH finding.
+      - For Python projects: parse `pyproject.toml` `[project.scripts]`
+        + `tool.poetry.scripts` + `setup.cfg [options.entry_points]`;
+        intersect with `[dev]` extras / `dev-dependencies`.
+      - For Rust projects: parse `Cargo.toml` workspace task definitions
+        (cargo-make, just, etc.); intersect with `[dev-dependencies]`.
+
+      Sweeps run as part of /redteam, NOT as a separate /release pre-flight.
+      The sweep is the structural defense; /release inherits the gate by
+      depending on /redteam-green.
+
+      Rationale (per cc-architect feedback): zero-tolerance Rule 1 already
+      covers the WARNINGS class; agents.md § Reviewer Mechanical Sweeps
+      already covers the MECHANICAL-SWEEP class. The right place to land
+      this finding is the intersection — augment the existing mechanical
+      sweep with manifest-script-tool parity. Avoids creating a parallel
+      /release pre-flight discipline that duplicates existing gates.
+    origin: |
+      kailash-prism workspace prism-0.6.0 journal 0006 (this codify pass)
+      + cc-architect red team disposition (journal 0007). Original framing
+      ("/release pre-flight") shipped both /release pre-flight + /redteam
+      mechanical sweep — duplicative. cc-architect's REJECT-with-fold
+      verdict is the cleaner pick: one place, one gate, one mechanism.
+
 status: pending_review
