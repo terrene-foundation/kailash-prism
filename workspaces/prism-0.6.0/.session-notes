@@ -1,0 +1,29 @@
+# Session Notes — 2026-05-04
+
+## Where we are
+
+prism-0.6.0 release shipped; `/codify` cycle closed via PR #32. All cross-project
+lessons live in `.claude/.proposals/latest.yaml` (status: `pending_review`) awaiting
+loom-side `/sync` Gate-1 classification. No active prism workstream — next move
+is either arbor wave-6 (cross-repo, your call) or Node 24 deprecation (~2026-05-25).
+
+## Read first
+
+1. `workspaces/prism-0.6.0/journal/0007-DECISION-codify-pass-complete.md` — codify-pass closure + red-team disposition table for all 4 rule_candidate entries
+2. `workspaces/prism-0.6.0/journal/0006-DECISION-codify-pre-release-sweep-discipline.md` — sweep discipline (later REJECT-folded per red team)
+3. `.claude/.proposals/latest.yaml` — pending_review proposal; loom Gate-1 reads this on next `/sync`
+4. `.claude/learning/learning-codified.json` — codify ledger (digest_hash, actions taken, follow-ups)
+5. `CLAUDE.md` — repo entry point
+
+## In-flight state
+
+- Working tree carries large loom-sync residue: untracked `.claude/agents/cc-architect.md`, hooks, settings.json, VERSION, .coc-obsoleted, .coc-sync-marker, dozens of new rule/skill files; modified `.claude/commands/codify.md`, `cc-artifacts.md`, etc. NOT from this session's prism work — likely a `/sync` that landed without commit. Decide commit-or-discard separately from prism workstreams.
+- `web/package.json` 0.6.0 now declares `eslint` in devDependencies (added in PR #29). The `lint` script previously exited `command not found` silently; future PRs MUST pass lint.
+
+## Traps
+
+- **Cross-repo scope.** arbor at `/Users/esperie/repos/terrene/contrib/arbor` — wave-6 / M05 is YOUR arbor session, not this prism session. `repo-scope-discipline.md` blocks reading arbor source from here.
+- **`docs/specs/05-engine-specifications.md` ~2240 lines** — far past `specs-authority.md` MUST 8 (300-line cap). Future spec edits MUST split into `05a-filter-engine.md` / `05b-data-table-changes.md` siblings, not append.
+- **Node 20 deprecation** in `.github/workflows/release-web.yml` — NOT a 5-min YAML edit. Forced upgrade to Node 24 begins 2026-06-02. Need setup-node@v5 / checkout@v5 verification + Vite/TS Node-24 compat sweep. Spin up `workspaces/prism-node24-bump/` as a proper micro-workspace ~2026-05-25.
+- **Never `git add -A`** with this much loom-sync residue in working tree — stage by explicit path only (per `git.md`). PR #32 is the example pattern.
+- **`pre-release-sweep-discipline` candidate WITHDRAWN** from proposal as standalone — restructured as a clause-append to `agents.md § Reviewer Mechanical Sweeps`. Don't re-propose it; loom Gate-1 evaluates the clause-append.

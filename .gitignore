@@ -10,3 +10,11 @@ target/
 .DS_Store
 coverage/
 .turbo/
+
+# Claude Code runtime telemetry (firehose log; sibling learning-codified.json IS tracked)
+.claude/learning/observations.jsonl
+.claude/learning/observations.archive
+web/.claude/
+
+# Dart library lockfile — kailash_prism is published via pub.dev; lockfile is per-consumer
+flutter/pubspec.lock
