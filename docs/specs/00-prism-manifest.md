@@ -4,18 +4,18 @@ This document is the canonical index of all Prism specifications. Every implemen
 
 ## Spec Documents
 
-| # | Document | Governs | Status |
-|---|----------|---------|--------|
-| 01 | [Design System Protocol](01-design-system-protocol.md) | DESIGN.md format, design-system.yaml schema, token tiers, constraint system | DRAFT |
-| 02 | [Token Architecture](02-token-architecture.md) | Three-tier token system, compilation targets, constraint validation | DRAFT |
-| 03 | [Component Contracts](03-component-contracts.md) | Abstract component definitions, state machines, accessibility requirements | DRAFT |
-| 04 | [Layout Grammar](04-layout-grammar.md) | Layout primitives, responsive rules, zone composition | DRAFT |
-| 05 | [Engine Specifications](05-engine-specifications.md) | DataTable, Form, Navigation, Layout, Theme, AI Chat engine contracts | DRAFT |
-| 06 | [Page Templates](06-page-templates.md) | Template definitions, zone schemas, composition rules | DRAFT |
-| 07 | [Cross-Platform Strategy](07-cross-platform-strategy.md) | Two-engine model, shared/divergent boundaries, compilation targets | DRAFT |
-| 08 | [Repo Architecture](08-repo-architecture.md) | Directory structure, package boundaries, build system, distribution | DRAFT |
-| 09 | [COC Integration](09-coc-integration.md) | Loom relationship, sync manifest, variant system, artifact flow | DRAFT |
-| 10 | [Quality Gates](10-quality-gates.md) | /i-audit scoring, /i-harden checklist, automated validation, convergence criteria | DRAFT |
+| #   | Document                                                                                  | Governs                                                                           | Status |
+| --- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------ |
+| 01  | [Design System Protocol](01-design-system-protocol.md)                                    | DESIGN.md format, design-system.yaml schema, token tiers, constraint system       | DRAFT  |
+| 02  | [Token Architecture](02-token-architecture.md)                                            | Three-tier token system, compilation targets, constraint validation               | DRAFT  |
+| 03  | [Component Contracts](03-component-contracts.md)                                          | Abstract component definitions, state machines, accessibility requirements        | DRAFT  |
+| 04  | [Layout Grammar](04-layout-grammar.md)                                                    | Layout primitives, responsive rules, zone composition                             | DRAFT  |
+| 05  | [Engine Specifications](05-engine-specifications.md) (index of 13 sub-specs `05a`..`05m`) | DataTable, Form, Navigation, Layout, Theme, AI Chat engine contracts              | DRAFT  |
+| 06  | [Page Templates](06-page-templates.md)                                                    | Template definitions, zone schemas, composition rules                             | DRAFT  |
+| 07  | [Cross-Platform Strategy](07-cross-platform-strategy.md)                                  | Two-engine model, shared/divergent boundaries, compilation targets                | DRAFT  |
+| 08  | [Repo Architecture](08-repo-architecture.md)                                              | Directory structure, package boundaries, build system, distribution               | DRAFT  |
+| 09  | [COC Integration](09-coc-integration.md)                                                  | Loom relationship, sync manifest, variant system, artifact flow                   | DRAFT  |
+| 10  | [Quality Gates](10-quality-gates.md)                                                      | /i-audit scoring, /i-harden checklist, automated validation, convergence criteria | DRAFT  |
 
 ## Compliance Rule
 

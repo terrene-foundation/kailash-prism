@@ -23,7 +23,7 @@ Platform-agnostic source of truth for all Prism implementations. YAML files in t
 | 02 | [Token Architecture](../docs/specs/02-token-architecture.md) | Three-tier token system, compilation targets, constraint validation |
 | 03 | [Component Contracts](../docs/specs/03-component-contracts.md) | Abstract component definitions, state machines, accessibility requirements |
 | 04 | [Layout Grammar](../docs/specs/04-layout-grammar.md) | Layout primitives, responsive rules, zone composition |
-| 05 | [Engine Specifications](../docs/specs/05-engine-specifications.md) | DataTable, Form, Navigation, Layout, Theme, AI Chat engine contracts |
+| 05 | [Engine Specifications](../docs/specs/05-engine-specifications.md) (index of 13 sub-specs `05a`..`05m`) | DataTable, Form, Navigation, Layout, Theme, AI Chat engine contracts |
 | 06 | [Page Templates](../docs/specs/06-page-templates.md) | Template definitions, zone schemas, composition rules |
 | 07 | [Cross-Platform Strategy](../docs/specs/07-cross-platform-strategy.md) | Two-engine model, shared/divergent boundaries, compilation targets |
 | 08 | [Repo Architecture](../docs/specs/08-repo-architecture.md) | Directory structure, package boundaries, build system, distribution |
