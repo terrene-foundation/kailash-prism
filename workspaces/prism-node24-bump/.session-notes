@@ -1,0 +1,61 @@
+# Session Notes — 2026-05-06
+
+## Where we are
+
+Workspace `prism-node24-bump` opened with `/analyze` complete. Brief + four
+analysis docs written; `02-plans/` empty (waiting on `/todos`). No code
+changed. Deadline 2026-06-02 (forced GHA Node 20 cut); 27 days.
+
+## Read first
+
+1. `briefs/0001-node24-bump.md` — scope, success criteria, 5-phase plan
+2. `01-analysis/00-current-state.md` — verified facts (single workflow, no PR-time CI, empty `engines`)
+3. `01-analysis/01-upgrade-surface.md` — 5 changes, risks, validation matrix
+4. `01-analysis/02-decisions-locked.md` — **the authoritative input for `/todos`**: 7 decisions, ready-to-paste `ci-web.yml` body, line-precise `release-web.yml` edits, validation grep commands
+5. `01-analysis/03-failure-modes.md` — 6 failure modes (1 HIGH mitigated, 1 MEDIUM mitigated, 4 LOW)
+6. `.github/workflows/release-web.yml` — only existing workflow (lines 21, 24, 26 carry the bumps)
+
+## /analyze output summary
+
+- **Versions verified** (resolved from package-lock.json): vitest 3.2.4, eslint 9.39.4, typescript 5.9.3, react 19.2.5, @types/node 22.19.17 (compiler) — all support Node 24
+- **Native modules**: esbuild + fsevents (both have Node 24 prebuilts)
+- **engines.node floor**: locked at `>=22.0.0` (LTS)
+- **CI workflow**: `.github/workflows/ci-web.yml` with matrix `[22, 24]`, full body in 02-decisions-locked.md
+- **release-web.yml**: 3 line edits (lines 21, 24, 26)
+- **@types/node bump**: compiler `^22.15.0` → `^24.0.0`
+- **packageManager field**: skip
+- **Atomicity**: one PR landing all 5 changes
+- **No HIGH severity failure modes left unmitigated**
+
+## In-flight state
+
+- Branch `docs/node24-bump-workspace-open` checked out, 4 untracked files in
+  `workspaces/prism-node24-bump/`. NOT YET COMMITTED.
+- Working tree otherwise clean (PRs #34 + #35 just landed, main at e8cc809).
+- Next step: opening PR (brief + 4 analyses + session notes) — pattern matches
+  PR #26 (prism-0.6.0 opening).
+
+## Traps
+
+- **No PR-time CI exists.** Solving this gap IS half the workspace —
+  `ci-web.yml` and the bump MUST land in the same PR (Decision 7).
+- **Compiler package has no release workflow yet.** When one lands later,
+  it MUST inherit Node 24 + setup-node@v5 + checkout@v5 + matrix [22, 24]
+  per Decision 6. Codify proposal will capture this as the institutional
+  pattern.
+- **Don't pre-cut a synthetic `web-vTEST` tag for validation.** Tags trigger
+  release-web.yml and create real GitHub Releases. The new ci-web.yml is
+  the validation surface, not a tag dry-run.
+- **Run local Node 22 + Node 24 builds BEFORE first push** per `git.md` §
+  "Pre-FIRST-Push CI Parity Discipline" — open item in 02-decisions-locked.md.
+
+## Open items for /todos
+
+- M01: edit `release-web.yml` (3 lines)
+- M02: write `ci-web.yml` (body in 02-decisions-locked.md)
+- M03: declare `engines.node` in both package.json files
+- M04: bump `@types/node` in `compiler/package.json` + regen lockfile
+- M05: local validation on Node 22 + 24 (pre-first-push)
+- M06: open PR; rely on its own ci-web.yml run for validation
+
+Target merge: 2026-05-30 (3-day buffer before 2026-06-02 deadline).
