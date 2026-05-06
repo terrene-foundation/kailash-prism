@@ -32,12 +32,15 @@
     "url": "https://github.com/terrene-foundation/kailash-prism.git",
     "directory": "compiler"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "dependencies": {
     "yaml": "^2.7.0"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
     "vitest": "^3.1.0",
-    "@types/node": "^22.15.0"
+    "@types/node": "^24.0.0"
   }
 }
