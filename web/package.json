@@ -39,6 +39,9 @@
     "url": "https://github.com/terrene-foundation/kailash-prism.git",
     "directory": "web"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"

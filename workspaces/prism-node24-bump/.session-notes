@@ -2,14 +2,16 @@
 
 ## Where we are
 
-Workspace `prism-node24-bump` opened with `/analyze` and `/todos` complete.
-Brief + four analyses + plan + three milestone todos written. No code
-changed. Deadline 2026-06-02 (forced GHA Node 20 cut); 27 days from open.
+`/implement` complete through M02. PR #38 OPEN + MERGEABLE + both
+ci-web.yml matrix entries [22, 24] PASS (37s and 36s). Awaiting human
+admin-squash-merge — that gate unblocks M03 (redteam + codify).
 
-**At human approval gate**: `/todos` MUST stop here for plan review per
-rules/autonomous-execution.md § Structural vs Execution Gates. After
-approval, `/implement` executes M01 → M02 autonomously; admin-merge of
-the M02 PR is the second human gate; M03 runs autonomously thereafter.
+Deadline: 2026-06-02 GHA Node 20 force-cut. With merge today, buffer
+becomes 27 days. Target merge per plan was 2026-05-30 (3-day buffer);
+landing 24 days earlier than target.
+
+**At human approval gate**: M02 ended at PR-green-awaiting-admin-merge
+per rules/autonomous-execution.md § Structural vs Execution Gates.
 
 ## Read first
 
