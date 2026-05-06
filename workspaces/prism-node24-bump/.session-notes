@@ -2,60 +2,86 @@
 
 ## Where we are
 
-Workspace `prism-node24-bump` opened with `/analyze` complete. Brief + four
-analysis docs written; `02-plans/` empty (waiting on `/todos`). No code
-changed. Deadline 2026-06-02 (forced GHA Node 20 cut); 27 days.
+Workspace `prism-node24-bump` opened with `/analyze` and `/todos` complete.
+Brief + four analyses + plan + three milestone todos written. No code
+changed. Deadline 2026-06-02 (forced GHA Node 20 cut); 27 days from open.
+
+**At human approval gate**: `/todos` MUST stop here for plan review per
+rules/autonomous-execution.md § Structural vs Execution Gates. After
+approval, `/implement` executes M01 → M02 autonomously; admin-merge of
+the M02 PR is the second human gate; M03 runs autonomously thereafter.
 
 ## Read first
 
 1. `briefs/0001-node24-bump.md` — scope, success criteria, 5-phase plan
-2. `01-analysis/00-current-state.md` — verified facts (single workflow, no PR-time CI, empty `engines`)
-3. `01-analysis/01-upgrade-surface.md` — 5 changes, risks, validation matrix
-4. `01-analysis/02-decisions-locked.md` — **the authoritative input for `/todos`**: 7 decisions, ready-to-paste `ci-web.yml` body, line-precise `release-web.yml` edits, validation grep commands
-5. `01-analysis/03-failure-modes.md` — 6 failure modes (1 HIGH mitigated, 1 MEDIUM mitigated, 4 LOW)
-6. `.github/workflows/release-web.yml` — only existing workflow (lines 21, 24, 26 carry the bumps)
+2. `01-analysis/02-decisions-locked.md` — **the authoritative input**: 7 decisions
+3. `01-analysis/03-failure-modes.md` — 6 FMs (1 HIGH + 1 MEDIUM mitigated, 4 LOW)
+4. `02-plans/01-implementation-plan.md` — single-shard plan, dependency graph
+5. `todos/active/M01-build-file-edits.md` — stage 5 file edits + lockfile regen
+6. `todos/active/M02-wire-validation-and-pr.md` — local Node 22+24 validation, commit, PR, own-CI green
+7. `todos/active/M03-redteam-codify.md` — 4 grep checks + codify proposal append + workspace closeout
 
-## /analyze output summary
+## Three-milestone shape
 
-- **Versions verified** (resolved from package-lock.json): vitest 3.2.4, eslint 9.39.4, typescript 5.9.3, react 19.2.5, @types/node 22.19.17 (compiler) — all support Node 24
-- **Native modules**: esbuild + fsevents (both have Node 24 prebuilts)
-- **engines.node floor**: locked at `>=22.0.0` (LTS)
-- **CI workflow**: `.github/workflows/ci-web.yml` with matrix `[22, 24]`, full body in 02-decisions-locked.md
-- **release-web.yml**: 3 line edits (lines 21, 24, 26)
-- **@types/node bump**: compiler `^22.15.0` → `^24.0.0`
-- **packageManager field**: skip
-- **Atomicity**: one PR landing all 5 changes
-- **No HIGH severity failure modes left unmitigated**
+```
+M01 Build (file edits)
+  → M02 Wire (validate + commit + PR + own-CI green)
+        → [HUMAN GATE: admin-squash-merge]
+              → M03 Redteam + Codify
+```
+
+Single-shard implementation per autonomous-execution.md MUST 1 (50 LOC,
+5 invariants, 1 call-graph hop). Splitting beyond 3 milestones is
+artificial overhead.
+
+## Decisions locked (input to /implement)
+
+- `engines.node: ">=22.0.0"` in web/ + compiler/
+- New `.github/workflows/ci-web.yml`, matrix `[22, 24]`
+- `release-web.yml` 3 line edits (checkout v4→v5, setup-node v4→v5, node 20→24)
+- `@types/node@^24.0.0` in compiler + lockfile regen
+- `packageManager` field skipped (Decision 5)
+- Compiler release workflow scoped OUT — codify proposal captures
+  inheritance pattern (Decision 6)
+- One PR for all 5 changes (Decision 7)
 
 ## In-flight state
 
-- Branch `docs/node24-bump-workspace-open` checked out, 4 untracked files in
-  `workspaces/prism-node24-bump/`. NOT YET COMMITTED.
-- Working tree otherwise clean (PRs #34 + #35 just landed, main at e8cc809).
-- Next step: opening PR (brief + 4 analyses + session notes) — pattern matches
-  PR #26 (prism-0.6.0 opening).
+- On `main`, working tree clean (PR #36 merged as 78dea2d).
+- 5 untracked files in `workspaces/prism-node24-bump/`: plan + 3 todo files
+  + this updated .session-notes. NOT YET COMMITTED.
+- Pattern matches PR #26 (prism-0.6.0): brief + analyses + plan + todos
+  shipped together. Recommend single PR opening `/todos` artefacts.
 
-## Traps
+## Traps (carry-forward)
 
 - **No PR-time CI exists.** Solving this gap IS half the workspace —
-  `ci-web.yml` and the bump MUST land in the same PR (Decision 7).
-- **Compiler package has no release workflow yet.** When one lands later,
-  it MUST inherit Node 24 + setup-node@v5 + checkout@v5 + matrix [22, 24]
-  per Decision 6. Codify proposal will capture this as the institutional
-  pattern.
-- **Don't pre-cut a synthetic `web-vTEST` tag for validation.** Tags trigger
-  release-web.yml and create real GitHub Releases. The new ci-web.yml is
-  the validation surface, not a tag dry-run.
-- **Run local Node 22 + Node 24 builds BEFORE first push** per `git.md` §
-  "Pre-FIRST-Push CI Parity Discipline" — open item in 02-decisions-locked.md.
+  ci-web.yml MUST land in the same PR as the bump (Decision 7).
+- **Compiler release workflow inheritance**: codify proposal in M03
+  captures the pattern; without it, the next bump re-discovers it.
+- **Don't pre-cut `web-vTEST` tag** — would create a real GitHub Release.
+  ci-web.yml is the validation surface, not a tag dry-run.
+- **Run local Node 22 + Node 24 BEFORE first push** per `git.md` §
+  "Pre-FIRST-Push CI Parity Discipline" — M02 T01–T04 enforce this.
+- **`compiler/package.json` collision in M02 T10/T11**: if T10 already
+  staged the engines field, T11's @types/node bump may hit "no change to
+  add" on the package.json path. Fall back to a single combined commit
+  (documented in M02 T11's alternative).
 
-## Open items for /todos
+## Open question for the human
 
-- M01: edit `release-web.yml` (3 lines)
-- M02: write `ci-web.yml` (body in 02-decisions-locked.md)
-- M03: declare `engines.node` in both package.json files
-- M04: bump `@types/node` in `compiler/package.json` + regen lockfile
-- M05: local validation on Node 22 + 24 (pre-first-push)
-- M06: open PR; rely on its own ci-web.yml run for validation
+Approve the plan and 3 todos? Once approved, `/implement` runs M01 → M02
+autonomously and stops at the next human gate (admin-squash-merge of
+M02's PR). Target merge: 2026-05-30 (24-day buffer before deadline).
 
-Target merge: 2026-05-30 (3-day buffer before 2026-06-02 deadline).
+## After approval — commit + PR opening
+
+5 files staged for one PR:
+  workspaces/prism-node24-bump/02-plans/01-implementation-plan.md
+  workspaces/prism-node24-bump/todos/active/M01-build-file-edits.md
+  workspaces/prism-node24-bump/todos/active/M02-wire-validation-and-pr.md
+  workspaces/prism-node24-bump/todos/active/M03-redteam-codify.md
+  workspaces/prism-node24-bump/.session-notes (modified)
+
+Branch: docs/node24-bump-todos
+Commit: docs(workspace): /todos closure for prism-node24-bump
