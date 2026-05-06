@@ -679,4 +679,83 @@ changes:
       mechanical sweep — duplicative. cc-architect's REJECT-with-fold
       verdict is the cleaner pick: one place, one gate, one mechanism.
 
+  # --- Node 24 bump (workspace prism-node24-bump) — appended 2026-05-06 ---
+
+  - file: ".github/workflows/release-web.yml"
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Bumped from Node 20 (deprecated 2026-06-02) to Node 24, with
+      actions/checkout v4 -> v5 and actions/setup-node v4 -> v5.
+      Pinned softprops/action-gh-release SHA unchanged. Single-shard
+      change; verified by ci-web.yml matrix [22, 24] on PR #38 and
+      first-on-main run (all green).
+    diff_lines: "+3 -3"
+
+  - file: ".github/workflows/ci-web.yml"
+    action: added
+    suggested_tier: coc-prism
+    reason: |
+      New PR-time CI workflow closing the validation gap that
+      release-web.yml left (release-web.yml fires only on web-v* tag
+      push; web/ changes had zero pre-merge signal). Matrix
+      node-version: ["22", "24"] validates the engines.node ">=22.0.0"
+      LTS floor AND the release pipeline pin in one workflow. Trigger
+      paths: web/**, .github/workflows/ci-web.yml; push to main for
+      green-on-main signal; concurrency cancel-in-progress.
+    diff_lines: "+58 -0"
+
+  - file: "web/package.json + compiler/package.json"
+    action: modified
+    suggested_tier: coc-prism
+    reason: |
+      Declared engines.node >=22.0.0 in both packages so consumers see
+      an explicit Node floor on tarball install. compiler also bumped
+      @types/node ^22.15.0 -> ^24.0.0 so Node-24-only types are visible
+      to TS. compiler/package-lock.json lockfile regen patched a
+      transitive postcss vulnerability (8.5.9 -> 8.5.14, GHSA-qx2v-qp2m-jg93)
+      same-shard per zero-tolerance Rule 1.
+    diff_lines: "+11 -3 (engines fields + @types bump + lockfile)"
+
+  - rule_candidate: future-prism-release-workflow-defaults
+    suggested_tier: coc-prism (cross-cli candidate; lift to coc-global if loom decides)
+    reason: |
+      Institutional pattern captured from this bump: future Prism
+      release workflows MUST default to:
+
+        - actions/checkout@v5 (not @v4)
+        - actions/setup-node@v5 (not @v4)
+        - node-version: '<CURRENT>' (Node 24 today, Node 26 next LTS cycle)
+        - Companion CI workflow with node-version matrix:
+            [<LTS>, <CURRENT>]    # ['22', '24'] today
+        - engines.node ">=<LTS>.0.0" in package.json
+
+      Trigger paths in CI MUST include the package's source tree AND
+      the workflow file itself (so the workflow's first PR validates
+      itself). concurrency.cancel-in-progress: true is mandatory.
+
+      Inheritance: when release-compiler.yml ships (currently scoped
+      out — no compiler release workflow exists yet), it MUST adopt
+      these defaults. Cite workspaces/prism-node24-bump/01-analysis/
+      02-decisions-locked.md as the canonical reference.
+
+      Validation gap lesson: a repo with tag-only release workflows AND
+      no PR-time CI cannot pre-validate a major Node bump without
+      first creating the CI surface that validates it. Future
+      similar-shaped bumps MUST treat "add CI workflow" as a
+      co-requisite of the bump, not a separate workspace.
+    origin: |
+      kailash-prism workspace prism-node24-bump, /codify M03 T09
+      (2026-05-06). Triggered by GHA's 2026-06-02 Node 20 force-cut;
+      bump landed 27 days ahead of deadline as PR #38 (merge commit
+      280ee60). Three local validation paths green via Docker
+      (host had Node 25 only, no nvm/fnm/volta); both PR-time and
+      first-on-main ci-web.yml runs green across [22, 24] matrix.
+
+      Pattern is generalizable to any tarball-distributed npm package
+      whose release pipeline pins a Node major. Same shape applies in
+      principle to Cargo + Rust toolchain bumps, Bundler + Ruby
+      toolchain bumps, etc. — the "matrix [<LTS>, <CURRENT>]" formulation
+      is intentionally parametric.
+
 status: pending_review
