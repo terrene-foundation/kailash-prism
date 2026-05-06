@@ -1,103 +1,29 @@
-# Session Notes — 2026-05-06 (workspace closed)
+# Session Notes — 2026-05-06
 
-## Status
+## Where we are
 
-`prism-node24-bump` workspace **CLOSED** — all phases complete, bump live on
-main, codify proposal queued for loom Gate-1.
+`prism-node24-bump` workspace is **closed** — todos in `completed/`, redteam
+APPROVE, codify proposal appended (status `pending_review`). Bump shipped
+24 days before the 2026-06-02 GHA Node 20 force-cut. No in-flight prism
+workstream; working tree clean on `main`.
 
-Bump merged as PR #38 commit `280ee60` at 2026-05-06T02:23:13Z. The 2026-06-02
-GHA Node 20 force-cut is no longer a binding constraint for kailash-prism;
-buffer captured: **27 days** vs. 3-day target.
+## Read first
 
-## Phase trail
+1. `CLAUDE.md` — repo entry point (architecture, packages, rules index)
+2. `workspaces/prism-node24-bump/journal/0001-DECISION-bump-19-days-early.md` — why this workstream landed early; institutional pattern captured
+3. `workspaces/prism-node24-bump/04-validate/redteam-round-1.md` — APPROVE verdict + 5 mechanical check transcripts (model for future bump verification)
+4. `.claude/.proposals/latest.yaml` — 4 entries appended this session (incl. `future-prism-release-workflow-defaults` rule_candidate); `pending_review` until loom Gate-1
+5. `workspaces/prism-0.6.0/.session-notes` — three-trap punch list this session closed; pattern reference for future closeout sessions
 
-| Phase    | Output                                                        | PR  |
-|----------|---------------------------------------------------------------|-----|
-| /analyze | brief + 4 analyses, 7 decisions locked, 6 FMs scored          | #36 |
-| /todos   | implementation plan + 3 milestone todos, build/wire split     | #37 |
-| /implement | M01 (file edits) + M02 (Docker validation + commits + PR)   | #38 |
-| /redteam | 5 mechanical checks, all PASS, verdict APPROVE                | (in-workspace) |
-| /codify  | 4 entries appended to .claude/.proposals/latest.yaml          | (in-workspace) |
+## In-flight state
 
-## Final artefact inventory
+- `.claude/.proposals/latest.yaml` is `pending_review` with this session's 4 new entries; loom Gate-1 picks them up on the next `/sync`. No prism-side action until then.
+- All three traps from `workspaces/prism-0.6.0/.session-notes` are now closed; that punch list is historical.
 
-```
-workspaces/prism-node24-bump/
-├── briefs/
-│   └── 0001-node24-bump.md
-├── 01-analysis/
-│   ├── 00-current-state.md
-│   ├── 01-upgrade-surface.md
-│   ├── 02-decisions-locked.md     ← authoritative input doc
-│   └── 03-failure-modes.md
-├── 02-plans/
-│   └── 01-implementation-plan.md
-├── todos/
-│   └── completed/
-│       ├── M01-build-file-edits.md
-│       ├── M02-wire-validation-and-pr.md
-│       └── M03-redteam-codify.md
-├── 04-validate/
-│   ├── local-validation-results.md  ← Docker Node 22+24 transcripts
-│   └── redteam-round-1.md           ← APPROVE verdict
-├── journal/
-│   └── 0001-DECISION-bump-19-days-early.md
-└── .session-notes (this file)
-```
+## Traps
 
-## What landed in production
-
-| File | Change |
-|---|---|
-| `.github/workflows/release-web.yml` | checkout v4→v5, setup-node v4→v5, Node 20→24 |
-| `.github/workflows/ci-web.yml` | NEW — PR-time CI matrix `[22, 24]` |
-| `web/package.json` | `engines.node: ">=22.0.0"` declared |
-| `compiler/package.json` | engines + `@types/node ^22→^24` |
-| `compiler/package-lock.json` | regen + transitive postcss `8.5.9→8.5.14` (CVE-fix) |
-
-## Codify proposal entries (queued for loom)
-
-`.claude/.proposals/latest.yaml` now has 56 changes (was 52); 4 new entries:
-1. release-web.yml bump (file change)
-2. ci-web.yml addition (file change)
-3. engines.node + @types/node bump (combined file change)
-4. **rule_candidate**: `future-prism-release-workflow-defaults` — institutional
-   pattern for the next major Node bump and any future Prism release workflow
-   (e.g. when `release-compiler.yml` ships)
-
-Status: `pending_review` (per artifact-flow.md MUST: append + reset).
-
-## Lessons captured (for future sessions)
-
-1. **Local Node manager substitutes**: when nvm/fnm/volta are unavailable on
-   the host, Docker `node:<major>` official images are a clean substitute
-   for matrix validation — no shell-config side effects, full version isolation.
-   Caveat: monorepo-relative test paths (`../specs/`) require a full-repo
-   mount, NOT a package-only mount.
-
-2. **Bump self-validation pattern**: when the bump introduces the CI workflow
-   that gates it, the PR's own opening run validates the bump. No need for
-   pre-cut synthetic tags or external runner setup. Trigger paths MUST
-   include the workflow file itself.
-
-3. **Same-shard zero-tolerance fixes**: lockfile regen surfaces transitive
-   vulnerabilities; per `zero-tolerance.md` Rule 1, fix in same shard.
-   `npm audit fix --dry-run` enables bounded-impact verification before commit.
-
-4. **Open-early is the right call** when working tree is clean and no
-   competing workstream is preempted (see journal 0001 for full rationale).
-
-## Forward work (NOT in this workspace)
-
-- **Compiler release workflow**: when `release-compiler.yml` ships, it MUST
-  inherit the locked defaults (Node 24, setup-node@v5, checkout@v5,
-  matrix `[22, 24]` CI, `engines.node: ">=22.0.0"`). The codify rule_candidate
-  captures this. Workspace not yet open; no scheduled date.
-- **Next LTS bump** (Node 26, ~2027/2028): same workspace shape applies.
-  Pattern is parametric per the rule_candidate.
-
-## Approval gate (closeout)
-
-Workspace closed. Ready to commit M03 artefacts (redteam doc + journal +
-codify proposal append + completed/ moves + this session notes update) as
-the final docs(workspace) PR.
+- **Don't re-open `prism-node24-bump`.** Closed workspaces stay in tree as institutional record (per `prism-0.6.0` precedent); new bumps get new workspaces.
+- **Cross-repo work blocked.** arbor wave-6 is YOUR arbor session per `rules/repo-scope-discipline.md`; do not touch arbor source from a prism session.
+- **Loom-sync residue may recur.** Next `/sync` from loom may land 50+ untracked `.claude/**` files again — commit promptly per the PR #34 pattern, never `git add -A`.
+- **Future Prism release workflows MUST inherit Node 24 + setup-node@v5 + checkout@v5 + matrix `[22, 24]` CI** per the codified rule_candidate. When `release-compiler.yml` ships, cite `workspaces/prism-node24-bump/01-analysis/02-decisions-locked.md` as the canonical reference.
+- **Spec edits to `docs/specs/05-*.md`**: the monolith was split into 13 sub-files (PR #35); always edit the relevant `05a..05m` sub-file directly, not the master `05-engine-specifications.md` (now a thin TOC index).
