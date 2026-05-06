@@ -13,16 +13,16 @@
 ```typescript
 interface ThemeEngineConfig {
   // Token source
-  tokens: DesignSystemYaml;       // Parsed design-system.yaml (all three tiers).
+  tokens: DesignSystemYaml; // Parsed design-system.yaml (all three tiers).
 
   // Initial theme
-  defaultTheme?: string;          // Theme name. Default: "enterprise" (first available theme).
+  defaultTheme?: string; // Theme name. Default: "enterprise" (first available theme).
   defaultMode?: "light" | "dark" | "system"; // Default: "system".
 
   // Behavior
-  persistPreference?: boolean;    // Default: true. Saves theme + mode to storage.
-  storageKey?: string;            // Default: "prism:theme".
-  transitionDuration?: number;    // Duration of theme switch animation in ms. Default: 200.
+  persistPreference?: boolean; // Default: true. Saves theme + mode to storage.
+  storageKey?: string; // Default: "prism:theme".
+  transitionDuration?: number; // Duration of theme switch animation in ms. Default: 200.
 
   // Per-page overrides
   pageOverrides?: Record<string, Partial<TokenOverrides>>; // Keyed by route path.
@@ -37,30 +37,30 @@ interface TokenOverrides {
 
 ### Internal State
 
-| State | Type | Description |
-|-------|------|-------------|
-| `activeTheme` | `string` | Name of the currently active theme (e.g., "enterprise", "modern"). |
-| `activeMode` | `"light" \| "dark"` | Resolved color mode (never "system" — always resolved to light or dark). |
-| `systemPreference` | `"light" \| "dark"` | OS-level color scheme preference. |
-| `resolvedTokens` | `ResolvedTokenMap` | Fully resolved token values for the active theme + mode combination. |
-| `cssVariables` | `Record<string, string>` | (Web only) Map of CSS custom property names to values. |
-| `themeData` | `ThemeData` | (Flutter only) Generated Flutter ThemeData. |
-| `activeOverrides` | `Partial<TokenOverrides>` | Currently applied per-page overrides. |
+| State              | Type                      | Description                                                              |
+| ------------------ | ------------------------- | ------------------------------------------------------------------------ |
+| `activeTheme`      | `string`                  | Name of the currently active theme (e.g., "enterprise", "modern").       |
+| `activeMode`       | `"light" \| "dark"`       | Resolved color mode (never "system" — always resolved to light or dark). |
+| `systemPreference` | `"light" \| "dark"`       | OS-level color scheme preference.                                        |
+| `resolvedTokens`   | `ResolvedTokenMap`        | Fully resolved token values for the active theme + mode combination.     |
+| `cssVariables`     | `Record<string, string>`  | (Web only) Map of CSS custom property names to values.                   |
+| `themeData`        | `ThemeData`               | (Flutter only) Generated Flutter ThemeData.                              |
+| `activeOverrides`  | `Partial<TokenOverrides>` | Currently applied per-page overrides.                                    |
 
 ### Events/Callbacks
 
-| Event | Payload | When Emitted |
-|-------|---------|-------------|
-| `onThemeChange` | `{ from: string; to: string }` | Active theme changes (brand switch). |
-| `onModeChange` | `{ from: "light" \| "dark"; to: "light" \| "dark" }` | Color mode changes. |
-| `onSystemPreferenceChange` | `"light" \| "dark"` | OS color scheme preference changes. |
-| `onTokensResolved` | `ResolvedTokenMap` | Token resolution completes (initial load or after switch). |
+| Event                      | Payload                                              | When Emitted                                               |
+| -------------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
+| `onThemeChange`            | `{ from: string; to: string }`                       | Active theme changes (brand switch).                       |
+| `onModeChange`             | `{ from: "light" \| "dark"; to: "light" \| "dark" }` | Color mode changes.                                        |
+| `onSystemPreferenceChange` | `"light" \| "dark"`                                  | OS color scheme preference changes.                        |
+| `onTokensResolved`         | `ResolvedTokenMap`                                   | Token resolution completes (initial load or after switch). |
 
 ### Composition Points
 
-| Slot | Purpose | Default |
-|------|---------|---------|
-| `modeToggle` | Custom mode toggle component. | Toggle switch with sun/moon icons. |
+| Slot          | Purpose                              | Default                                       |
+| ------------- | ------------------------------------ | --------------------------------------------- |
+| `modeToggle`  | Custom mode toggle component.        | Toggle switch with sun/moon icons.            |
 | `themePicker` | Custom theme/brand picker component. | Dropdown with theme names and color swatches. |
 
 ### Performance Contract
@@ -73,7 +73,7 @@ interface TokenOverrides {
 
 ### Accessibility Contract
 
-- **Contrast compliance**: The constraint validator MUST verify that all text/background combinations meet WCAG 2.1 AA contrast ratios: 4.5:1 for normal text (< 18px or < 14px bold), 3:1 for large text (>= 18px or >= 14px bold).
+- **Contrast compliance** (target): Theme tokens SHOULD be authored such that text/background combinations meet WCAG 2.1 AA contrast ratios: 4.5:1 for normal text (< 18px or < 14px bold), 3:1 for large text (>= 18px or >= 14px bold). The token schema declares an optional `contrast_min` field per palette entry (`compiler/src/types.ts:56`); however, no `contrast_min` validator/enforcement function exists in `compiler/` or `web/` as of this revision. Authoring discipline is the only current safeguard; an automated validator is reserved for future work.
 - **Mode toggle**: Accessible label: "Switch to dark mode" or "Switch to light mode" based on current state.
 - **Reduced motion**: When `prefers-reduced-motion: reduce` is detected, all theme transition animations are replaced with instant switches (duration: 1ms, not 0ms for rendering guarantees).
 - **Focus visibility**: Focus rings MUST maintain 3:1 contrast against their background in both light and dark modes. The focus ring token is part of the theme.
@@ -108,6 +108,7 @@ radius.component.default  -> --prism-radius-component-default
 ```
 
 All component CSS references these variables:
+
 ```css
 .prism-button-primary {
   background-color: var(--prism-color-interactive-primary);
@@ -146,6 +147,7 @@ ThemeData prismTheme({
 ### Dark Mode Switching
 
 **Exact behavior**:
+
 1. User clicks mode toggle (or system preference changes when mode is "system").
 2. Theme Engine resolves the new token set (same theme, different mode).
 3. **Web**: CSS transition is applied to `background-color` and `color` on `:root` with duration `transitionDuration`. CSS variables are updated on `document.documentElement.style`. The transition creates a smooth fade.
@@ -153,12 +155,14 @@ ThemeData prismTheme({
 5. Preference is saved to storage (if `persistPreference: true`).
 
 **System preference detection**:
+
 - Web: `window.matchMedia('(prefers-color-scheme: dark)')` with `addEventListener('change', ...)`.
 - Flutter: `MediaQuery.of(context).platformBrightness`.
 
 ### Brand Switching
 
 **Exact behavior**:
+
 1. User selects a new theme from the theme picker.
 2. Theme Engine resolves all tokens for the new theme + current mode.
 3. **Web**: All CSS variables are updated simultaneously. A `data-theme` attribute is set on `<html>` for any theme-specific CSS selectors.
@@ -172,13 +176,17 @@ Brand switching changes ALL token values (colors, typography, spacing if differe
 Overrides are scoped via CSS specificity (web) or `Theme` widget nesting (Flutter).
 
 **Web**: A `<div data-prism-overrides>` wrapper with inline CSS custom properties:
+
 ```html
-<div style="--prism-type-heading-h1-size: 48px; --prism-spacing-page-margin: 48px;">
+<div
+  style="--prism-type-heading-h1-size: 48px; --prism-spacing-page-margin: 48px;"
+>
   <!-- Marketing page with larger headings and margins -->
 </div>
 ```
 
 **Flutter**: A nested `Theme` widget with modified `ThemeData`:
+
 ```dart
 Theme(
   data: Theme.of(context).copyWith(
@@ -193,3 +201,7 @@ Theme(
 Overrides cascade: component-level overrides take precedence over page-level overrides, which take precedence over theme defaults.
 
 ---
+
+### Change log
+
+- **2026-05-06** — Phantom-citation correction in Accessibility Contract: the WCAG contrast-compliance entry was originally `"The constraint validator MUST verify that all text/background combinations meet WCAG 2.1 AA contrast ratios"`. No such validator exists in `compiler/` or `web/` — the `contrast_min` field is declared in `compiler/src/types.ts:56` and used in a test fixture (`compiler/src/compile.test.ts:61`), but no enforcement function reads it. Per `rules/spec-accuracy.md` Rule 1 (every citation resolves against working code), the MUST was downgraded to a SHOULD/authoring-discipline target with an explicit "automated validator is reserved for future work" note. Surfaced by `/sweep` Sweep 5 supplemental, 2026-05-06 (`SWEEP-2026-05-06.md`).
