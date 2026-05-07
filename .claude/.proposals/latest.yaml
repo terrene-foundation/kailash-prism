@@ -758,4 +758,322 @@ changes:
       toolchain bumps, etc. — the "matrix [<LTS>, <CURRENT>]" formulation
       is intentionally parametric.
 
+  # --- Sweep skill methodology fixes — appended 2026-05-06 ---
+  # Sourced from SWEEP-2026-05-06.md § "Methodology gaps acknowledged" + the
+  # final paragraph of § "Sweep 5 supplemental". Surfaced by self-audit during
+  # /sweep cycle 2026-05-06 ("did you /sweep according to directives?"). Five
+  # lessons against commands/sweep.md (4) + rules/orphan-detection.md (1).
+  # No workspace owns this codify pass — /sweep is repo-level, not workspace-scoped.
+
+  - rule_candidate: sweep-skill-repo-level-specs-fallback
+    suggested_tier: coc-global
+    suggested_priority: 15
+    suggested_scope: skill-embedded
+    target: commands/sweep.md § Sweep 5 (Spec compliance spot-check)
+    skill_clause:
+      title: "Sweep 5 MUST fall back to repo-level docs/specs/ when per-workspace specs/ absent"
+      body: |
+        Current skill text iterates `for ws in workspaces/*/; [ -d "$ws/specs" ]`
+        and silently produces an empty result for any repo whose spec authority
+        lives at the repo root (kailash-prism's docs/specs/00-prism-manifest.md
+        … 10-quality-gates.md, including the 13 sub-files of 05*). Returning
+        empty + reporting "no findings" is the substitution failure mode that
+        rules/sweep-completeness.md Rule 1 blocks.
+
+        Skill MUST detect this case and either:
+          (a) fall back to a repo-level scan against docs/specs/ (run the
+              equivalent spec-vs-source compliance check at the level the repo
+              uses), OR
+          (b) explicitly emit a "manual supplement required" finding documenting
+              that the per-workspace assumption does not hold for this repo
+              shape, so the report cannot ship "clean" without supplemental
+              spot-check.
+    must_clauses:
+      - id: 1
+        title: "Sweep 5 MUST detect repo-level spec authority and adapt"
+        body: |
+          When `for ws in workspaces/*/; [ -d "$ws/specs" ]` returns empty AND
+          `[ -d docs/specs ]` returns true, the skill MUST run the equivalent
+          spec-vs-source compliance spot-check against repo-level specs OR
+          surface a "manual supplement required" finding. Reporting "no
+          findings" without running the equivalent check IS the substitution
+          failure mode blocked by sweep-completeness.md Rule 1.
+    must_not_clauses:
+      - "MUST NOT report Sweep 5 'clean' when the per-workspace check returned empty AND no repo-level fallback was attempted."
+      - "MUST NOT silently substitute a cheaper proxy (cite-check, grep) for the spec-vs-source check without human approval per sweep-completeness.md Rule 1."
+    blocked_rationalizations:
+      - "the per-workspace loop returned empty — sweep is N/A here"
+      - "repo-level specs are /redteam territory, not /sweep"
+      - "no workspaces use specs/ in this repo, so Sweep 5 is naturally clean"
+      - "the supplemental supplement is excessive cost — cite-check is enough"
+    origin: |
+      kailash-prism /sweep 2026-05-06 self-audit. Original Sweep 5 reported
+      "clean" because workspaces/*/specs/ was empty. Supplemental run against
+      docs/specs/ (6 of 13 sub-specs) surfaced 5 findings (2 DRIFT + 3
+      COVERAGE GAP — including 05b advertising the removed `ServerDataSource<T>`
+      contract as current). HIGH gap per SWEEP-2026-05-06.md § "Methodology
+      gaps acknowledged".
+    cross_cli_slot_partition:
+      neutral_body: "Sweep 5 MUST detect repo-level docs/specs/ when per-workspace empty"
+      examples_slot: "shell loop variants per CLI runner"
+
+  - rule_candidate: sweep-skill-unfiltered-branch-enumeration
+    suggested_tier: coc-global
+    suggested_priority: 20
+    suggested_scope: skill-embedded
+    target: commands/sweep.md § Sweep 4 (Branch hygiene)
+    skill_clause:
+      title: "Sweep 4 MUST enumerate local branches via unfiltered `git branch` and explicitly grep harness-default orphans"
+      body: |
+        Current skill uses `git branch --no-merged main` to list local branches
+        for cleanup-candidate review. The flag excludes refs whose tip is
+        tip-equal to main even when the branch was abandoned mid-flight (the
+        `worktree-agent-<hash>` orphans documented by
+        rules/worktree-isolation.md Rule 6). Result: harness-default orphans
+        are silently dropped from the cleanup candidate list.
+
+        Skill MUST:
+          1. Enumerate local branches via unfiltered `git branch` (or
+             `git for-each-ref refs/heads/`).
+          2. Run an explicit `git branch --list 'worktree-agent-*'` pass to
+             surface harness-default orphans as a named class.
+          3. Per worktree-isolation.md Rule 6, treat the existence of any
+             `worktree-agent-<hash>` branch as itself a finding (the rule
+             mandates declared branch names; their presence indicates a prior
+             launch bypassed the rule).
+    must_clauses:
+      - id: 1
+        title: "Sweep 4 MUST enumerate via unfiltered branch list"
+        body: |
+          Local-branch enumeration in Sweep 4 MUST use `git branch` (no `--no-merged`
+          filter) AND `git branch --list 'worktree-agent-*'` to ensure
+          harness-default orphan refs are surfaced. The `--no-merged` filter
+          structurally excludes tip-equal abandoned refs and is BLOCKED as the
+          sole enumeration source.
+      - id: 2
+        title: "Worktree-agent-* presence is itself a finding"
+        body: |
+          Any `worktree-agent-<hash>` branch surfaced by Sweep 4 MUST be
+          reported as a finding (severity: LOW minimum, MED if multiple),
+          citing rules/worktree-isolation.md Rule 6. The expected disposition
+          is delete-after-verifying-zero-commits-ahead (a separate user-bound
+          step, per Prudence).
+    blocked_rationalizations:
+      - "--no-merged is the standard cleanup query"
+      - "tip-equal branches are merged by definition, no need to surface"
+      - "worktree-agent-* are harness internals, not user concern"
+      - "cleanup found them eventually anyway"
+    origin: |
+      kailash-prism /sweep 2026-05-06 self-audit. Original Sweep 4 missed 4
+      `worktree-agent-*` orphans because their tip was at an old main commit
+      (technically "merged" by tip-equality). Found by accident during
+      cleanup. MED gap per SWEEP-2026-05-06.md § "Methodology gaps acknowledged".
+    cross_cli_slot_partition:
+      neutral_body: "Sweep 4 MUST use unfiltered branch enumeration + harness-default-orphan grep"
+      examples_slot: "shell command variants per CLI runner"
+
+  - rule_candidate: memory-citation-grounding
+    suggested_tier: coc-global
+    suggested_priority: 5
+    suggested_scope: baseline
+    suggested_paths: ["**"]
+    target: |
+      EITHER new rules/memory-citation-grounding.md (preferred — distinct
+      principle from Rule 1c)
+      OR fold-into-existing rules/zero-tolerance.md as a sibling clause to
+      Rule 1c ("Pre-existing is unprovable after context boundary"); both
+      enforce the same OBSERVED-vs-ASSUMED grounding contract.
+    retier_note: |
+      Re-tiered from skill-embedded (sweep-only) → coc-global per cc-architect
+      red-team finding: the principle applies to EVERY command that cites
+      memory content in user-visible artifacts, not just /sweep. /sweep
+      keeps a one-line reminder in commands/sweep.md § Sweep 3, but the
+      enforcement contract lives at the rules layer.
+    must_clauses:
+      - id: 1
+        title: "Memory citations in user-visible artifacts MUST come from a Read of the canonical file"
+        body: |
+          When any command, agent, or skill cites a memory file as evidence
+          in a user-visible artifact (GitHub issue, PR body or comment,
+          public report, journal entry users may read, slash-command
+          response shown to user), the citation MUST be produced by reading
+          the canonical memory file (`~/.claude/<account>/<project>/memory/<name>.md`),
+          NOT by paraphrasing the MEMORY.md index one-line hook. The index
+          hook is a relevance signal, not authoritative content; it CAN
+          drift from the underlying file because MEMORY.md is hand-edited.
+      - id: 2
+        title: "Read MUST land in the same session as the citation"
+        body: |
+          The Read of the canonical memory file MUST occur in the same
+          session as the user-visible artifact that cites it. Recalled
+          content from a prior session is BLOCKED for the same provenance-
+          unfalsifiability reason as zero-tolerance.md Rule 1c — after
+          /clear, auto-compaction, or context boundary, the agent has no
+          audit trail of what the file said when last seen.
+    must_not_clauses:
+      - "MUST NOT cite memory content from the MEMORY.md index summary in a public-record artifact (issue, PR, comment, public report)."
+      - "MUST NOT close an issue, file a sweep finding, or post a public artifact whose disposition rests on memory the agent did not Read in the SAME session."
+      - "MUST NOT rely on the index hook even when the agent 'recalls' that the underlying file matches — recall is not observation."
+    blocked_rationalizations:
+      - "the index summary IS the memory's headline — paraphrase is fine"
+      - "the file content matches the index, no Read needed"
+      - "Reading every memory cite is bureaucracy"
+      - "the disposition is obvious from the index alone"
+      - "the user just told me the memory in chat, I don't need to Read it"
+      - "I Read it three turns ago, the content can't have changed"
+    audit_protocol: |
+      Mechanical detection at /redteam (or post-publish audit):
+      1. Enumerate user-visible artifacts emitted in the session: issue
+         closes (`gh issue close`), PR comments (`gh pr comment`), PR
+         bodies (`gh pr create --body`), public reports written to repo
+         root (e.g., `SWEEP-*.md`), journal entries under
+         `workspaces/*/journal/`.
+      2. For each artifact, grep for memory file references — any of:
+         `<name>.md` patterns matching a known memory file, `MEMORY.md`
+         direct citations, "per memory" / "per project_*.md" prose hooks.
+      3. For every match, walk the session's tool-call log for a Read of
+         that canonical memory file PRIOR to the artifact's emission.
+      4. Match without prior Read = HIGH finding (disposition: revise the
+         artifact OR explicitly mark it as "index-summary-only" and accept
+         the audit-trail gap as an exception).
+    origin: |
+      kailash-prism /sweep 2026-05-06 self-audit. Original disposition on
+      Issue #33 cited project_distribution.md from the MEMORY.md index
+      summary (substantively correct — verified post-hoc — but methodology
+      violated "distinguish OBSERVED from ASSUMED"). MED gap per
+      SWEEP-2026-05-06.md § "Methodology gaps acknowledged". Re-tiered
+      coc-global per cc-architect: principle is cross-command. Sibling
+      clause to zero-tolerance.md Rule 1c — same provenance-grounding
+      shape, different surface (memory file vs commit SHA).
+    cross_cli_slot_partition:
+      neutral_body: "memory citations in public-record artifacts MUST be Read-grounded in the same session"
+      examples_slot: "Read invocation syntax per CLI runner; gh / public-artifact tools per CLI"
+
+  - rule_candidate: sweep-skill-closure-sha-template
+    suggested_tier: coc-global
+    suggested_priority: 25
+    suggested_scope: skill-embedded
+    target: commands/sweep.md § Closure (Step 2 — disposition table)
+    skill_clause:
+      title: "Sweep closure rows reclassified to FIXED MUST cite the commit SHA in the disposition column"
+      body: |
+        Skill currently mandates "Trivial fixes applied inline; reclassified
+        FIXED with commit SHA" but the report-template prose did not enforce
+        the SHA citation. Result: the original 2026-05-06 sweep report shipped
+        rows showing "FIXED inline" without `8e67ad3`, breaking the audit
+        trail between finding and fix.
+
+        Closure step MUST emit the report row in the form:
+          [LOW → FIXED] [Sweep N] <title>
+          Disposition: FIXED inline (commit `<short-sha>`) — <one-line reason>
+        rather than the bare "FIXED inline" form. The SHA is the grep-able
+        link from finding to commit; without it, /redteam cannot verify
+        closure parity in a future round.
+    must_clauses:
+      - id: 1
+        title: "Sweep closure rows MUST cite SHA in disposition column"
+        body: |
+          Every Sweep finding reclassified from any severity to `FIXED`
+          inline MUST cite the resolving commit SHA (short form, 7 chars)
+          in the same line as the disposition. Reports lacking the SHA are
+          incomplete per the skill's closure contract and MUST be revised
+          before being shipped to the user.
+    blocked_rationalizations:
+      - "the commit SHA is in git log, anyone can find it"
+      - "FIXED inline is enough, SHA is overhead"
+      - "the working-tree state section already lists files"
+    do_examples:
+      - "[LOW → FIXED] [Sweep 1] M00 launch plan still in active/ after 0.6.0 shipped — Disposition: FIXED inline (commit `8e67ad3`)"
+    do_not_examples:
+      - "[LOW → FIXED] [Sweep 1] M00 launch plan still in active/ after 0.6.0 shipped — Disposition: FIXED inline"
+    origin: |
+      kailash-prism /sweep 2026-05-06 self-audit. Original report listed
+      "FIXED inline" rows without citing `8e67ad3`. Fixed in revision (table
+      at top now cites SHA). LOW gap per SWEEP-2026-05-06.md § "Methodology
+      gaps acknowledged".
+    cross_cli_slot_partition:
+      neutral_body: "every Sweep-FIXED row MUST cite the resolving commit SHA in the disposition column"
+      examples_slot: "report-template formatting variants per CLI runner (none currently — report is markdown across all targets)"
+
+  - rule_candidate: orphan-detection-library-vs-application-applicability
+    suggested_tier: coc-global
+    suggested_priority: 5
+    suggested_scope: baseline
+    target: rules/orphan-detection.md
+    must_clauses:
+      - id: 1
+        title: "Library-class artifacts: public exports ARE the hot path"
+        body: |
+          rules/orphan-detection.md is currently authored against
+          application-framework artifacts (DataFlow, Nexus, Kaizen) where the
+          framework's hot path is INTERNAL — `DataFlow.express.list()` calls
+          `db.trust_executor.check_read_access()` inside the framework's own
+          source tree. The MUST Rule 1 ("Every db.* / app.* facade has a
+          production call site within 5 commits") is well-defined for this
+          shape.
+
+          For LIBRARY-class artifacts (UI component libraries like
+          kailash-prism, parser libraries, utility libraries), the hot path
+          IS the public export surface — `web/src/index.ts` exports
+          `Sidebar`, `Breadcrumbs`, `MobileHeader`, `NavigationConfig`, and
+          downstream consumers (arbor, etc.) call them directly. There is no
+          internal callsite to find; the rule's premise (`zero matches in the
+          hot path = orphan`) returns false-positives because it is auditing
+          the wrong surface.
+
+          The rule MUST distinguish the two contexts and define the audit
+          surface for each:
+            - Application framework: orphan = no internal callsite in
+              framework hot path within 5 commits.
+            - Library: orphan = no public export from the library's index
+              file (`src/index.ts`, `lib.rs`, `__init__.py`) AND no Tier 2/E2E
+              test importing through that surface within 5 commits.
+      - id: 2
+        title: "Library audit surface — public-export grep + downstream-consumer test"
+        body: |
+          For library-class artifacts, the orphan audit MUST grep:
+            (a) the library's public index file for the symbol's export, AND
+            (b) the library's Tier 2/wiring tests for an import of the symbol
+                through the public package name (not via internal path).
+          A symbol with (a) but not (b) is a HIGH finding — exported but
+          unverifiable. A symbol with (b) but not (a) is a MED finding —
+          tested but unreachable to consumers.
+    must_not_clauses:
+      - "MUST NOT classify a library symbol as orphan when the public-export entry file (`src/index.ts` / `lib.rs` `pub use` / `__init__.py` `__all__`) contains the symbol AND a Tier 2/wiring test imports it via package name."
+      - "MUST NOT classify a library's exported symbol as an orphan based solely on absence of internal callsites — by design, the consumer IS the callsite."
+      - "MUST NOT apply the application-framework orphan audit to a library repo without first re-anchoring the audit surface to the public-export file."
+    blocked_rationalizations:
+      - "the rule is rule, no carve-outs"
+      - "library context is just a special case of application framework"
+      - "the agent should infer library-vs-application from repo type"
+      - "downstream consumers are out-of-repo, can't audit them anyway"
+    audit_protocol: |
+      Library-class detection (apply BEFORE the orphan audit):
+      1. Check for a single public-export entry point: `<package>/src/index.ts`,
+         `<package>/lib.rs` with `pub use`, or `<package>/__init__.py` with
+         `__all__`. If present AND the package is consumed via name (not by
+         path) downstream, treat as library-class.
+      2. For library-class repos, redirect the orphan audit:
+         - Surface scan: enumerate symbols re-exported from the public entry.
+         - "Hot path" grep: search the library's tests/integration/ and
+           tests/e2e/ for `import { ... } from '<package-name>'` (NOT
+           internal path).
+         - Disposition: same FIXED/DELETED/UNVERIFIED triad.
+    origin: |
+      kailash-prism /sweep 2026-05-06 supplemental. Sweep 5 supplemental's
+      agent-flagged ORPHAN ("navigation engine zero callsites") was DOWNGRADED
+      to false positive on verification: prism is a UI library, not an
+      application; the framework's hot path IS the public export via
+      `web/src/index.ts:99` (which exports `NavigationConfig`) and
+      `web/src/engines/navigation.tsx` (which exports `Sidebar`, `Breadcrumbs`,
+      `MobileHeader`). rules/orphan-detection.md is written for application
+      frameworks; the library context fails its premise. Per SWEEP-2026-05-06.md
+      § "Sweep 5 summary": "Worth a /codify clause for that rule." The fix is
+      not to weaken the rule but to define the audit surface separately for
+      library- vs application-class artifacts so both classes have a real
+      orphan check.
+    cross_cli_slot_partition:
+      neutral_body: "orphan audit surface differs between application-framework and library-class repos"
+      examples_slot: "language/framework-specific export-surface examples (TS index.ts, Rust pub use, Python __all__)"
+
 status: pending_review
