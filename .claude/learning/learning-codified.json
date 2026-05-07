@@ -1,91 +1,89 @@
 {
-  "last_codified": "2026-05-04T00:00:00Z",
-  "digest_hash": "no-digest-present-fell-back-to-observations-sha256",
-  "observations_sha256": "6f850a19c0889fc4d23154b7436b60e92873b4c59eb9c871c5b20dd8b177b354",
-  "observations_line_count": 23,
-  "workspace": "prism-0.6.0",
-  "codify_session_summary": "prism-0.6.0 lessons routed via .claude/.proposals/latest.yaml (appended); zero local globals edited per cross-cli-parity + variant-authoring constraints",
+  "last_codified": "2026-05-06T11:30:00Z",
+  "digest_hash": "no-digest-present-fell-back-to-sweep-report-as-source",
+  "observations_line_count": 32,
+  "workspace": "none — repo-level /sweep cycle",
+  "source_artifact": "SWEEP-2026-05-06.md",
+  "codify_session_summary": "5 sweep-skill methodology fixes appended to .claude/.proposals/latest.yaml (4 commands/sweep.md skill clauses + 1 rules/orphan-detection.md library-class clause); zero local globals edited per cross-cli-parity + variant-authoring constraints; cc-architect red-team applied (3 ACCEPT + 1 minor + 1 NEEDS-REVISION applied to the file)",
   "actions_taken": [
     {
       "type": "proposal_append",
       "file": ".claude/.proposals/latest.yaml",
-      "entries_added": 16,
+      "entries_added": 5,
       "breakdown": {
-        "source_file_entries": 9,
-        "journal_entries": 7,
-        "rule_candidates_initial": 4,
-        "rule_candidates_after_red_team": 3,
-        "withdrawn_candidates": 1
+        "rule_candidates": 5,
+        "withdrawn_candidates": 0
       },
+      "candidates": [
+        "sweep-skill-repo-level-specs-fallback (skill-embedded — commands/sweep.md § Sweep 5)",
+        "sweep-skill-unfiltered-branch-enumeration (skill-embedded — commands/sweep.md § Sweep 4)",
+        "memory-citation-grounding (coc-global — re-tiered from skill-embedded per red team)",
+        "sweep-skill-closure-sha-template (skill-embedded — commands/sweep.md § Closure)",
+        "orphan-detection-library-vs-application-applicability (coc-global — rules/orphan-detection.md)"
+      ],
       "reason": "Per artifact-flow.md MUST: append-not-overwrite. Status remains pending_review for loom Gate-1 classification."
     },
     {
       "type": "journal_create",
-      "file": "workspaces/prism-0.6.0/journal/0006-DECISION-codify-pre-release-sweep-discipline.md",
-      "reason": "Codification of pre-release lint+type sweep as /release discipline (later REJECT-folded into agents.md mechanical-sweep clause-append per cc-architect red team)."
-    },
-    {
-      "type": "journal_create",
-      "file": "workspaces/prism-0.6.0/journal/0007-DECISION-codify-pass-complete.md",
-      "reason": "Codify-pass closure entry per /codify journal MUST gate. Documents the deliberate skip of /codify Steps 3-5 (local-globals edits) due to variant/parity constraints, and the red-team disposition for all four rule_candidate entries."
+      "file": "workspaces/prism-0.6.0/journal/0008-DECISION-codify-sweep-methodology-fixes.md",
+      "reason": "Codify-pass DECISION entry per /codify journal MUST gate. Records the 5 candidates, rationale per candidate, skipped steps, and follow-ups."
     },
     {
       "type": "rule_candidate_revision",
-      "candidate": "type-relaxation-surface-sweep",
+      "candidate": "memory-citation-grounding",
       "trigger": "cc-architect red team NEEDS-REVISION verdict",
       "changes": [
-        "added MUST clause + MUST NOT clauses",
-        "added verbatim BLOCKED rationalizations enumeration (6 phrases)",
-        "added paths frontmatter hint (TS/Py/Rust file globs)",
-        "added cross_cli_slot_partition (neutral_body vs examples_slot)",
-        "DROPPED Dart cross-language claim (sound null-safety lacks ambient-narrowing failure mode)"
+        "Re-tiered from skill-embedded → coc-global (principle applies to every command that cites memory in user-visible artifacts, not just /sweep)",
+        "Renamed from sweep-skill-memory-citations-via-file-read → memory-citation-grounding to reflect cross-command scope",
+        "Target reframed: new rules/memory-citation-grounding.md OR fold-into-existing as zero-tolerance.md Rule 1c sibling clause",
+        "Added second MUST clause (Read MUST land in the same session as citation — closes the cross-session-recall loophole)",
+        "Added audit_protocol section (mechanical detection: walk session tool-call log for Read prior to artifact emission)",
+        "Added two BLOCKED rationalizations (chat-recall + prior-session-Read)"
       ]
-    },
-    {
-      "type": "rule_candidate_reclassification",
-      "candidate": "phantom-field-noUnusedLocals",
-      "trigger": "cc-architect red team REJECT (re-scope) verdict",
-      "from_tier": "coc-global",
-      "to_tier": "skill-embedded",
-      "rationale": "TypeScript-only convention; Rust PhantomData is different mechanism, Dart has no analogue. Cross-language framing was unsupported."
     },
     {
       "type": "rule_candidate_revision",
-      "candidate": "script-tool-manifest-sanity",
-      "trigger": "cc-architect red team NEEDS-REVISION verdict",
+      "candidate": "sweep-skill-closure-sha-template",
+      "trigger": "cc-architect red team minor flag (audit symmetry)",
       "changes": [
-        "added paths frontmatter (**/package.json, **/pyproject.toml, **/Cargo.toml)",
-        "added MUST NOT clause",
-        "added verbatim BLOCKED rationalizations enumeration (7 phrases)",
-        "added audit_protocol section (parse-intersect-diff sweep)"
+        "Added cross_cli_slot_partition (neutral_body + examples_slot) for Gate-1 audit symmetry"
       ]
     },
     {
-      "type": "rule_candidate_withdrawal",
-      "candidate": "pre-release-sweep-discipline",
-      "trigger": "cc-architect red team REJECT (fold-into-existing) verdict",
-      "disposition": "fold-into-existing",
-      "target_existing_rule": "rules/agents.md § Reviewer Mechanical Sweeps",
-      "rationale": "Standalone rule duplicated zero-tolerance Rule 1 (warnings-as-errors) + existing mechanical-sweep gate. Folding as a clause-append to agents.md is the cheaper, non-duplicative fix."
+      "type": "rule_candidate_revision",
+      "candidate": "orphan-detection-library-vs-application-applicability",
+      "trigger": "cc-architect red team minor flag (procedural → mechanical)",
+      "changes": [
+        "Strengthened first MUST NOT clause from procedural ('must re-anchor audit surface') to mechanical ('MUST NOT classify when public-export file contains symbol AND Tier 2 test imports via package name')",
+        "Re-ordered must_not_clauses: mechanical defense first, conceptual second, procedural last"
+      ]
+    },
+    {
+      "type": "red_team_acceptance",
+      "candidates_accepted_unchanged": [
+        "sweep-skill-repo-level-specs-fallback",
+        "sweep-skill-unfiltered-branch-enumeration"
+      ],
+      "rationale": "Both well-formed: tightly bound to existing rules (sweep-completeness.md Rule 1, worktree-isolation.md Rule 6); MUST/MUST NOT/BLOCKED rationalizations + cross_cli_slot_partition all present; mechanical defenses grep-able."
     }
   ],
   "actions_skipped": [
     {
       "step": "Step 3 — update existing agents",
-      "reason": "Local global edits to .claude/agents/* would violate cross-cli-parity.md MUST 1 (neutral-body byte-identical) and variant-authoring.md MUST 1 (slot-replacement only). Lessons routed via proposal."
+      "reason": "Local globals edits to .claude/agents/* would violate cross-cli-parity.md MUST 1 (neutral-body byte-identical) and variant-authoring.md MUST 1 (slot-replacement only). Lessons routed via proposal."
     },
     {
       "step": "Step 4 — update existing skills",
-      "reason": "Same as Step 3."
+      "reason": "Same as Step 3 — commands/sweep.md is a loom-owned artifact; edits here would drift from the canonical."
     },
     {
       "step": "Step 5 — update README/docs",
-      "reason": "No user-facing docs added in prism-0.6.0; specs were updated during /implement (PR #29 web-v0.6.0 cycle)."
+      "reason": "No user-facing docs added; SWEEP-2026-05-06.md is the audit trail and remains the authoritative source for these lessons."
     }
   ],
   "follow_ups_for_human": [
-    "Commit working-tree changes to a chore(codify): prism-0.6.0 lessons branch + PR (per BUILD-repo rule, agent does NOT commit).",
-    "Loom-side /sync Gate 1 reviewer classifies the three remaining rule_candidate entries (1 path-scoped global, 1 path-scoped global, 1 skill-embedded) and reviews the withdrawn candidate's clause-append for agents.md.",
-    "Decide whether to backport the cc-architect red-team verdict pattern (NEEDS-REVISION / REJECT-fold / REJECT-retier) into guides/co-setup/09-proposal-protocol.md as a recommended Gate-1 reviewer triage shape."
+    "Commit working-tree changes (5 latest.yaml entries + 0008 journal + learning-codified update + .session-notes refresh + working-tree .pending dir cleanup) to a chore(codify): sweep skill methodology fixes branch + PR (per BUILD-repo Prudence rule, agent does NOT commit).",
+    "Loom-side /sync Gate 1 reviewer classifies the 5 candidates: 4 skill-embedded for commands/sweep.md (Sweep 3/4/5/Closure clauses) + 1 coc-global for rules/orphan-detection.md (library-class audit surface).",
+    "Decide the memory-citation-grounding disposition: NEW rules/memory-citation-grounding.md (cleaner, separate principle) OR fold-into-existing as zero-tolerance.md Rule 1c sibling clause (tighter, leverages existing rule's authority). Both options preserved in the candidate's target field."
   ]
 }
