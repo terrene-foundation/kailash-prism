@@ -287,7 +287,10 @@ function SearchInput({
     },
     [onChange],
   );
-  const ariaLabel = placeholder ?? "Search";
+  // `??` only falls back on null/undefined; an explicit `searchPlaceholder=""`
+  // would defeat the default. Trim + truthiness ensures whitespace and empty
+  // strings also fall back to "Search".
+  const ariaLabel = placeholder?.trim() || "Search";
   return (
     <div style={SEARCH_WRAPPER_STYLE}>
       <span style={SEARCH_ICON_STYLE}>{SEARCH_ICON}</span>

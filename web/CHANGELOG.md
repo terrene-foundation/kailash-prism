@@ -9,8 +9,8 @@ Two API gaps surfaced by arbor `*-prism` migration waves 1–5 land together. Bo
 ### Added
 
 - **`FilterBar` molecule** (`@kailash/prism-web`) — horizontal filter bar with search input + filter dimensions (chip-row OR dropdown) + optional view-mode toggle. Three observed arbor consumer shapes covered: search-only, search+chip-row, search+dropdown+toggle. Composes with `DataTable` via existing controlled `globalSearchValue` (0.4.0 G-2). Closes #24.
-- **`useFilterBarState<T, TFilters>()`** hook — typed state machine with `search`/`setSearch`/`filters`/`setFilter`/`options`. Internally absorbs derive-options-from-data (3 arbor consumers hand-rolled) + effective-filter-fallback (2 arbor consumers hand-rolled), so the molecule replaces ~120 LOC of consumer boilerplate per route. Co-located with the molecule, exported from the top-level barrel.
-- **Storybook stories** for the three FilterBar shapes plus a composite `FilterBar + DataTable` integration story (with the M01 synthetic Profile-completeness column from #25).
+- **`useFilterBarState<T, TFilters>()`** hook — typed state machine with `search`/`setSearch`/`filters`/`setFilter`/`options`. Internally absorbs derive-options-from-data (3 arbor consumers hand-rolled) + effective-filter-fallback (2 arbor consumers hand-rolled). Expected to replace ~120 LOC of consumer boilerplate per route once arbor wave-6 migration lands (`workspaces/prism-0.6.0/todos/active/M05-arbor-migration-followup.md`); the BEFORE numbers come from the wave 1–5 audit, the AFTER numbers will be backfilled in 0.6.1 once M05 ships. Co-located with the molecule, exported from the top-level barrel.
+- **Storybook-compatible scenario exports** for the three FilterBar shapes plus a composite `FilterBar + DataTable` integration story (with the M01 synthetic Profile-completeness column from #25). Stateful React component exports under `__stories__/`; a Storybook runner is not yet wired into the build (named exports become Story objects when one is added).
 
 ### Changed
 
@@ -51,14 +51,14 @@ The `ColumnDef.render` value-type widening (`T[keyof T] | undefined` → `unknow
 - New ESLint v9 flat config (`web/eslint.config.js`) matching the repo's `tsconfig.json` (strict + `noUnusedLocals` + `noUnusedParameters`). Lint is now part of the pre-FIRST-push CI parity discipline per `git.md`.
 - `specs/components/data-table.yaml` — 0.6.0 changelog entry.
 - `specs/components/filter-bar.yaml` — NEW (FilterBar contract + state hook signature + a11y + tokens + migration LOC).
-- `docs/specs/05-engine-specifications.md` — appended § Filter Engine + § DataTable § ColumnDef relaxation. Future split recommended (file is now 2200+ lines; out of M04 scope).
+- `docs/specs/05m-0.6.0-additions.md` — NEW companion sub-spec landing § Filter Engine + § DataTable § ColumnDef relaxation. Cross-references the parent `docs/specs/05-engine-specifications.md` (which the post-0.6.0 PR #35 split into 13 sub-domain files for readability).
 - `workspaces/prism-0.6.0/` — full analyze/todos/implement/journal artefact set for the release cycle.
 
 ### Out of scope (deferred to 0.7.0+)
 
 - `DataTableAdapter.filterDimensions` engine wiring stays vapourware (declared in v0.2.2 spec, never implemented; per `orphan-detection.md` Rule 1, no consumer demand surfaced through 5 migration waves).
-- Form engine result-render slot (`BLOCKING-2` from migration findings — separate FormAdapter cycle).
-- Form custom field render escape hatch (`BLOCKING-1` from migration findings — bundled into the FormAdapter cycle).
+- Form engine result-render slot (`M-01 BLOCKING-2` from migration findings — separate FormAdapter cycle).
+- Form custom field render escape hatch (`M-01 BLOCKING-1` from migration findings — bundled into the FormAdapter cycle).
 - Layout engine consumer migration (architectural debt, not API gap).
 - Typed renderer library (`BadgeRenderer` / `FormattedDateRenderer` / `MultilineTextRenderer` — 2-consumer pattern; below the 3+ promotion bar).
 
