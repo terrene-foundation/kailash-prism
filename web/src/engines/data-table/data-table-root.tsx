@@ -609,9 +609,7 @@ function defaultCardBody<T extends DataTableRow>(
                 margin: 0,
               }}
             >
-              {col.render
-                ? col.render(value as T[keyof T] | undefined, row)
-                : String(value ?? "")}
+              {col.render ? col.render(value, row) : String(value ?? "")}
             </dd>
           </div>
         );

@@ -63,7 +63,7 @@ props:
     type: boolean
     required: false
     default: false
-    description: "When true, applies position: sticky; top: 0; z-index: var(--prism-z-sticky). Useful when the bar sits above a tall scrollable list."
+    description: "When true, applies position: sticky; top: 0; z-index: 10. Useful when the bar sits above a tall scrollable list. The z-index is currently a literal (web/src/molecules/filter-bar/filter-bar.tsx:129); a future iteration may introduce --prism-z-sticky for layered stacking control."
 
 # State hook — colocated with the molecule, exported alongside.
 state_hook:
@@ -80,12 +80,12 @@ state_hook:
       filters: TFilters;                                   # EFFECTIVE values (fallback applied)
       setFilter: <K extends keyof TFilters>(k: K, v: string) => void;
       options: { [K in keyof TFilters]: string[] };
-      readonly __rowType?: T;                              # phantom (load-bearing for type-param symmetry; do NOT remove)
+      readonly __rowType?: T | undefined;                  # phantom (load-bearing for type-param symmetry; materialised as undefined at runtime)
     };
   contract:
     derive: "When derive[K] is provided, options[K] is computed by invoking the callback with input.data, deduping, sorting, and prepending 'All' if absent. When derive[K] is absent, options[K] is []."
     effective_fallback: "filters[K] is the *effective* value: if the raw setFilter-stored value is in options[K], it is used; otherwise it falls back to input.initial[K]. Default-on per journal 0002 § For Discussion #2."
-    phantom_field: "__rowType: T is a load-bearing phantom field (always undefined at runtime) that keeps T in the public type signature for symmetry with UseFilterBarStateInput<T, ...>. Required by TS strict noUnusedLocals. M03/M04 must NOT remove or rename. See workspaces/prism-0.6.0/journal/0004-DISCOVERY-*.md Finding 2."
+    phantom_field: "__rowType: T | undefined is a load-bearing phantom field that keeps T in the public type signature for symmetry with UseFilterBarStateInput<T, ...>. Required by TS strict noUnusedLocals. Materialised on the runtime return literal as `__rowType: undefined` so the type and runtime contracts agree under exactOptionalPropertyTypes (`('__rowType' in result) === true`). Surfaced by /redteam Round 1 (security M-1, value V-M-2); see workspaces/prism-0.6.0/journal/0004-DISCOVERY-*.md Finding 2 + workspaces/prism-0.6.0/04-validate/01-round-1-aggregate.md MED-1."
   rationale: "Three of four arbor *-prism consumers (documents, clients, employees) hand-roll the derive-options-from-data pattern; two of four hand-roll the effective-filter-fallback. Putting both inside useFilterBarState collapses three pieces a consumer must wire (state hook + derive helper + fallback util) into one call. The hook is also useful standalone (consumers using a custom layout but the same state semantics)."
 
 states:
@@ -152,22 +152,44 @@ responsive:
     behavior: "Same as desktop with extra spacing."
 
 tokens:
+  # Actual CSS variables consumed by web/src/molecules/filter-bar/filter-bar.tsx
+  # (verified via `grep "var(--" web/src/molecules/filter-bar/filter-bar.tsx`).
+  # Each entry includes the literal fallback shipped in the source so theme
+  # authors know what surface to override AND what default they inherit.
+  # Per /redteam Round 1 MED-4 (value-auditor V-M-1): the previous
+  # `filter-bar.*` namespace did not exist anywhere in code or compiler.
   consumes:
-    - filter-bar.default.bg
-    - filter-bar.default.border
-    - filter-bar.default.radius
-    - filter-bar.default.padding
-    - filter-bar.default.gap
-    - filter-bar.search.bg
-    - filter-bar.search.border
-    - filter-bar.dimension.bg
-    - filter-bar.dimension.text
-    - filter-bar.dimension.active_bg
-    - filter-bar.dimension.active_text
-    - filter-bar.viewMode.bg
-    - filter-bar.viewMode.active_bg
-    - filter-bar.sticky.z_index
+    - var: "--prism-spacing-1"
+      fallback: "4px"
+    - var: "--prism-spacing-2"
+      fallback: "8px"
+    - var: "--prism-spacing-3"
+      fallback: "12px"
+    - var: "--prism-color-surface-default"
+      fallback: "var(--color-surface-default, #ffffff)"
+    - var: "--prism-color-surface-elevated"
+      fallback: "#f1f5f9"
+    - var: "--prism-color-border-default"
+      fallback: "var(--color-border-default, #e2e8f0)"
+    - var: "--prism-color-text-primary"
+      fallback: "#0f172a"
+    - var: "--prism-color-text-secondary"
+      fallback: "#64748b"
+    - var: "--prism-color-text-on-primary"
+      fallback: "#ffffff"
+    - var: "--prism-color-interactive-primary"
+      fallback: "#1e3a5f"
+    - var: "--prism-radius-md"
+      fallback: "6px"
+    - var: "--prism-font-size-body"
+      fallback: "14px"
+    - var: "--prism-font-size-caption"
+      fallback: "12px"
   inherits_from: null
+  # Sticky positioning (when sticky=true) uses inline `position: sticky; top: 0`;
+  # z-index is currently a literal `10` (web/src/molecules/filter-bar/filter-bar.tsx:129),
+  # not token-driven. A future iteration may introduce `--prism-z-sticky` for
+  # layered stacking control.
 
 # Storybook stories shipped with 0.6.0
 stories:

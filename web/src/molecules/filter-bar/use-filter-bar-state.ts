@@ -91,11 +91,12 @@ export interface UseFilterBarStateResult<
   options: { [K in keyof TFilters]: string[] };
   /**
    * Phantom field carrying the row type `T` so the result interface
-   * preserves it as a public type parameter (enabling
-   * `UseFilterBarStateResult<Client, { sector: string }>` to mirror the
-   * input shape). Always `undefined` at runtime.
+   * preserves it as a public type parameter (mirroring
+   * `UseFilterBarStateInput<T, TFilters>`). Always materialised as
+   * `undefined` on the returned object so `("__rowType" in result)`
+   * returns `true` and the type/runtime contracts agree.
    */
-  readonly __rowType?: T;
+  readonly __rowType?: T | undefined;
 }
 
 /**
@@ -194,5 +195,6 @@ export function useFilterBarState<T, TFilters extends Record<string, string>>(
     filters,
     setFilter,
     options,
+    __rowType: undefined,
   };
 }

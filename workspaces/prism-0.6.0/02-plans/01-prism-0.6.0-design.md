@@ -149,7 +149,7 @@ Hook this into `useDataTable` setup (one call after first non-empty data render;
 
 ## Out of scope (per analysis 03)
 
-- Form engine changes (BLOCKING-1, BLOCKING-2)
+- Form engine changes (M-01 BLOCKING-1, M-01 BLOCKING-2)
 - Layout engine consumer migration (H-2)
 - `DataTableAdapter.filterDimensions` engine wiring (vapourware stays vapourware)
 - Card / CardGrid atoms

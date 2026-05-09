@@ -65,7 +65,8 @@ function ProfileBar({ pct }: ProfileBarProps): ReactNode {
   const trackStyle = {
     width: "100%",
     height: "8px",
-    background: "var(--color-surface-muted)",
+    background:
+      "var(--prism-color-surface-muted, var(--color-surface-muted, #e2e8f0))",
     borderRadius: "4px",
     overflow: "hidden" as const,
   };
@@ -74,10 +75,10 @@ function ProfileBar({ pct }: ProfileBarProps): ReactNode {
     height: "100%",
     background:
       pct >= 80
-        ? "var(--color-feedback-success)"
+        ? "var(--prism-color-feedback-success, var(--color-feedback-success, #16a34a))"
         : pct >= 50
-          ? "var(--color-feedback-warning)"
-          : "var(--color-feedback-error)",
+          ? "var(--prism-color-feedback-warning, var(--color-feedback-warning, #f59e0b))"
+          : "var(--prism-color-feedback-error, var(--color-feedback-error, #dc2626))",
     transition: "width 250ms ease",
   };
   return (
