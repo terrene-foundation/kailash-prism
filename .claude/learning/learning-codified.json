@@ -1,89 +1,65 @@
 {
-  "last_codified": "2026-05-06T11:30:00Z",
-  "digest_hash": "no-digest-present-fell-back-to-sweep-report-as-source",
+  "last_codified": "2026-05-08T00:00:00Z",
+  "digest_hash": "no-digest-present-fell-back-to-session-notes-and-cleared-artifacts-as-source",
   "observations_line_count": 32,
-  "workspace": "none — repo-level /sweep cycle",
-  "source_artifact": "SWEEP-2026-05-06.md",
-  "codify_session_summary": "5 sweep-skill methodology fixes appended to .claude/.proposals/latest.yaml (4 commands/sweep.md skill clauses + 1 rules/orphan-detection.md library-class clause); zero local globals edited per cross-cli-parity + variant-authoring constraints; cc-architect red-team applied (3 ACCEPT + 1 minor + 1 NEEDS-REVISION applied to the file)",
+  "workspace": "prism-0.6.0 (journal home for codify cycles); evidence drawn from prism-node24-bump/journal/.pending/",
+  "source_artifact": ".session-notes:41-45 + cleared .pending/ stubs (1778065911099-0/-1)",
+  "codify_session_summary": "1 rule_candidate appended to .claude/.proposals/latest.yaml (session-end-pending-stub-duplicate-suppression — skill-embedded against .claude/hooks/session-end.js generateJournalCandidates); 2 .pending/ stubs cleared at session start (commits 91a107c, 2f68aa3 — both already documented in SWEEP-2026-05-06.md and PR #41); zero local globals edited; user pre-approved disposition B (filter) over A (surface) and C (filter+misroute-fix); subagent fan-out skipped due to single-clause hook-patch scope.",
   "actions_taken": [
+    {
+      "type": "artifact_cleanup",
+      "files_deleted": [
+        "workspaces/prism-node24-bump/journal/.pending/1778065911099-0-DECISION.md",
+        "workspaces/prism-node24-bump/journal/.pending/1778065911099-1-RISK.md"
+      ],
+      "directory_removed": "workspaces/prism-node24-bump/journal/.pending/",
+      "reason": "Both stubs pointed at commits 91a107c (PR #41) and 2f68aa3 (sweep self-audit) whose content is already canonical in SWEEP-2026-05-06.md and PR #41 body. Same recurrence class as 8e67ad3 cleanup 1 day prior — twice in 7 days."
+    },
     {
       "type": "proposal_append",
       "file": ".claude/.proposals/latest.yaml",
-      "entries_added": 5,
+      "entries_added": 1,
       "breakdown": {
-        "rule_candidates": 5,
+        "rule_candidates": 1,
         "withdrawn_candidates": 0
       },
       "candidates": [
-        "sweep-skill-repo-level-specs-fallback (skill-embedded — commands/sweep.md § Sweep 5)",
-        "sweep-skill-unfiltered-branch-enumeration (skill-embedded — commands/sweep.md § Sweep 4)",
-        "memory-citation-grounding (coc-global — re-tiered from skill-embedded per red team)",
-        "sweep-skill-closure-sha-template (skill-embedded — commands/sweep.md § Closure)",
-        "orphan-detection-library-vs-application-applicability (coc-global — rules/orphan-detection.md)"
+        "session-end-pending-stub-duplicate-suppression (skill-embedded — .claude/hooks/session-end.js § generateJournalCandidates)"
       ],
       "reason": "Per artifact-flow.md MUST: append-not-overwrite. Status remains pending_review for loom Gate-1 classification."
     },
     {
       "type": "journal_create",
-      "file": "workspaces/prism-0.6.0/journal/0008-DECISION-codify-sweep-methodology-fixes.md",
-      "reason": "Codify-pass DECISION entry per /codify journal MUST gate. Records the 5 candidates, rationale per candidate, skipped steps, and follow-ups."
-    },
-    {
-      "type": "rule_candidate_revision",
-      "candidate": "memory-citation-grounding",
-      "trigger": "cc-architect red team NEEDS-REVISION verdict",
-      "changes": [
-        "Re-tiered from skill-embedded → coc-global (principle applies to every command that cites memory in user-visible artifacts, not just /sweep)",
-        "Renamed from sweep-skill-memory-citations-via-file-read → memory-citation-grounding to reflect cross-command scope",
-        "Target reframed: new rules/memory-citation-grounding.md OR fold-into-existing as zero-tolerance.md Rule 1c sibling clause",
-        "Added second MUST clause (Read MUST land in the same session as citation — closes the cross-session-recall loophole)",
-        "Added audit_protocol section (mechanical detection: walk session tool-call log for Read prior to artifact emission)",
-        "Added two BLOCKED rationalizations (chat-recall + prior-session-Read)"
-      ]
-    },
-    {
-      "type": "rule_candidate_revision",
-      "candidate": "sweep-skill-closure-sha-template",
-      "trigger": "cc-architect red team minor flag (audit symmetry)",
-      "changes": [
-        "Added cross_cli_slot_partition (neutral_body + examples_slot) for Gate-1 audit symmetry"
-      ]
-    },
-    {
-      "type": "rule_candidate_revision",
-      "candidate": "orphan-detection-library-vs-application-applicability",
-      "trigger": "cc-architect red team minor flag (procedural → mechanical)",
-      "changes": [
-        "Strengthened first MUST NOT clause from procedural ('must re-anchor audit surface') to mechanical ('MUST NOT classify when public-export file contains symbol AND Tier 2 test imports via package name')",
-        "Re-ordered must_not_clauses: mechanical defense first, conceptual second, procedural last"
-      ]
-    },
-    {
-      "type": "red_team_acceptance",
-      "candidates_accepted_unchanged": [
-        "sweep-skill-repo-level-specs-fallback",
-        "sweep-skill-unfiltered-branch-enumeration"
-      ],
-      "rationale": "Both well-formed: tightly bound to existing rules (sweep-completeness.md Rule 1, worktree-isolation.md Rule 6); MUST/MUST NOT/BLOCKED rationalizations + cross_cli_slot_partition all present; mechanical defenses grep-able."
+      "file": "workspaces/prism-0.6.0/journal/0009-DECISION-codify-session-end-stub-duplicate-suppression.md",
+      "reason": "Codify-pass DECISION entry per /codify journal MUST gate. Records candidate rationale, user disposition (B over A/C), skipped pipeline steps, follow-ups."
     }
   ],
   "actions_skipped": [
     {
+      "step": "Step 2 — Deep knowledge extraction (subagent fan-out)",
+      "reason": "Single-clause hook-patch with explicit pre-approved disposition; full subagent fan-out (analyst x2, reviewer x2, cc-architect, gold-standards-validator, testing-specialist, security-reviewer) inappropriate for scope. cc-architect verification deferred to loom Gate-1."
+    },
+    {
       "step": "Step 3 — update existing agents",
-      "reason": "Local globals edits to .claude/agents/* would violate cross-cli-parity.md MUST 1 (neutral-body byte-identical) and variant-authoring.md MUST 1 (slot-replacement only). Lessons routed via proposal."
+      "reason": "Local globals edits would violate cross-cli-parity.md MUST 1 + variant-authoring.md MUST 1. Lessons routed via proposal."
     },
     {
       "step": "Step 4 — update existing skills",
-      "reason": "Same as Step 3 — commands/sweep.md is a loom-owned artifact; edits here would drift from the canonical."
+      "reason": ".claude/hooks/session-end.js is a loom-owned artifact; edits here would drift from the canonical."
     },
     {
       "step": "Step 5 — update README/docs",
-      "reason": "No user-facing docs added; SWEEP-2026-05-06.md is the audit trail and remains the authoritative source for these lessons."
+      "reason": "No user-facing docs affected; the journal entry + proposal candidate are the audit trail."
+    },
+    {
+      "step": "Step 6 — Red team subagents",
+      "reason": "Same scope rationale as Step 2. cc-architect mechanical sweep deferred to /codify validation at loom."
     }
   ],
   "follow_ups_for_human": [
-    "Commit working-tree changes (5 latest.yaml entries + 0008 journal + learning-codified update + .session-notes refresh + working-tree .pending dir cleanup) to a chore(codify): sweep skill methodology fixes branch + PR (per BUILD-repo Prudence rule, agent does NOT commit).",
-    "Loom-side /sync Gate 1 reviewer classifies the 5 candidates: 4 skill-embedded for commands/sweep.md (Sweep 3/4/5/Closure clauses) + 1 coc-global for rules/orphan-detection.md (library-class audit surface).",
-    "Decide the memory-citation-grounding disposition: NEW rules/memory-citation-grounding.md (cleaner, separate principle) OR fold-into-existing as zero-tolerance.md Rule 1c sibling clause (tighter, leverages existing rule's authority). Both options preserved in the candidate's target field."
+    "Commit working-tree changes (1 latest.yaml entry + 0009 journal + learning-codified update + .session-notes refresh + .pending/ cleanup) per BUILD-repo Prudence rule (agent does NOT commit unilaterally).",
+    "Loom-side /sync Gate 1 reviewer classifies session-end-pending-stub-duplicate-suppression as skill-embedded against .claude/hooks/session-end.js. Three prior unresolved Gate-1 dispositions still open from 2026-05-06 cycle.",
+    "Misroute axis (workspace selection by cwd-recency in detectActiveWorkspace) NOT included in this proposal per user disposition B; revisit if duplicate suppression alone proves insufficient on next observation.",
+    "Watch for regression-within-grace on .claude/hooks/session-end.js modifications during 7-day grace window from rule landing."
   ]
 }
