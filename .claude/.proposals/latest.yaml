@@ -1076,4 +1076,111 @@ changes:
       neutral_body: "orphan audit surface differs between application-framework and library-class repos"
       examples_slot: "language/framework-specific export-surface examples (TS index.ts, Rust pub use, Python __all__)"
 
+  - rule_candidate: session-end-pending-stub-duplicate-suppression
+    suggested_tier: coc-global
+    suggested_priority: 30
+    suggested_scope: skill-embedded
+    target: .claude/hooks/session-end.js § generateJournalCandidates
+    must_clauses:
+      - id: 1
+        title: "SessionEnd MUST skip stub generation for commits already documented in canonical artifacts"
+        body: |
+          generateJournalCandidates() currently classifies every session
+          commit matching a journal-worthy literal pattern and writes a stub
+          to `<workspace>/journal/.pending/`. Commits whose subject or SHA
+          already appears in a canonical session artifact — a `SWEEP-*.md`
+          report at the repo root, the body of an open or merged PR opened
+          this session, or an existing journal entry under
+          `<workspace>/journal/NNNN-*.md` — are duplicate stubs from the
+          moment they are written. The next session has no signal to
+          distinguish duplicate-of-already-captured from genuinely-novel,
+          and the .pending/ directory accumulates across sessions.
+
+          Hook MUST add a pre-write filter: for each candidate commit,
+          check (a) whether the short SHA appears in any `SWEEP-*.md` at
+          repo root with mtime within the session window, (b) whether the
+          short SHA appears in `gh pr list --state all --search '<sha>'`
+          output cached at session start, OR (c) whether a journal entry
+          under `<workspace>/journal/` references the SHA. A match on any
+          of (a/b/c) → skip the stub. The active workspace's
+          `journal/.pending/` directory is created only if at least one
+          candidate survives the filter, so a duplicate-only session
+          leaves no .pending/ residue.
+      - id: 2
+        title: "Filter MUST be cheap and bounded"
+        body: |
+          Hook budget is 3s wall-clock total per existing constraint
+          (line 364). Filter MUST stay under ~500ms additional cost:
+          (a) glob+grep across `SWEEP-*.md` (≤5 files typical, <50ms);
+          (b) gh PR query is one cached call at session start, reused per
+              commit (no per-commit fork);
+          (c) journal grep is `grep -l <short-sha> workspaces/*/journal/`
+              (single fs walk, <100ms).
+          If the filter exceeds budget on any single commit, hook falls
+          through to the original write-stub behavior — never blocks the
+          session-end critical path.
+    must_not_clauses:
+      - "MUST NOT delete any existing .pending/ stubs as a side effect of the filter — purge is a separate concern owned by /wrapup or manual cleanup."
+      - "MUST NOT drop the stub silently with no audit trail — when the filter suppresses a candidate, append a one-line entry to the session's hook log noting `[suppressed: <sha> matched <artifact>]` so the dedup is grep-able."
+      - "MUST NOT extend the filter to semantic similarity (subject-line fuzzy match, body-text comparison) — only literal SHA presence is hook-legal per cc-artifacts.md MUST NOT 'No semantic analysis in hooks'."
+    blocked_rationalizations:
+      - "the next session can just delete the duplicates"
+      - "the cost of the filter exceeds the cost of manual cleanup"
+      - ".pending/ accumulation is benign — the directory is git-ignored"
+      - "if the user wants no duplicates they should run /wrapup"
+      - "the misroute (wrong workspace) is the real bug; filter doesn't fix that"
+    audit_protocol: |
+      Detection at /codify validation (cc-architect mechanical sweep):
+      1. Read .claude/hooks/session-end.js around generateJournalCandidates.
+      2. Confirm the function calls a filter helper before writing stubs.
+      3. Confirm the helper checks: SWEEP-*.md grep, gh PR cache, journal
+         grep — each via a literal SHA match (no semantic comparison).
+      4. Confirm the helper has a wall-clock budget guard that falls
+         through to original behavior on overrun.
+      5. Audit fixture committed at .claude/audit-fixtures/session-end/
+         covering: (a) commit referenced in SWEEP report → suppressed,
+         (b) commit referenced in PR body → suppressed, (c) commit
+         referenced in journal entry → suppressed, (d) genuinely-novel
+         commit → stub written, (e) filter-budget-exceeded → fallback to
+         original behavior.
+    do_examples:
+      - "// session-end.js generateJournalCandidates pre-write filter
+        if (await isAlreadyDocumented(hash, sessionContext)) {
+        await appendHookLog(`[suppressed: ${hash.slice(0,7)} matched ${matchSource}]`);
+        continue;
+        }"
+    do_not_examples:
+      - "// always write stub — duplicates accumulate
+        const stub = buildStub(hash, type, body);
+        fs.writeFileSync(stubPath, stub);"
+    origin: |
+      kailash-prism session 2026-05-08. Two .pending/ stubs cleared at
+      session-start (1778065911099-0-DECISION.md for commit `91a107c`,
+      1778065911099-1-RISK.md for commit `2f68aa3`). Both commits already
+      documented in SWEEP-2026-05-06.md and PR #41 body. Same recurrence
+      class as the 4 stubs cleaned by commit `8e67ad3` 1 day prior:
+      twice in 7 days = repeating-pattern signal per the prior session's
+      .session-notes:41-45 open question. Filter eliminates duplicate
+      class at source; misroute (wrong workspace via detectActiveWorkspace
+      cwd-recency) remains a manual-cleanup nuisance but no longer carries
+      duplicate content (low residual value vs cost of fixing).
+    cross_cli_slot_partition:
+      neutral_body: "SessionEnd journal-stub generation MUST suppress duplicates already in canonical session artifacts"
+      examples_slot: "Node hook syntax (CC). Codex/Gemini hook variants per their respective hook runtimes."
+    trust_posture_wiring:
+      severity: advisory
+      grace_period_days: 7
+      regression_within_grace: |
+        A new SessionEnd hook modification in .claude/hooks/session-end.js
+        within 7 days of this rule landing that ships generateJournalCandidates
+        without the duplicate-suppression filter triggers emergency downgrade
+        L5 → L4 per trust-posture.md MUST Rule 4.
+      receipt_requirement: |
+        SessionStart MUST require [ack: session-end-pending-stub-duplicate-suppression]
+        in agent's first response IF posture.json::pending_verification includes
+        this rule_id (set at land-time, cleared after grace).
+      detection_mechanism: |
+        cc-architect mechanical sweep at /codify validation per audit_protocol
+        above. No hook-layer detector — this rule governs hook code itself.
+
 status: pending_review
