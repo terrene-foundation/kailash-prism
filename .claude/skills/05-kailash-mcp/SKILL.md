@@ -1,6 +1,6 @@
 ---
 name: kailash-mcp
-description: "Kailash MCP (Model Context Protocol) - production-ready MCP server implementation for AI agent integration. Use when asking about 'MCP', 'Model Context Protocol', 'MCP server', 'MCP client', 'MCP tools', 'MCP resources', 'MCP prompts', 'MCP authentication', 'MCP transports', 'stdio transport', 'SSE transport', 'HTTP transport', 'MCP testing', 'progress reporting', or 'structured tools'."
+description: "Kailash MCP — server, client, tools, resources, auth, transports (stdio/SSE/HTTP)."
 ---
 
 # Kailash MCP - Model Context Protocol Integration
@@ -189,10 +189,10 @@ def analyze(text: str) -> str:
 
 ## Related Skills
 
-- **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
-- **[03-nexus](../nexus/SKILL.md)** - Nexus includes MCP channel
-- **[04-kaizen](../kaizen/SKILL.md)** - AI agents as MCP tools
-- **[02-dataflow](../dataflow/SKILL.md)** - Database resources
+- **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core workflow patterns
+- **[03-nexus](../03-nexus/SKILL.md)** - Nexus includes MCP channel
+- **[04-kaizen](../04-kaizen/SKILL.md)** - AI agents as MCP tools
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Database resources
 
 ## Support
 

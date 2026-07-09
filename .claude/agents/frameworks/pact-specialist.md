@@ -3,6 +3,13 @@ name: pact-specialist
 description: "PACT specialist. Use for governance, RBAC, policy, access control, envelopes, audit — custom authz BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # PACT Specialist Agent
@@ -140,9 +147,9 @@ Per `.claude/rules/pact-governance.md`:
 5. **NaN/Inf validation** -- `math.isfinite()` on all numeric constraints
 6. **Thread safety** -- All engine methods acquire `self._lock`
 
-## Security Invariants (Cross-SDK)
+## Security Invariants
 
-Discovered during kailash-rs red team. Violations are BLOCK-level findings.
+Violations are BLOCK-level findings.
 
 ### 1. GovernanceContext Must NOT Be Deserializable
 

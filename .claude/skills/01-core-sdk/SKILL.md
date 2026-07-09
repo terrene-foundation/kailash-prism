@@ -1,15 +1,11 @@
 ---
 name: core-sdk
-description: "Kailash Core SDK. Use for WorkflowBuilder, nodes, connections, runtime, async, cycles, MCP, OpenTelemetry tracing."
+description: "Kailash Core SDK — workflows, 110+ nodes, runtime, async, cycles, MCP, OpenTelemetry. Use for WorkflowBuilder + connections + runtime patterns."
 ---
 
 # Kailash Core SDK - Foundational Skills
 
 Comprehensive guide to Kailash Core SDK fundamentals for workflow automation and integration.
-
-## When to Use
-
-Use Core SDK when asking about workflow basics, core sdk, create workflow, workflow builder, node patterns, connections, runtime, parameters, imports, installation, getting started, workflow execution, async workflows, error handling, cyclic workflows, PythonCode node, SwitchNode, or MCP integration. Also covers observability: OpenTelemetry, OTel, tracing, `TracingLevel`, `WorkflowTracer`, node instrumentation, `NodeInstrumentor`, database instrumentation, Prometheus metrics, `MetricsBridge`, `KAILASH_TRACING_LEVEL`, and span attributes.
 
 ## Features
 
@@ -17,7 +13,7 @@ The Core SDK provides the foundational building blocks for creating custom workf
 
 - **110+ Workflow Nodes**: Pre-built nodes for AI, API, database, file operations, logic, and more
 - **WorkflowBuilder API**: String-based workflow construction with type safety
-- **Dual Runtime Support**: AsyncLocalRuntime (Docker/FastAPI) and LocalRuntime (CLI/scripts)
+- **Dual Runtime Support**: AsyncLocalRuntime (Docker/Nexus) and LocalRuntime (CLI/scripts)
 - **Advanced Patterns**: Cyclic workflows, conditional execution, error handling
 - **MCP Integration**: Built-in Model Context Protocol support
 - **Parameter Passing**: Flexible data flow between nodes
@@ -69,6 +65,11 @@ with LocalRuntime() as runtime:
 - **[runtime-progress](runtime-progress.md)** - ProgressRegistry for node progress tracking (contextvars, thread-safe callbacks, bounded deque)
 - **[runtime-watchdog](runtime-watchdog.md)** - EventLoopWatchdog for asyncio stall detection (heartbeat + thread, StallReport, task stack capture)
 
+### Recurring + Durable Execution
+
+- **`WorkflowScheduler`** (`kailash.runtime.scheduler`) — cron + interval + one-shot scheduling for recurring workflow execution; APScheduler-backed SQLite jobstore. See **[15-enterprise-infrastructure/scheduler-patterns](../15-enterprise-infrastructure/scheduler-patterns.md)**.
+- **`ExecutionTracker`** (`kailash.runtime.execution_tracker`) — per-node checkpoint primitive consumed by `DurableRequest` for resume-on-restart workflows. See **[15-enterprise-infrastructure/durability-patterns](../15-enterprise-infrastructure/durability-patterns.md)**.
+
 ## Key Concepts
 
 ### Canonical Node Pattern (4-Parameter)
@@ -115,7 +116,7 @@ workflow.connect("node1", "node2", mapping={"content": "input", "meta": "metadat
 
 ### Runtime Selection
 
-- **AsyncLocalRuntime**: For Docker/FastAPI (async contexts) - async-first, no threading, 10-100x faster
+- **AsyncLocalRuntime**: For Docker/Nexus (async contexts) - async-first, no threading, 10-100x faster
 - **LocalRuntime**: For CLI/scripts (sync contexts) - synchronous execution with thread support
 - **get_runtime()**: Auto-detection helper that selects appropriate runtime based on context
 
@@ -146,14 +147,14 @@ Both LocalRuntime and AsyncLocalRuntime inherit from BaseRuntime with shared cap
 
 ## Critical Rules
 
-- ✅ ALWAYS: `runtime.execute(workflow.build())`
-- ✅ String-based nodes: `workflow.add_node("NodeName", "id", {})`
-- ✅ 4-parameter connections: `(source_id, source_param, target_id, target_param)`
-- ✅ Docker/FastAPI: Use AsyncLocalRuntime (mandatory)
-- ✅ CLI/Scripts: Use LocalRuntime
-- ❌ NEVER: `workflow.execute(runtime)`
-- ❌ NEVER: Instance-based nodes
-- ❌ NEVER: Use LocalRuntime in Docker (causes hangs)
+- ALWAYS: `runtime.execute(workflow.build())`
+- String-based nodes: `workflow.add_node("NodeName", "id", {})`
+- 4-parameter connections: `(source_id, source_param, target_id, target_param)`
+- Docker/Nexus: Use AsyncLocalRuntime (mandatory)
+- CLI/Scripts: Use LocalRuntime
+- NEVER: `workflow.execute(runtime)`
+- NEVER: Instance-based nodes
+- NEVER: Use LocalRuntime in Docker (causes hangs)
 
 ## When to Use This Skill
 
@@ -175,7 +176,6 @@ Use this skill when you need to:
 - **[04-kaizen](../04-kaizen/SKILL.md)** - AI agent framework built on Core SDK
 - **[06-cheatsheets](../06-cheatsheets/SKILL.md)** - Quick reference patterns
 - **[08-nodes-reference](../08-nodes-reference/SKILL.md)** - Complete node reference
-- **[09-workflow-patterns](../09-workflow-patterns/SKILL.md)** - Industry workflow templates
 - **[17-gold-standards](../17-gold-standards/SKILL.md)** - Mandatory best practices
 
 ## Support

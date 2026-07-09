@@ -225,7 +225,7 @@ on:
 
 **Why:** Bindings ship compiled wheels — none of the listed doc-only surfaces can affect what's built. Each non-excluded doc-only PR triggers ALL binding workflows (python + ruby + node), each billed at 1-minute minimum on `ubuntu-latest` even when they short-circuit. Compounded over 30-50 doc/codify PRs per month, this is ~150-200 min/month of pure overhead. Excluding `.claude/**`, `docs/**`, `specs/**`, `workspaces/**`, `memory/**` recovers all of that for zero correctness cost.
 
-Origin: 2026-04-25 kailash-rs gh-manager CI burn audit — identified 66 of 580 GHA-billable minutes were doc-only PR triggers on binding workflows, mostly on `chore/codify-*`, `feat/rls-*-codify`, and similar non-code branches. Closing this gap eliminates that recurring class of waste.
+Origin: 2026-04-25 CI burn audit — identified 66 of 580 GHA-billable minutes were doc-only PR triggers on binding workflows, mostly on `chore/codify-*`, `feat/*-codify`, and similar non-code branches. Closing this gap eliminates that recurring class of waste.
 
 ### 7. Workflow Crons MUST Have Explicit Cost Footer
 
@@ -263,7 +263,7 @@ on:
 
 **Why:** GitHub Actions bills a 1-minute minimum per job invocation regardless of actual runtime. A workflow on `*/5 * * * *` (every 5 min) consumes a minimum of 8,640 min/month even if every run exits in under 10 seconds. On a 3,000-min/month free tier, a single mis-cadenced cron can consume 280%+ of the budget BEFORE any productive CI runs. The cost footer makes the trade-off explicit at author time and forces an active decision about cadence vs cost.
 
-Origin: 2026-04-25 kailash-rs gh-manager audit — `ci-queue-monitor.yml` configured at `cron: "*/5 * * * *"` consumed 288 min/day (ground-truth, audited at 14:00Z). At month-end this approaches 8,640 min/month — alone exceeding 2× the entire 3,000-min free tier. Cadence MUST drop to `*/30` minimum until the runner-queue load profile is characterized; the rule prevents this class of unaudited cron from re-landing.
+Origin: 2026-04-25 CI cost audit — `ci-queue-monitor.yml` configured at `cron: "*/5 * * * *"` consumed 288 min/day (ground-truth, audited at 14:00Z). At month-end this approaches 8,640 min/month — alone exceeding 2× the entire 3,000-min free tier. Cadence MUST drop to `*/30` minimum until the runner-queue load profile is characterized; the rule prevents this class of unaudited cron from re-landing.
 
 ### 8. Release PRs MUST Skip The PR-Gate Suite
 
@@ -316,7 +316,7 @@ for f in .github/workflows/*.yml; do
 done
 ```
 
-Origin: 2026-04-22 kailash-rs session — user observed release PR #531 (pure version bump, 6 files touched, zero code surface) running the full PR-gate suite for the third time on the same code. Codified as a MUST gate in the same session; savings are per-release cycle (~45 min). Cross-references `git.md` § "Release-Prep PRs MUST Use `release/v*` Branch Convention" (always-loaded baseline) for branch-naming-time visibility into the cost lever.
+Origin: 2026-04-22 — user observed a release PR (pure version bump, 6 files touched, zero code surface) running the full PR-gate suite for the third time on the same code. Codified as a MUST gate in the same session; savings are per-release cycle (~45 min). Cross-references `git.md` § "Release-Prep PRs MUST Use `release/v*` Branch Convention" (always-loaded baseline) for branch-naming-time visibility into the cost lever.
 
 ## MUST NOT Rules
 
@@ -356,6 +356,6 @@ Every `actions/upload-artifact@v*` step across ALL workflows MUST include `conti
 
 **Why:** The failure mode re-surfaces every ~12h on PR CI until someone re-discovers the fix. Codify once, apply everywhere.
 
-Origin: kailash-rs CI cascade waves 6-18 (commits `ecc50c4e..5429928c`, 2026-04-16/17). 12 consecutive waves fixed pre-existing failures hidden by fmt short-circuit. Wave 17 fixup to a shared crate didn't trigger Python/Node/Ruby binding CI because their paths filters excluded the shared-crates tree. Runner auto-update at a trivial commit orphaned one run and required a service restart. Recovery protocols for each MUST rule live in `skills/10-deployment-git/ci-runner-troubleshooting.md`.
+Origin: 2026-04-16/17 CI cascade — 12 consecutive waves fixed pre-existing failures hidden by fmt short-circuit. Wave 17 fixup to a shared crate didn't trigger Python/Node/Ruby binding CI because their paths filters excluded the shared-crates tree. Runner auto-update at a trivial commit orphaned one run and required a service restart. Recovery protocols for each MUST rule live in `skills/10-deployment-git/ci-runner-troubleshooting.md`.
 
 <!-- /slot:neutral-body -->

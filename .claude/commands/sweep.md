@@ -17,7 +17,7 @@ Autonomous — runs every sweep sequentially, accumulates findings into a single
 
 ## Workflow
 
-Run all 7 sweeps. Aggregate findings into a single report at the end with severity (CRIT / HIGH / MED / LOW), disposition, and pointer (file:line, PR#, issue#).
+Run all 8 sweeps. Aggregate findings into a single report at the end with severity (CRIT / HIGH / MED / LOW), disposition, and pointer (file:line, PR#, issue#).
 
 ### Sweep 1: Active todos across all workspaces
 
@@ -25,7 +25,7 @@ Run all 7 sweeps. Aggregate findings into a single report at the end with severi
 find workspaces/*/todos/active/ -name "*.md" -not -name "*-milestone-tracker.md" 2>/dev/null
 ```
 
-Read frontmatter (`status`, `priority`, `wave`). Group by workspace. Surface stale (>7d) workspaces' todos with explicit "is this still relevant?" flag.
+Read frontmatter (`status`, `priority`, `wave`). Group by workspace. Per `rules/value-prioritization.md` MUST-3+4, classify each stale (>7d) item into one of THREE dispositions — never `Stale` alone, never auto-close: **(a) still-wanted** (re-validate value-anchor, re-queue with explicit value-rank citing brief / spec § / journal DECISION); **(b) abandon-with-user-gate** (recommend closure with value-decay rationale, surface to user — auto-close as `not_planned` is BLOCKED); **(c) queued-with-value-rank** (alive but lower-priority; explicit anchor required). Items lacking value-anchors entirely surface as a separate finding: "value-anchor absent — request from user before re-queuing."
 
 ### Sweep 2: Pending journal entries (auto-generated, awaiting promotion)
 
@@ -43,7 +43,7 @@ gh issue list --repo "$REPO" --state open --limit 50 \
   --json number,title,labels,createdAt,updatedAt,comments
 ```
 
-Categorize: **Stale** (no activity ≥30d), **`deferred` label** (verify Rule 1b 4-condition body per `rules/zero-tolerance.md`), **Closeable** (delivered code per `rules/git.md` § Issue Closure Discipline), **Genuinely actionable**.
+Categorize: **`deferred` label** (verify Rule 1b 4-condition body per `rules/zero-tolerance.md`), **Closeable** (delivered code per `rules/git.md` § Issue Closure Discipline), **Genuinely actionable**. Per `rules/value-prioritization.md` MUST-4, `Stale` is NOT a closure category — auto-closing stale issues as `not_planned` because of age is BLOCKED. Stale issues route through the same three-disposition classification as Sweep 1 (still-wanted re-validate / abandon-with-user-gate / queued-with-value-rank).
 
 ### Sweep 4: Open PRs and stale feature branches
 
@@ -60,12 +60,29 @@ Surface: drafts >7d, PRs with red CI (never merge red — fix in same branch per
 
 `/redteam` re-derived as a repo-wide sweep. Use `skills/spec-compliance/SKILL.md` protocol — AST/grep verification, never file existence.
 
+**Pre-condition check (run FIRST):** Sweep 5 only applies in repos that have BOTH (a) at least one `workspaces/*/specs/` directory containing per-workspace specs AND (b) `tools/sweep-redteam.py` (or language equivalent under `tools/`). If EITHER is absent, the repo is in **orchestration mode** (loom, USE templates) — Sweep 5 logs the sentinel `<!-- sweep-redteam:v1:N/A reason=orchestration-mode no_specs=<bool> no_tool=<bool> -->` into the sweep report and Sweep 5 is complete. This is NOT a substitution decision (no proxy is run); it is a structural N/A, recorded explicitly so future readers can grep the sentinel.
+
+When BOTH conditions hold (BUILD repos: kailash-py, kailash-rs), Sweep 5 MUST invoke `tools/sweep-redteam.py` (or the equivalent at `tools/` for the consumer project's language) and embed its sentinel comment + findings into the sweep report. Substituting `tools/spec-cite-check.py` or any other proxy for the mandated per-spec symbol + Tier 2 coverage verification is BLOCKED — see `rules/sweep-completeness.md` for the human-gate requirement when proxy substitution is genuinely warranted. The TOOL is BUILD-local (each repo owns `tools/`); the SKILL text mandates the invocation pattern.
+
 ```bash
+# Pre-condition gate
+spec_count=$(find workspaces/*/specs -type d -mindepth 1 2>/dev/null | wc -l | tr -d ' ')
+tool_present=$([ -f tools/sweep-redteam.py ] && echo true || echo false)
+if [ "$spec_count" = "0" ] || [ "$tool_present" = "false" ]; then
+  echo "<!-- sweep-redteam:v1:N/A reason=orchestration-mode no_specs=$([ $spec_count = 0 ] && echo true || echo false) no_tool=$([ $tool_present = false ] && echo true || echo false) -->"
+  exit 0  # Sweep 5 complete
+fi
+
+# BUILD-mode: run per-workspace
 for ws in workspaces/*/; do
   [ -d "$ws/specs" ] && echo "WORKSPACE: $ws"
 done
-# Per workspace, per spec: grep production source for each MUST symbol;
-# verify the contract holds; verify Tier 2 coverage exists.
+# Per workspace, per spec: invoke tools/sweep-redteam.py — single-pass
+# walk + compiled regex per MUST symbol; verify the contract holds;
+# verify Tier 2 coverage exists. Embed the tool's sentinel comment
+# `<!-- sweep-redteam:v1:OK specs=N symbols=M orphans=O coverage_gaps=C stubs=S -->`
+# into the sweep report so readers (and any future enforcement hook)
+# can verify the mandated step actually ran.
 ```
 
 Categorize findings:
@@ -100,6 +117,19 @@ grep -rEn 'TODO|FIXME|HACK|XXX|NotImplementedError' \
 
 Surface: uncommitted changes, branch ahead/behind origin/main, new stub markers in production code (BLOCKED per `rules/zero-tolerance.md` Rule 2).
 
+### Sweep 8: Release readiness (publishing repos only)
+
+For repos that publish version anchors (`pyproject.toml` + `__init__.py`, or language equivalent), determine what is GENUINELY unreleased. The diff base MUST be derived mechanically from the latest stable tag — hand-picking a base tag is BLOCKED (a stale base re-flags already-released fixes as "unreleased" on every sweep). Non-publishing repos: record "N/A — non-publishing" and move on.
+
+```bash
+# plain vX.Y.Z stable tags ONLY — `$`-anchor excludes prerelease (-rc1) and
+# package-prefixed (pkg-v*) tags so a future v2.29.0-rc1 cannot sort above v2.29.0
+LATEST=$(git tag --sort=-version:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+git log --oneline "$LATEST"..HEAD -- src/ packages/*/src 2>/dev/null   # shippable code ONLY
+```
+
+Flag "unreleased work" ONLY when the shippable-code diff is non-empty; docs / `.claude/` / workspace diffs do NOT ship → record "no shippable change since `$LATEST`". Before naming any merged PR as unreleased, confirm via `git merge-base --is-ancestor <sha> "$LATEST"` (ancestor = already released).
+
 ## Output
 
 Write findings to `workspaces/<project>/04-validate/sweep-<date>.md` (workspace context active) OR `SWEEP-<date>.md` at root. Each finding: `[SEVERITY] [Sweep N] <title>` + Location + Disposition + Evidence + Why-this-matters + Action-taken-if-FIX-NOW. End with cross-cutting observations and 2-5 ranked recommended next-session items.
@@ -108,7 +138,7 @@ Write findings to `workspaces/<project>/04-validate/sweep-<date>.md` (workspace 
 
 Before reporting `/sweep` complete:
 
-1. ALL Sweep 1-7 outputs accumulated
+1. ALL Sweep 1-8 outputs accumulated
 2. Trivial fixes applied inline (`rules/zero-tolerance.md` Rule 1); reclassified `FIXED` with commit SHA
 3. Non-trivial fixes filed as workspace todos OR GH issues with delivered-code references
 4. Report committed (`git add` + `git commit`)

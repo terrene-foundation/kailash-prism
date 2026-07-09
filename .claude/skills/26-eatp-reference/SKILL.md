@@ -1,6 +1,6 @@
 ---
 name: eatp-reference
-description: "EATP SDK implementation reference — TrustPlane, BudgetTracker, PostureStore, security patterns, store backends, enterprise features. Use when implementing trust code, not when asking about EATP concepts (use co-reference for specs)."
+description: "EATP SDK — TrustPlane, BudgetTracker, PostureStore. For trust-code implementation."
 tools:
   - Read
   - Glob

@@ -55,7 +55,7 @@ For every new module a spec creates, grep the test directory for an import of th
 
 ```bash
 # DO (web)
-grep -rln "from.*@kailash/prism-web.*import\|import.*ButtonAtom" web/src/**/*.test.ts web/src/**/*.test.tsx
+grep -rln "import.*ButtonAtom\|from.*@kailash/prism-web" web/src/**/*.test.ts web/src/**/*.test.tsx
 # Empty → HIGH: new module has zero test coverage
 
 # DO (flutter)
@@ -70,11 +70,11 @@ cat .test-results | grep -c PASSED  # Suite-level count tells you nothing about 
 
 ### MUST: Verify security mitigations have tests
 
-For every § Security Threats subsection in any spec, grep for a corresponding `test_<threat>` function. Missing = HIGH.
+For every § Security Threats subsection in any spec, grep for a corresponding test name. Missing = HIGH.
 
 ```bash
-# Spec § Threat: prompt injection via tool description
-grep -rln "test.*prompt.*injection\|test.*tool.*description.*injection" tests/
+# Spec § Threat: XSS via dangerouslySetInnerHTML
+grep -rln "xss.*dangerouslySetInnerHTML\|test.*xss" web/src/ flutter/test/
 # Empty → HIGH: documented threat has no test
 ```
 
@@ -113,13 +113,51 @@ void main() {
 }
 ```
 
+### MUST: Behavioral Regression Tests Over Source-Grep
+
+Regression tests MUST exercise the actual code path (render the component, call the function, assert the raise/return). Grepping source files for literal substrings is BLOCKED as the sole assertion.
+
+```typescript
+// DO — behavioral: render, assert the contract
+describe('Regression: sanitize user-rendered content', () => {
+  it('rejects script tags in ButtonAtom children', () => {
+    const { container } = render(<ButtonAtom>{'<script>alert(1)</script>'}</ButtonAtom>);
+    expect(container.querySelector('script')).toBeNull();
+  });
+});
+
+// DO NOT — source-grep: pins implementation, breaks on refactor
+it('sanitization check exists', () => {
+  const src = fs.readFileSync('web/src/atoms/button.tsx', 'utf8');
+  expect(src).toMatch(/DOMPurify/);  // breaks when logic moves to a shared helper
+});
+```
+
+**Why:** Source-grep tests pin the implementation, not the contract; refactoring to a shared helper (the right move) breaks them. Behavioral tests survive refactors and survive being moved between modules.
+
+### MUST: Verified Numerical Claims In Session Notes
+
+Any numerical claim about test counts, file counts, or coverage in session notes / wrapup MUST be produced by a verifying command (`npx vitest --list | wc -l`, `git diff --stat`) at the moment of writing. Hand-typed numbers are BLOCKED.
+
+```bash
+# DO — verified: run the command, paste the output
+# "62 regression tests pass" — verified via:
+npx vitest --list web/src/__tests__/regression/ 2>&1 | grep -c '✓\|PASS'
+# Output: 62
+
+# DO NOT — hand-recall: author guesses a round number
+# "86 regression tests pass" — author's recall; actual was 46.
+```
+
+**Why:** The "claim a number, never verify" pattern bypasses audit-mode rules and produces discrepancies. A verifying command costs 2 seconds and converts a memory bug into a script.
+
 ## 3-Tier Testing
 
 ### Tier 1 (Unit): Mocking allowed, <1s per test
 
 ### Tier 2 (Integration): Real infrastructure recommended
 
-- Real API calls (test server), real browser rendering
+- Real API calls (test server), real browser rendering, real IPC for Tauri
 - NO mocking (`vi.mock()`, `jest.mock()` — BLOCKED in integration tests)
 - Web: `npx vitest run --config vitest.integration.config.ts`
 - Flutter: `flutter test integration_test/`

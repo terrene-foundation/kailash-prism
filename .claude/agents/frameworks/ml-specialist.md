@@ -1,8 +1,15 @@
 ---
 name: ml-specialist
-description: "ML specialist. Use proactively for ANY ML training/inference/feature/drift/AutoML/RL work — raw sklearn/torch BLOCKED."
+description: "ML specialist. Use proactively for ML training/inference/feature/drift/AutoML/RL — raw sklearn/torch BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # ML Specialist Agent

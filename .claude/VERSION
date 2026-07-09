@@ -1,11 +1,13 @@
 {
   "version": "0.0.0",
   "type": "coc-project",
-  "updated": "2026-04-28",
+  "updated": "2026-06-25",
   "description": "Auto-created — run /sync to pull latest template artifacts",
   "upstream": {
     "template": "unknown",
     "template_version": "0.0.0",
-    "synced_at": null
+    "synced_at": "2026-06-25T16:15:16.767Z",
+    "build_version": "2.45.0",
+    "loom_sha": "3d10b379a9127cac8201e2567e228b0793c8fa0e"
   }
 }

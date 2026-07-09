@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "ecosystem": {
+    "id": "canon",
+    "upstream_canon": null
+  },
+  "registry": {
+    "host": "docker.io",
+    "org": "terrenefoundation"
+  },
+  "remote_links": {
+    "build.py": { "org": "terrene-foundation", "repo": "kailash-py" },
+    "build.rs": { "org": "esperie-enterprise", "repo": "kailash-rs" },
+    "build.prism": { "org": "terrene-foundation", "repo": "kailash-prism" },
+    "use-template.py": {
+      "org": "terrene-foundation",
+      "repo": "kailash-coc-py"
+    },
+    "use-template.rs": {
+      "org": "terrene-foundation",
+      "repo": "kailash-coc-rs"
+    },
+    "use-template.claude-py": {
+      "org": "terrene-foundation",
+      "repo": "kailash-coc-claude-py"
+    },
+    "use-template.claude-rs": {
+      "org": "terrene-foundation",
+      "repo": "kailash-coc-claude-rs"
+    },
+    "use-template.claude-rb": {
+      "org": "terrene-foundation",
+      "repo": "kailash-coc-claude-rb"
+    },
+    "use-template.base": { "org": "terrene-foundation", "repo": "coc-base" },
+    "use-template.claude-base": {
+      "org": "terrene-foundation",
+      "repo": "coc-claude-base"
+    },
+    "loom": { "org": "esperie-enterprise", "repo": "loom" },
+    "atelier": { "org": "esperie-enterprise", "repo": "atelier" },
+    "command": {
+      "org": "esperie-enterprise",
+      "repo": "loom-command"
+    }
+  },
+  "vcs": {
+    "default_provider": "github",
+    "overrides": {}
+  },
+  "deploy": {
+    "default_targets": [],
+    "per_project": {}
+  }
+}

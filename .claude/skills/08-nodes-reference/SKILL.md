@@ -1,6 +1,6 @@
 ---
 name: nodes-reference
-description: "Comprehensive node reference documentation for all 110+ Kailash SDK nodes organized by category: AI, API, Code, Data, Database, File, Logic, Monitoring, Admin, Transaction, and Transform nodes. Use when asking about 'node reference', 'available nodes', 'node list', 'AI nodes', 'API nodes', 'code nodes', 'data nodes', 'database nodes', 'file nodes', 'logic nodes', 'monitoring nodes', 'transaction nodes', 'transform nodes', 'which nodes', 'node documentation', or 'node capabilities'."
+description: "Kailash 110+ nodes by category — AI, API, Data, DB, Logic, Transaction, Transform."
 ---
 
 # Kailash Nodes - Complete Reference
@@ -64,10 +64,9 @@ workflow.add_connection("node1", "result", "node2", "input_data")
 
 ## Related Skills
 
-- **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
-- **[06-cheatsheets](../cheatsheets/SKILL.md)** - Node usage patterns
-- **[07-development-guides](../development-guides/SKILL.md)** - Custom node development
-- **[02-dataflow](../../02-dataflow/SKILL.md)** - Auto-generated database nodes
+- **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core workflow patterns
+- **[06-cheatsheets](../06-cheatsheets/SKILL.md)** - Node usage patterns
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Auto-generated database nodes
 
 ## Support
 

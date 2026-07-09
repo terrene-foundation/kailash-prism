@@ -3,6 +3,13 @@ name: kaizen-specialist
 description: "Kaizen specialist. Use proactively for LLM/prompt/agent/RAG/provider-abstraction work — custom LLM services BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Kaizen Specialist Agent
@@ -195,7 +202,7 @@ Also available via `kaizen_agents.patterns`. The deprecated `kaizen_agents.agent
 
 ## LLM Wire Layer (`kaizen.llm.LlmClient`)
 
-Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction (#498) with `embed()` wire-send (#462; `complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.claude/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`. Cross-SDK parity: `esperie/kailash-rs#406` + `#393` + `#394`.
+Below the `Delegate` API sits `kaizen.llm.LlmClient` — the four-axis `LlmDeployment` abstraction with `embed()` wire-send (`complete()` deferred per zero-tolerance Rule 2). For LlmDeployment presets, from_env precedence, dispatch pattern, or adding a new wire-send method, load `.claude/skills/04-kaizen/kaizen-llm-deployment.md` first. Authoritative spec: `specs/kaizen-llm-deployments.md`.
 
 ## Full Documentation
 

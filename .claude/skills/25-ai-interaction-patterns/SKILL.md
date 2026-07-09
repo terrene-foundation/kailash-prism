@@ -1,6 +1,6 @@
 ---
 name: ai-interaction-patterns
-description: "AI-specific interaction design patterns covering wayfinding, prompt UX, human-in-the-loop controls, trust & transparency, AI identity, and context management. Based on Shape of AI (shapeof.ai). Use when asking about 'AI UX', 'AI interaction', 'prompt UX', 'AI trust', 'AI disclosure', 'AI avatar', 'AI personality', 'AI memory UX', 'action plan UX', 'stream of thought', 'AI citations', 'AI controls', 'AI wayfinding', 'AI suggestions', 'gallery pattern', 'follow-up pattern', 'draft mode', 'AI variations', 'AI consent', 'AI caveat', 'human-in-the-loop', 'AI transparency', 'AI state', 'prompt design', 'AI onboarding', or 'generative UI'."
+description: "AI UX patterns — prompt UX, wayfinding, HITL, trust, disclosure, memory, generative UI."
 ---
 
 # AI Interaction Patterns
@@ -9,14 +9,15 @@ AI-specific UX patterns for designing interfaces where users interact with AI mo
 
 **Source**: Based on [Shape of AI](https://www.shapeof.ai) pattern library (CC-BY-NC-SA) by Emily Campbell.
 
+## When to Use
+
+Use these patterns when asking about AI UX, AI interaction, prompt UX, AI trust, AI disclosure, AI avatar, AI personality, AI memory UX, action plan UX, stream of thought, AI citations, AI controls, AI wayfinding, AI suggestions, gallery pattern, follow-up pattern, draft mode, AI variations, AI consent, AI caveat, human-in-the-loop, AI transparency, AI state, prompt design, AI onboarding, or generative UI.
+
 ## How This Differs from Other UI/UX Skills
 
 | Skill                                 | Focus                                                                             |
 | ------------------------------------- | --------------------------------------------------------------------------------- |
 | **23-uiux-design-principles**         | Layout, hierarchy, responsive design (framework-agnostic)                         |
-| **21-enterprise-ai-ux**               | Enterprise context: challenge taxonomy, professional palettes, RBAC               |
-| **22-conversation-ux**                | Thread management, branching data model, context switching                        |
-| **20-interactive-widgets**            | Widget protocols, rendering pipeline, state management                            |
 | **25-ai-interaction-patterns** (this) | AI-SPECIFIC interaction logic: how users prompt, control, trust, and relate to AI |
 
 ## Reference Documentation
@@ -103,10 +104,7 @@ Avatar, Personality, Name, Color, Iconography
 
 ## Related Skills
 
-- **[21-enterprise-ai-ux](../21-enterprise-ai-ux/SKILL.md)** - Enterprise-specific AI design
-- **[22-conversation-ux](../22-conversation-ux/SKILL.md)** - Thread management and conversation data models
 - **[23-uiux-design-principles](../23-uiux-design-principles/SKILL.md)** - General design principles
-- **[20-interactive-widgets](../20-interactive-widgets/SKILL.md)** - Widget rendering and state management
 
 ## Support
 

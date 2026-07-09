@@ -18,6 +18,7 @@ const {
   logObservation: logLearningObservation,
   countObservations,
 } = require("./lib/learning-utils");
+const { classifyCommitForJournal } = require("./lib/journal-classifier");
 
 // Timeout fallback — prevents hanging the Claude Code session
 const TIMEOUT_MS = 15000;
@@ -32,12 +33,16 @@ process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
-    saveSession(data);
-    // SessionEnd hooks don't support hookSpecificOutput in schema
+    const summary = saveSession(data);
+    // SessionEnd schema: no hookSpecificOutput. Surface a stderr summary so
+    // the user sees what was checkpointed (was DARK pre-fix).
+    if (summary) {
+      process.stderr.write(`[session-end] ${summary}\n`);
+    }
     console.log(JSON.stringify({ continue: true }));
     process.exit(0);
   } catch (error) {
-    console.error(`[HOOK ERROR] ${error.message}`);
+    process.stderr.write(`[session-end] HOOK ERROR: ${error.message}\n`);
     console.log(JSON.stringify({ continue: true }));
     process.exit(1);
   }
@@ -113,9 +118,15 @@ function saveSession(data) {
     // Clean up old sessions (keep last 20)
     cleanupOldSessions(sessionDir, 20);
 
-    return { saved: true, path: sessionFile };
+    // User-visible summary (was DARK before; mitigates red-team session-end-DARK)
+    const stats = sessionData.stats || {};
+    const fileCount = Object.values(stats).reduce(
+      (a, b) => a + (typeof b === "number" ? b : 0),
+      0,
+    );
+    return `checkpoint saved (session=${session_id.slice(0, 8)}, ~${fileCount} touched, learning digest built)`;
   } catch (error) {
-    return { saved: false, error: error.message };
+    return `checkpoint FAILED: ${error.message}`;
   }
 }
 
@@ -293,15 +304,23 @@ function logDecisionReferences(cwd, sessionId, sessionDir) {
       // Only log entries created/modified during this session
       if (stat.mtimeMs < sessionStartMs) continue;
 
-      // Parse type from filename: NNNN-TYPE-topic.md
-      const match = entry.match(/^\d+-(\w+)-(.+)\.md$/);
+      // Parse TYPE from filename. Handles BOTH the legacy single-operator
+      // shape (NNNN-TYPE-topic.md) AND the multi-operator shape
+      // (NNNN-<display_id>-TYPE-topic.md per knowledge-convergence.md MUST-2 /
+      // rules/journal.md). The optional lowercase display_id segment is skipped
+      // so TYPE (uppercase, may contain a hyphen e.g. TRADE-OFF) is captured,
+      // not the display_id. Pre-multi-op regex `^\d+-(\w+)-` mis-captured the
+      // display_id as the type for every NNNN-<display_id>-TYPE entry.
+      const match = entry.match(
+        /^\d+-(?:[a-z0-9_-]+-)?(DECISION|DISCOVERY|TRADE-OFF|RISK|CONNECTION|GAP|AMENDMENT)-(.+)\.md$/,
+      );
       if (!match) continue;
 
       logLearningObservation(
         cwd,
         "decision_reference",
         {
-          type: match[1], // DECISION, DISCOVERY, TRADE-OFF, etc.
+          type: match[1], // DECISION, DISCOVERY, TRADE-OFF, RISK, CONNECTION, GAP, AMENDMENT
           topic: match[2].replace(/-/g, " "),
           file: entry,
         },
@@ -385,8 +404,15 @@ function generateJournalCandidates(cwd, sessionId, sessionDir) {
     const body = parts[2];
     if (!hash || !subject) continue;
 
-    const type = classifyCommitForJournal(subject, body || "");
-    if (!type) continue;
+    const verdict = classifyCommitForJournal(subject, body || "");
+    if (!verdict.type) {
+      // Per issue #114 acceptance criteria: log skipped commits to a
+      // per-workspace .journal-skipped.log so a future audit can verify
+      // nothing valuable was filtered. Single-line, grep-able shape.
+      appendJournalSkipLog(workspace.path, hash, verdict.skipReason, subject);
+      continue;
+    }
+    const type = verdict.type;
 
     const filename = `${Date.now()}-${count}-${type}.md`;
     const filepath = path.join(pendingDir, filename);
@@ -426,32 +452,24 @@ ${bodySection}
 }
 
 /**
- * Classify a commit by literal pattern matching (no semantic analysis).
- * Returns DECISION | DISCOVERY | RISK | null (skip).
+ * Append one line to the workspace's .journal-skipped.log.
+ *
+ * Format (per issue #114 acceptance criteria):
+ *   <journal-skip>commit=SHA12 reason=SLUG subject="SUBJECT"</journal-skip>\n
+ *
+ * Best-effort write — never throws. The log is gitignored
+ * (workspaces/* is gitignored at the repo root).
  */
-function classifyCommitForJournal(subject, body) {
-  const text = (subject + " " + (body || "")).toLowerCase();
-  // RISK: security/stability concerns mentioned in message
-  if (/\b(risk|concern|vulnerability|cve|security|exploit)\b/.test(text))
-    return "RISK";
-  // DISCOVERY: fixes for subtle bugs often reveal hidden behavior
-  if (
-    /^fix.*(race|leak|deadlock|corrupt|lost|regression)/.test(
-      subject.toLowerCase(),
-    )
-  )
-    return "DISCOVERY";
-  // DECISION: new features imply scope/architecture choices
-  if (/^feat(\(|:)/i.test(subject)) return "DECISION";
-  // DECISION: explicit decision language
-  if (/\b(decided|chose|trade-?off|alternative|rationale)\b/.test(text))
-    return "DECISION";
-  // DISCOVERY: explicit discovery language
-  if (/\b(discovered|found that|turns out|learned)\b/.test(text))
-    return "DISCOVERY";
-  // DECISION: commits touching architecture/decisions docs
-  if (/docs\/(adr|architecture|decisions)/.test(text)) return "DECISION";
-  return null; // routine commit — skip
+function appendJournalSkipLog(workspacePath, hash, skipReason, subject) {
+  try {
+    const logPath = path.join(workspacePath, ".journal-skipped.log");
+    const ts = new Date().toISOString();
+    const safeSubject = String(subject || "")
+      .replace(/[\r\n]/g, " ")
+      .slice(0, 200);
+    const line = `${ts} <journal-skip>commit=${hash.slice(0, 12)} reason=${skipReason} subject="${safeSubject}"</journal-skip>\n`;
+    fs.appendFileSync(logPath, line);
+  } catch {}
 }
 
 function cleanupOldSessions(sessionDir, keepCount) {

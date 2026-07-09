@@ -1,0 +1,51 @@
+# Session Notes — 2026-05-09
+
+## Where we are
+
+`/redteam to convergence` for prism-0.6.0 is COMPLETE. PR #43 admin-merged
+into main (`c835498`) — closed 7 MED + 4 LOW from the secondary-artefact
+layer; code shipped clean. Working tree carries forward only the prior
+`/codify` cycle (uncommitted) — user pre-approved option B in journal/0009
+but per-turn BUILD-repo Prudence still gates the commit.
+
+## Read first
+
+1. `workspaces/prism-0.6.0/04-validate/16-round-4-aggregate.md` — final
+   convergence verdict + recommended next-PR commit shape
+2. `workspaces/prism-0.6.0/journal/0010-GAP-redteam-spec-accuracy-drift-secondary-artefact-layer.md`
+   — institutional learning from this redteam pass
+3. `workspaces/prism-0.6.0/journal/0009-DECISION-codify-session-end-stub-duplicate-suppression.md`
+   — pending codify cycle disposition + user pre-approval
+4. `.claude/.proposals/latest.yaml` lines 1079–1184 — `session-end-pending-stub-duplicate-suppression`
+   rule_candidate awaiting next loom Gate-1 review
+5. `workspaces/prism-0.6.0/04-validate/.spec-coverage-v2.md` — 30/30
+   assertion table (use as Round-1 starting point if any future redteam runs)
+
+## In-flight state
+
+- Working tree dirty with codify-cycle residue: `.claude/.proposals/latest.yaml`,
+  `.claude/learning/learning-codified.json`, `journal/0009-DECISION-*.md`,
+  plus the now-stale `.session-notes` (this rewrite supersedes it). User has
+  pre-approved Option B but did NOT yet authorise the commit this session.
+- `chore/redteam-prism-0.6.0` branch deleted on remote post-merge (don't
+  recreate — the work is on main as `5ef398f`).
+
+## Traps
+
+- **BUILD-repo Prudence still applies.** Never commit / push / branch-delete
+  on user's behalf without per-turn approval. The redteam authorisation
+  ("approved" earlier) does NOT extend to the codify cycle.
+- **Loom-sync residue may recur** on next `/sync` from loom (50+ untracked
+  `.claude/**` files); commit promptly, never `git add -A`.
+- **Trust posture grace clocks**: any modification to
+  `.claude/hooks/session-end.js` within 7 days of the latest.yaml rule
+  candidate landing that ships `generateJournalCandidates` without the
+  duplicate-suppression filter triggers L5 → L4 emergency downgrade.
+- **Re-pickup re-validation gate** (per `value-prioritization.md` MUST-3):
+  before resuming the codify cycle, surface journal/0009's value-anchor
+  and ask "still your value?" Don't auto-resume on faith.
+
+## Open questions for the human
+
+- Land the codify cycle as `chore/codify-session-end-stub-suppression`
+  (~4 files, ~200 LOC, no production code) — yes / no / different scope?

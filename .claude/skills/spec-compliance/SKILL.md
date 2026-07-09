@@ -1,5 +1,6 @@
 ---
-description: "Spec compliance verification protocol — verify code matches plan via AST/grep, not file existence. Use for /redteam Step 1, /codify validation, plan auditing."
+name: spec-compliance
+description: "Spec compliance — verify code matches plan via AST/grep, not file existence. /redteam Step 1."
 ---
 
 # Spec Compliance Audit
@@ -68,7 +69,7 @@ for node in ast.walk(tree):
 grep -A 5 "^class StreamingAgent" src/kaizen/streaming/agent.py | grep "def __init__"
 ```
 
-> **Cross-SDK note**: This skill is Python-only because it syncs to USE templates that serve Python and Ruby developers. The kailash-rs BUILD repo (the only place where non-Python source is edited) maintains its OWN equivalent verification protocol locally at `.claude/skills/spec-compliance/rust-parity.md`, which loom never overwrites. Do NOT add non-Python examples to this global skill.
+> **Note**: This skill's examples are Python-only because Python is the majority language across USE templates. Compiled-language SDKs maintain their own equivalent verification protocol locally; do NOT add non-Python examples to this skill.
 
 #### 2. Field Presence Verification
 
@@ -135,7 +136,7 @@ grep -rln "test.*prompt.*injection\|test.*tool.*description.*injection" tests/
 For every "consumer X migrates to import from Y" task, grep the consumer file for the OLD import path. Hits = FAIL (migration didn't happen).
 
 ```bash
-grep -rn "from kailash.mcp_server.client\|import kailash.mcp_server.client" packages/kaizen-agents/src/
+grep -rn "from kailash_mcp.client\|import kailash_mcp.client" packages/kaizen-agents/src/
 # Any hits → FAIL: migration incomplete
 ```
 

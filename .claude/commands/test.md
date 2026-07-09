@@ -1,3 +1,8 @@
+---
+name: test
+description: "Testing strategies quick reference: 3-tier, Tier 2/3 real infra (NO mocking), regression, coverage."
+---
+
 # /test - Testing Strategies Quick Reference
 
 ## Purpose
@@ -17,10 +22,10 @@ Adapt examples to the project's testing framework. The 3-tier strategy and Real 
 
 ## Quick Reference
 
-| Command       | Action                                      |
-| ------------- | ------------------------------------------- |
-| `/test`       | Load testing patterns and tier strategy     |
-| `/test tier1` | Show unit test patterns (mocking allowed)   |
+| Command       | Action                                                           |
+| ------------- | ---------------------------------------------------------------- |
+| `/test`       | Load testing patterns and tier strategy                          |
+| `/test tier1` | Show unit test patterns (mocking allowed)                        |
 | `/test tier2` | Show integration test patterns (Real infrastructure recommended) |
 | `/test tier3` | Show E2E test patterns (Real infrastructure recommended)         |
 
