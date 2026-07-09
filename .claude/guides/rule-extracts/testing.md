@@ -72,14 +72,14 @@ ALL 11,917 kaizen tests blocked from collection until fixed. Fixed commit `1313a
 
 See `workspaces/kailash-ml-gpu-stack/journal/0008-GAP-full-specs-redteam-2026-04-20-findings.md`.
 
-## Env-Var Race (kailash-rs PR #435, 2026-04-20)
+## Env-Var Race (2026-04-20)
 
-Cross-language origin of the env-var isolation rule. `DATAFLOW_MAX_CONNECTIONS` env-var race between `test_reads_max_connections_from_env` and `test_defaults_to_99_when_env_unset` produced a flaky CI failure (expected=7, actual=99). Root cause: both tests mutated the env var without a serialization lock; xdist worker re-ordered the mutations; sibling test observed the wrong value.
+Origin of the env-var isolation rule. `DATAFLOW_MAX_CONNECTIONS` env-var race between `test_reads_max_connections_from_env` and `test_defaults_to_99_when_env_unset` produced a flaky CI failure (expected=7, actual=99). Root cause: both tests mutated the env var without a serialization lock; xdist worker re-ordered the mutations; sibling test observed the wrong value.
 
-Cross-language principle codified to loom global 2026-04-20:
+Codified 2026-04-20:
 
-- Python variant: `monkeypatch` + `threading.Lock()`
-- Rust variant: `tokio::sync::Mutex` (see rs variant testing.md for async-guard semantics across `.await`)
+- Python: `monkeypatch` + `threading.Lock()`
+- Compiled-language equivalent: an async-guard-aware mutex (see the language variant for `.await`-safe semantics)
 
 ## End-to-End Pipeline Regression — kailash-ml W33b (2026-04-23)
 
@@ -98,7 +98,7 @@ W33b fix:
 
 See `rules/zero-tolerance.md` §2 "Fake integration via missing handoff field" for the stub-pattern framing.
 
-## Delegating Primitives (BP-046 kailash-rs, 2026-04-14)
+## Delegating Primitives (2026-04-14)
 
 `ServiceClient` module exposed paired typed/raw variants (`get`/`get_raw`, `post`/`post_raw`, etc.) delegating to a shared `execute()` core. Tests only exercised the typed variants; `put_raw` and `delete_raw` had zero direct call sites in the test suite — they were reached transitively through delegation. A refactor that touched `put_raw`'s error mapping would have shipped a silent regression.
 
@@ -131,4 +131,19 @@ See `skills/test-skip-discipline/SKILL.md` for full triage protocol.
 
 ## Full Origin Line
 
-Origin: PR #466 (2026-04-14 warnings sweep) + gh #512 / PR #518 (2026-04-19 test-skip triage) + BP-046 (2026-04-14 paired-variant coverage, kailash-rs) + kailash-rs PR #435 (2026-04-20 env-var race) + Session 2026-04-20 PR #580 (Protocol adapter exception) + kailash-ml-audit W33b (2026-04-23 E2E pipeline regression).
+Origin: 2026-04-14 warnings sweep + 2026-04-19 test-skip triage + 2026-04-14 paired-variant coverage + 2026-04-20 env-var race + 2026-04-20 Protocol adapter exception + 2026-04-23 E2E pipeline regression.
+
+
+## xfail-Strict For Deferred-Implementation Conformance Vectors — Evidence
+
+When a conformance vector pins a contract the implementation does NOT yet enforce, the test MUST carry `@pytest.mark.xfail(strict=True, reason="...")` — NOT skip, NOT delete, NOT comment-out. Strict-xfail surfaces XPASS on closure: the moment the implementation catches up, the test transitions from xfail to passing AND pytest reports it as a "strict xpass failure", forcing the author to remove the marker. Skip silently stays skipped after closure; deletion loses the contract pin entirely.
+
+Generalisation: the pattern for any "spec ahead of impl" deferral where the test SHOULD fail today but MUST be the first thing that surfaces when impl catches up. Compiled-language analogues: Rust `#[ignore = "..."]` + `cargo test -- --ignored` with a CI job asserting ignored tests STILL fail; Go `t.Skip` + an explicit "want fail, got pass" marker.
+
+**BLOCKED rationalizations:** "Skip is cleaner than xfail" / "We'll un-skip when the impl lands" / "Delete it and re-add later" / "xfail-strict is pytest ceremony" / "The contract is documented in the spec, the test pin is redundant".
+
+Evidence: kailash-py PR #1142 + #1144 — S7 conformance vectors at `tests/fixtures/delegate-conformance/canonical.json`. One vector (single-shot phase monotonicity) initially xfailed-strict because the runtime did not enforce single-shot consumption; the marker reverted to passing automatically when a `self._consumed` guard + try/finally landed — the XPASS forced the author to remove the marker the same shard. Skip would have left the vector silently skipped after the fix.
+
+Relationship: pairs with `skills/test-skip-discipline/SKILL.md` (acceptable skip vs masked failure) — that governs WHEN tests skip; this governs the structural defense for the subclass of "skip" that is actually "xfail-strict deferral". Extends `probe-driven-verification.md` MUST-3 § skip-vs-lexical-fallback.
+
+Trust Posture Wiring: Severity `advisory` at gate-review (reviewer mechanical sweep on conformance-vector test files) / `halt-and-report` at `/codify` when a vector is added with `@pytest.mark.skip` instead of xfail-strict for a deferred-impl claim. Grace 7 days. Detection: `grep -rn '@pytest.mark.skip' tests/**/conformance/` MUST return zero hits where the skip reason cites a deferred implementation; AST walk asserts conformance-vector xfail markers are `strict=True`. Origin: PRs #1142/#1144 (2026-05-22).

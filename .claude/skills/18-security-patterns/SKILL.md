@@ -1,6 +1,6 @@
 ---
 name: security-patterns
-description: "Security patterns and best practices for Kailash SDK including input validation, secret management, injection prevention, authentication, authorization, and OWASP compliance. Use when asking about 'security', 'secrets', 'authentication', 'authorization', 'injection prevention', 'input validation', 'OWASP', 'credentials', 'API keys', 'secure coding', or 'security review'."
+description: "Kailash security — input validation, secrets, injection prevention, authn/z, OWASP."
 ---
 
 # Security Patterns - Kailash SDK
@@ -60,25 +60,6 @@ workflow.add_node("HTTPRequestNode", "api", {
 })
 ```
 
-## Reference Documentation
-
-### Core Security
-
-- **[security-secrets](security-secrets.md)** - Secret management patterns
-- **[security-input-validation](security-input-validation.md)** - Input validation
-- **[security-injection-prevention](security-injection-prevention.md)** - SQL/code injection prevention
-
-### Authentication & Authorization
-
-- **[security-auth-patterns](security-auth-patterns.md)** - Auth best practices
-- **[security-api-keys](security-api-keys.md)** - API key management
-- **[security-tokens](security-tokens.md)** - Token handling
-
-### OWASP Compliance
-
-- **[security-owasp-top10](security-owasp-top10.md)** - OWASP Top 10 prevention
-- **[security-audit-checklist](security-audit-checklist.md)** - Security audit checklist
-
 ## Security Checklist
 
 ### Before Every Commit
@@ -120,7 +101,7 @@ Audit-chain anchors (hash-linked records proving the ordering of audited events)
 Every write path that mints an anchor AND every verify path (range-verify, anchor-chain-verify) MUST route through the shared canonical-form helper. In-module re-implementation of the canonical byte layout is BLOCKED.
 
 ```python
-# Python (kailash-py) — DO — route through the shared canonical-form helper
+# Python — DO — route through the shared canonical-form helper
 from kailash.audit.canonical import canonical_anchor_input, canonical_json_dumps
 
 payload_bytes = canonical_anchor_input(
@@ -133,7 +114,7 @@ h = sha256_hex(payload_bytes)
 ```
 
 ```rust
-// Rust (kailash-rs) — DO — route through the shared canonical-form helper
+// Compiled-language equivalent — DO — route through the shared canonical-form helper
 use kailash_audit::canonical::{canonical_anchor_input, canonical_json_serialize};
 
 let payload_bytes = canonical_anchor_input(
@@ -162,14 +143,14 @@ let h = sha256_hex(&payload_bytes);
 Every hash comparison in a verify path MUST use a constant-time comparison primitive. String `==` / `!=` on an attacker-influenced hash input is a timing oracle that leaks prefix-match length, allowing an attacker to forge an anchor hash one byte at a time across many verify attempts.
 
 ```python
-# Python (kailash-py) — DO
+# Python — DO
 import hmac
 if not hmac.compare_digest(expected_hash, computed_hash):
     raise ChainVerifyError("hash mismatch")
 ```
 
 ```rust
-// Rust (kailash-rs) — DO — route through the constant-time comparison primitive
+// Compiled-language equivalent — DO — route through the constant-time comparison primitive
 use kailash_core::crypto::constant_time_eq;
 if !constant_time_eq(expected_hash, &computed_hash) {
     return Err(ChainVerifyError::HashMismatch);
@@ -191,6 +172,32 @@ if expected_hash == computed_hash { ... }
 Every range-verify and anchor-chain-verify surface MUST have at least one production call site in the framework's hot path — not only in tests. An anchor chain whose verify path is never called in production is the orphan failure mode (see `rules/orphan-detection.md`): the chain mints fine, operators believe tamper-detection is running, nothing ever runs the check.
 
 **Cross-SDK test vector:** both SDKs' canonical-form helpers MUST produce byte-identical output for the fixture at `test-vectors/audit-chain-canonical.json`. A regression test in each SDK loads the fixture, runs its helper, and asserts equality to the recorded golden output. Drift in either direction is a HIGH finding.
+
+## Default-Deny When Untrusted Input Selects Which Primitive To Instantiate
+
+When untrusted input (e.g. an LLM-emitted plan from a natural-language brief) selects WHICH node/primitive type to realize, the node-type surface IS a code-execution boundary. The sound model is **default-deny**, not denylist-subtraction:
+
+1. **Positive allowlist ∩ live registry.** Realize only types in a vetted `_SAFE_NODE_TYPES` frozenset, intersected with the live registry — NOT "all registered nodes minus a denylist". Denylist-subtraction is unsound by construction: every new SDK node added between releases is implicitly trusted, and code-exec helpers (e.g. a node that execs via a `CodeExecutor` helper) are invisible to a class-scope denylist scan.
+2. **Enforce at the choke point.** Apply the allowlist where the node is actually instantiated (`_realize()` at add-node time), not only at a higher `validate_plan()` gate — a typed plan whose shape differs from what the higher gate inspects bypasses it; the choke point cannot be bypassed.
+3. **Keep a hardcoded denylist FLOOR.** Subtract a small set of explicitly-dangerous types BEFORE the allowlist applies, so a future allowlist expansion cannot re-admit code-exec / SSRF surfaces.
+4. **Ship an INVERSE-COMPLETENESS test.** Walk the MRO of every allowlisted type and AST-scan every source path for `exec` / `eval` / `compile` / `import_module` / `__import__` / unsafe deserialization (`pickle|marshal|dill|cloudpickle.loads`, `yaml.load`) / code-executor references — so a future code-executing node added under a familiar name fails the allowlist TEST, not production.
+5. **Reject NaN/inf/out-of-range at the confidence-gate construction boundary** (e.g. pydantic `ConfigDict(extra="forbid", allow_inf_nan=False)` + `math.isfinite` check), closing the confidence-bypass class.
+
+```python
+# DO — allowlist ∩ registry at the choke point, denylist floor first
+candidates = (registry.types() - _DANGEROUS_NODE_TYPES) & _SAFE_NODE_TYPES
+if plan_node.node_type not in candidates:
+    raise UnsafeNodeTypeError(plan_node.node_type)   # at _realize(), add-node time
+
+# DO NOT — registry minus denylist (every new node implicitly trusted)
+if plan_node.node_type in _DANGEROUS_NODE_TYPES:
+    raise UnsafeNodeTypeError(plan_node.node_type)
+workflow.add_node(plan_node.node_type, ...)
+```
+
+**Reference implementation (Python SDK 2.27.0):** `src/kailash/workflow/from_brief.py` (`_SAFE_NODE_TYPES`, `_DANGEROUS_NODE_TYPES`, `_realize`), `kailash/_from_brief/{validator,confidence}.py`, `tests/unit/workflow/test_from_brief_safe_allowlist.py` (inverse-completeness test). Cross-SDK: the default-deny + choke-point + inverse-completeness triad is language-invariant; equivalent brief-to-primitive surfaces in other SDK implementations carry the same obligation.
+
+Origin: from_brief security model (issue #1125, shipped in 2.27.0; security fixes PR #1184, 2026-05-27). Redteam evidence: a typed-plan shape bypassed the higher validate gate, and a static "denylist closed" verdict was disproven by construction (a transformer node realized through the gate) — resolved by moving enforcement to the choke point and switching to the positive allowlist.
 
 ## Error Message Security
 
@@ -241,6 +248,7 @@ Use this skill when:
 - **[17-gold-standards](../17-gold-standards/SKILL.md)** - Mandatory best practices
 - **[16-validation-patterns](../16-validation-patterns/SKILL.md)** - Validation patterns
 - **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core workflow patterns
+- **[12-testing-strategies/oidc-offline-crypto-test-vectors](../12-testing-strategies/oidc-offline-crypto-test-vectors.md)** - Alg-confusion (RS256→HS256 / alg:none) fail-closed verification defense + deterministic offline asymmetric-crypto test vectors
 
 ## Support
 

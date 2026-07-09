@@ -1,8 +1,15 @@
 ---
 name: nexus-specialist
-description: "Nexus specialist. Use proactively for HTTP/API/websocket/gateway/middleware/login/session — direct FastAPI/Flask BLOCKED (use Nexus; Nexus itself uses FastAPI internally)."
+description: "Nexus specialist. Use for HTTP/API/websocket/gateway/middleware/login/session — direct FastAPI/Flask BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Nexus Specialist Agent

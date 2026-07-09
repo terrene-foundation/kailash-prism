@@ -27,6 +27,13 @@ All sensitive data MUST use environment variables.
 ✅ final apiKey = const String.fromEnvironment('API_KEY');
 ```
 
+```rust
+// Rust (tauri-rs)
+❌ let api_key = "sk-...";
+
+✅ let api_key = std::env::var("API_KEY")?;
+```
+
 ## Parameterized Queries
 
 All database queries MUST use parameterized queries or ORM.
@@ -43,9 +50,61 @@ All database queries MUST use parameterized queries or ORM.
 ✅ db.query("SELECT * FROM users WHERE id = $1", [userId])  // parameterized
 ```
 
+## Credential Decode Helpers
+
+Connection strings carry credentials in URL-encoded form. Decoding them at a call site with `decodeURIComponent(parsed.password)` is BLOCKED — every decode site MUST route through a shared helper module so the validation logic lives in exactly one place and drift between sites is impossible.
+
+### 1. Null-Byte Rejection At Every Credential Decode Site (MUST)
+
+Every URL parsing site that extracts `user`/`password` from a connection string MUST route through a single shared helper that rejects null bytes after percent-decoding. Hand-rolled `decodeURIComponent(parsed.password)` at a call site is BLOCKED.
+
+```typescript
+// DO — route through the shared helper
+import { decodeUserinfoOrRaise } from '@kailash/prism-web/utils/url-credentials';
+
+const url = new URL(connectionString);
+const { user, password } = decodeUserinfoOrRaise(url);  // throws on \x00 after decode
+
+// DO NOT — hand-rolled at the call site
+const url = new URL(connectionString);
+const user = decodeURIComponent(url.username ?? '');
+const password = decodeURIComponent(url.password ?? '');  // no null-byte check
+```
+
+**BLOCKED rationalizations:**
+
+- "The existing site already has the check"
+- "This is a new dialect, the rule doesn't apply yet"
+- "We'll consolidate later"
+- "The URL comes from a trusted config file, null bytes can't happen"
+
+**Why:** A crafted `mysql://user:%00bypass@host/db` decodes to `\x00bypass`; a MySQL client may truncate credentials at the first null byte and send an empty password, succeeding against any row with an empty `authentication_string`. Drift between sites with the check and sites without is unauditable without a single helper.
+
+### 2. Pre-Encoder Consolidation (MUST)
+
+Password pre-encoding helpers (encoding of `#$@?` etc.) MUST live in the same shared helper module as the decode path. Per-adapter copies are BLOCKED.
+
+```typescript
+// DO — single helper module owns both halves of the contract
+import {
+  preencodePasswordSpecialChars,
+  decodeUserinfoOrRaise,
+} from '@kailash/prism-web/utils/url-credentials';
+
+const encoded = preencodePasswordSpecialChars(rawUrl);
+const url = new URL(encoded);
+const { user, password } = decodeUserinfoOrRaise(url);
+
+// DO NOT — inline pre-encode in each adapter
+const pwd = rawPwd.replaceAll('@', '%40').replaceAll(':', '%3A').replaceAll('#', '%23');
+const url = `postgresql://${user}:${pwd}@${host}/${db}`;  // drifts from decode path silently
+```
+
+**Why:** Encode and decode are dual halves of one contract; splitting them across modules guarantees one half drifts. Round-trip tests are only meaningful when both ends share the helper.
+
 ## Input Validation
 
-All user input MUST be validated before use: type checking, length limits, format validation, whitelist when possible. Applies to API endpoints, CLI inputs, file uploads, form submissions.
+All user input MUST be validated before use: type checking, length limits, format validation, whitelist when possible. Applies to API endpoints, CLI inputs, file uploads, form submissions, Tauri IPC commands.
 
 **Why:** Unvalidated input is the entry point for injection attacks, buffer overflows, and type confusion across every attack surface.
 
@@ -65,7 +124,7 @@ All user-generated content MUST be encoded before display in HTML templates, JSO
 
 ## MUST NOT
 
-- **No eval() on user input**: `eval()`, `new Function(userInput)`, `child_process.exec(userInput)` (TS) / `Process.run(userInput)` (Dart) — BLOCKED
+- **No eval() on user input**: `eval()`, `new Function(userInput)`, `child_process.exec(userInput)` (TS) / `Process.run(userInput)` (Dart) / `Command::new(userInput)` (Rust) — BLOCKED
 
 **Why:** `eval()` on user input is arbitrary code execution — the attacker runs whatever they want on the server/client.
 

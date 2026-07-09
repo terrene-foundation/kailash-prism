@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kaizen AI agents. Use for BaseAgent, Signature, Delegate, multi-agent, RAG, trust/EATP, governance, L3 autonomy."
+description: "Kaizen AI agents — BaseAgent, Signature, Delegate, multi-agent, RAG, trust, governance."
 ---
 
 # Kailash Kaizen — AI Agent Framework
@@ -179,7 +179,7 @@ See [kaizen-key-concepts](kaizen-key-concepts.md) for the 9 pipeline patterns an
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | [kaizen-wrapper-composition](kaizen-wrapper-composition.md) | WrapperBase, canonical stacking, provider protocols, SPEC-02/05/10 convergence |
 | [kaizen-provider-config-v25](kaizen-provider-config-v25.md) | BaseAgentConfig fields, Azure env vars, anti-patterns (v2.5.0)                 |
-| [kaizen-multi-provider](kaizen-multi-provider.md)           | Provider registry, protocols, CostTracker                                      |
+| kaizen-multi-provider           | Provider registry, protocols, CostTracker                                      |
 | [kaizen-delegate](kaizen-delegate.md)                       | Delegate facade (SPEC-05)                                                      |
 | [kaizen-structured-outputs](kaizen-structured-outputs.md)   | Structured output guide with migration examples                                |
 
@@ -188,14 +188,6 @@ See [kaizen-key-concepts](kaizen-key-concepts.md) for the 9 pipeline patterns an
 | File                                                  | Purpose                                    |
 | ----------------------------------------------------- | ------------------------------------------ |
 | [kaizen-testing-patterns](kaizen-testing-patterns.md) | Testing AI agents with real infrastructure |
-
-## Reference Documentation (Package Source)
-
-For in-depth guides, see `packages/kailash-kaizen/docs/`:
-
-- **Core Guides**: [BaseAgent Architecture](../../../packages/kailash-kaizen/docs/guides/baseagent-architecture.md), [Multi-Agent Coordination](../../../packages/kailash-kaizen/docs/guides/multi-agent-coordination.md), [Signature Programming](../../../packages/kailash-kaizen/docs/guides/signature-programming.md), [Hooks System](../../../packages/kailash-kaizen/docs/guides/hooks-system-guide.md), [Integration Patterns](../../../packages/kailash-kaizen/docs/guides/integration-patterns.md), [Meta-Controller](../../../packages/kailash-kaizen/docs/guides/meta-controller-guide.md), [Planning System](../../../packages/kailash-kaizen/docs/guides/planning-system-guide.md)
-- **API Reference**: [API Reference](../../../packages/kailash-kaizen/docs/reference/api-reference.md), [Checkpoint](../../../packages/kailash-kaizen/docs/reference/checkpoint-api.md), [Coordination](../../../packages/kailash-kaizen/docs/reference/coordination-api.md), [Interrupts](../../../packages/kailash-kaizen/docs/reference/interrupts-api.md), [Memory](../../../packages/kailash-kaizen/docs/reference/memory-api.md), [Observability](../../../packages/kailash-kaizen/docs/reference/observability-api.md), [Planning Agents](../../../packages/kailash-kaizen/docs/reference/planning-agents-api.md), [Tools](../../../packages/kailash-kaizen/docs/reference/tools-api.md), [Configuration](../../../packages/kailash-kaizen/docs/reference/configuration.md), [Troubleshooting](../../../packages/kailash-kaizen/docs/reference/troubleshooting.md)
-- **v1.0 Developer Guides** (in `packages/kailash-kaizen/docs/guides/`): `00-native-tools-guide.md`, `01-runtime-abstraction-guide.md`, `02-local-kaizen-adapter-guide.md`, `03-memory-provider-guide.md`, `04-multi-llm-routing-guide.md`, `05-unified-agent-api-guide.md`, `06-specialist-system-guide.md`, `07-task-skill-tools-guide.md`, `08-claude-code-parity-tools-guide.md`, `09-performance-optimization-guide.md`
 
 ## Integration Patterns
 

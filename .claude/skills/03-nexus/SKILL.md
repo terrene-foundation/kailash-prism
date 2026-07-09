@@ -1,6 +1,6 @@
 ---
 name: nexus
-description: "Kailash Nexus: API+CLI+MCP platform. Use for workflow deploy, sessions, K8s probes, OpenAPI, CSRF, security headers."
+description: "Kailash Nexus — API+CLI+MCP platform; workflow deploy, sessions, K8s, OpenAPI, CSRF."
 ---
 
 # Kailash Nexus - Multi-Channel Platform Framework
@@ -263,11 +263,11 @@ docker-compose up --scale nexus=3
 
 ## Related Skills
 
-- **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
-- **[02-dataflow](../dataflow/SKILL.md)** - Auto CRUD API generation
-- **[04-kaizen](../kaizen/SKILL.md)** - AI agent deployment
+- **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core workflow patterns
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Auto CRUD API generation
+- **[04-kaizen](../04-kaizen/SKILL.md)** - AI agent deployment
 - **[05-kailash-mcp](../05-kailash-mcp/SKILL.md)** - MCP channel details
-- **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Best practices
+- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Best practices
 
 ## Support
 

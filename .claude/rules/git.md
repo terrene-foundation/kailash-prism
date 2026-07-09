@@ -32,7 +32,7 @@ All protected repos require PRs to main. Direct push is rejected by GitHub.
 | `terrene-foundation/kailash-py`              | `main` | Full (admin bypass) |
 | `terrene-foundation/kailash-coc-claude-py`   | `main` | Full (admin bypass) |
 | `terrene-foundation/kailash-coc-claude-rs`   | `main` | Full (admin bypass) |
-| `esperie/kailash-rs`                         | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-rs`                         | `main` | Full (admin bypass) |
 | `terrene-foundation/kailash-prism`           | `main` | Full (admin bypass) |
 | `terrene-foundation/kailash-coc-claude-prism`| `main` | Full (admin bypass) |
 

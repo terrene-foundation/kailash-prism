@@ -3,6 +3,13 @@ name: pattern-expert
 description: Core SDK pattern specialist for workflows, nodes, and cyclic patterns. Use for debugging issues.
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Core SDK Pattern Expert
@@ -16,6 +23,8 @@ Pattern specialist for Kailash SDK core patterns — workflows, nodes, parameter
 3. Advise on cyclic workflow design
 4. Resolve parameter passing problems
 5. Ensure correct node and connection usage
+
+**Framework-first binding**: Before rolling your own pattern, check `rules/framework-first.md` for the work-domain → framework mapping (DataFlow / Nexus / Kaizen / MCP / ML / Align / PACT). Core SDK is the foundation layer; escalate to the matching specialist when the domain fits a higher abstraction.
 
 ## Critical Rules
 

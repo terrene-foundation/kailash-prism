@@ -1,6 +1,6 @@
 ---
 name: error-troubleshooting
-description: "Kailash errors: Nexus hangs, connection errors, runtime errors, cycles, missing .build(), validation, template syntax."
+description: "Kailash errors — Nexus hangs, connection, runtime, cycles, missing .build(), validation."
 ---
 
 # Kailash Error Troubleshooting
@@ -43,7 +43,7 @@ Use when encountering errors, debugging issues, or asking about error, troublesh
 
 ### Kaizen Provider Errors
 
-- **[error-kaizen-provider-config](error-kaizen-provider-config.md)** - Provider configuration issues
+- **error-kaizen-provider-config** - Provider configuration issues
   - Azure 400 "messages must contain 'json'" | Use `json_prompt_suffix()` or set `response_format`
   - "Missing required parameter: response_format.type" | Don't put `api_version` in `response_format`
   - DeprecationWarning about `provider_config` | Migrate to `response_format` field
@@ -153,7 +153,7 @@ file a todo against the pre-commit configuration. See
 `rules/git.md` "Pre-Commit Hook Workarounds" for the full rule.
 Silent `--no-verify` retries are BLOCKED.
 
-**Frequency:** Recurring across sessions in kailash-py; the stash
+**Frequency:** Recurring across sessions; the stash
 interaction is non-deterministic and depends on which files have
 unstaged changes at commit time.
 
