@@ -65,6 +65,30 @@
  *                                  never LOADS the rule, so the Rule-1 gate
  *                                  silently does not FIRE on it → FAIL (the #440
  *                                  `.claude/codex-mcp-guard/**` gap class).
+ *   19. gitignore-learning-parity (#707) sync-manifest.yaml::gitignore_additions
+ *                                  `.claude/learning/**` subset MUST be a SUPERSET
+ *                                  of loom's own .gitignore `.claude/learning/**`
+ *                                  set MINUS LOOM_ONLY_LEARNING_EXCLUSIONS. A miss
+ *                                  lets a consumer git-commit per-clone trust/PII
+ *                                  state (journal/0368 disclosure class) → FAIL.
+ *   22. operator-ref-credential-separation (loom#411 B2) the structural lint
+ *                                  for the #411 signing-vs-model-key separation
+ *                                  ("the shared model key signs nothing"). The
+ *                                  runtime guard already lives in
+ *                                  provenance-event.js; this catches a FUTURE
+ *                                  emitter regression at /sync — before a
+ *                                  permanent signed governance record carries a
+ *                                  model key. Four structural predicates:
+ *                                  (P1) OPERATOR_REF_ALLOWED == {verified_id,
+ *                                  person_id, display_id} exactly; (P2) exactly
+ *                                  ONE `const OPERATOR_REF_ALLOWED =` definition
+ *                                  (in provenance-event.js); (P3) the validator
+ *                                  REJECTS operator_ref.model_key AND
+ *                                  payload.api_key + nested signing_key +
+ *                                  suffix-family; (P4) no capture-surface .js
+ *                                  (hooks/bin/codex-mcp-guard) handles
+ *                                  operator_ref in code without referencing the
+ *                                  schema (file-level co-occurrence). FAIL → blocks.
  *
  *  Each check is STRUCTURAL (file existence, frontmatter parse, line count, set
  *  membership, glob match, tree presence) per probe-driven-verification.md
@@ -116,6 +140,15 @@ const { canonicalSerialize } = _require("../hooks/lib/coc-sign.js");
 // the check SKIPs when validate-emit is pointed at a different root.
 import { emitCoc } from "./emit-coc.mjs";
 import { REPO as EMIT_REPO } from "./emit-cli-artifacts.mjs";
+// #825 Wave-2 Shard-03 — the community-completeness gate reads the positive
+// reference-primitive floor and re-verifies each is IN the community projection.
+// F1030d (#1051): these two libs are loom_only (they do NOT ship — #825 edition
+// machinery), but validate-emit.mjs itself IS consumer-run (via /cc-audit). A
+// top-level static import of a loom-only lib would ERR_MODULE_NOT_FOUND the whole
+// tool at every consumer. The edition-completeness check is a LOOM-ONLY concern, so
+// its two libs are lazy-loaded inside checkEditionCommunityCompleteness (via the
+// existing `_require`) and the check SKIPs when they are absent — the F1030a
+// loom-doctor→loom-links lazy-degrade pattern. Static imports removed here.
 
 // --- Repo root resolution -----------------------------------------------
 
@@ -155,6 +188,32 @@ const READONLY_FORBIDDEN_TOOLS = new Set(["Edit", "Write"]);
 
 const COMMAND_LINE_CAP = 150; // cc-artifacts.md Rule 3 + command-authoring SKILL
 
+// cc-artifacts.md Rule 3 named-rationale procedural-command exception (added
+// 2026-07-04, journal/0429): a genuinely-procedural command MAY exceed the base
+// cap ONLY when a named length-rationale is recorded in the landing receipt.
+// This allowlist is the machine-readable half — each entry pins the RATIFIED
+// ceiling and points at the receipt that carries the rationale.
+//
+// FAIL-CLOSED: the ceiling is the EXACT ratified body-line count (not a margin),
+// so any future growth re-FAILS and forces a NEW rationale in a NEW receipt —
+// "each overage needs its OWN named rationale" (Rule 3). A command trimmed back
+// ≤ COMMAND_LINE_CAP never consults the allowlist (its entry goes dormant).
+//
+// Counting unit: this check ENFORCES on BODY lines (after the `---` frontmatter);
+// journal/0429 ratifies via `wc -l` (TOTAL lines). The enforced ceiling is the
+// body-line count; the `wc -l` figure is illustrative provenance and the two
+// differ by exactly the frontmatter line count (4 for both entries below):
+// sweep 166 wc -l = 162 body, wrapup 164 wc -l = 160 body. A later frontmatter
+// change shifts `wc -l` but NOT the enforced body-line ceiling.
+//
+// Keyed on the REPO-RELATIVE path (not basename) so a same-named command in any
+// subdirectory does NOT inherit the exemption — matches how the rest of this
+// file addresses artifacts by `rel`.
+const COMMAND_LINE_CAP_EXCEPTIONS = Object.freeze({
+  ".claude/commands/sweep.md": { maxBodyLines: 173, receipt: "journal/0468" }, // 177 wc -l (162→173: Sweep-10 deferred-quality revisit + 6-part management report, journal/0468)
+  ".claude/commands/wrapup.md": { maxBodyLines: 160, receipt: "journal/0429" }, // 164 wc -l
+});
+
 // Commands intentionally exempt from the `---` frontmatter requirement.
 // Empty by default; any entry MUST be documented in command-authoring/SKILL.md.
 const COMMAND_FRONTMATTER_EXEMPT = new Set([]);
@@ -164,6 +223,7 @@ const DETECTOR_RE = /^detect[A-Z]/;
 
 const CHECK_IDS = [
   "command-frontmatter",
+  "settings-hook-registration",
   "command-line-cap",
   "readonly-specialist-tools",
   "tool-canonicality",
@@ -171,6 +231,8 @@ const CHECK_IDS = [
   "paths-annotation-consistency",
   "audit-fixture-coverage",
   "loom-only-mutual-exclusion",
+  "edition-community-completeness",
+  "edition-no-runtime-license",
   "provenance-parity",
   "provenance-subagent-hooks",
   "hook-delivery",
@@ -180,6 +242,12 @@ const CHECK_IDS = [
   "variant-orphan",
   "allowlist-paths-coverage",
   "surface-role-membership",
+  "claude-md-surface-role-parity",
+  "gitignore-learning-parity",
+  "codex-hooks-schema",
+  "gemini-settings-schema",
+  "operator-ref-credential-separation",
+  "signing-model-key-separation",
 ];
 
 const STATUS = {
@@ -381,13 +449,30 @@ function checkCommandLineCap(root) {
     const bodyLines = body.replace(/\n+$/, "").split(/\r?\n/).length;
     if (bodyLines <= COMMAND_LINE_CAP) {
       results.push({ artifact: rel, status: STATUS.PASS, detail: `${bodyLines} body lines` });
-    } else {
+      continue;
+    }
+    // Over the base cap — consult the Rule-3 named-rationale allowlist.
+    // Keyed on `rel` (repo-relative path) so a same-named command in a
+    // subdirectory does not inherit the exemption.
+    const exempt = COMMAND_LINE_CAP_EXCEPTIONS[rel];
+    if (exempt && bodyLines <= exempt.maxBodyLines) {
       results.push({
         artifact: rel,
-        status: STATUS.FAIL,
-        detail: `${bodyLines} body lines > ${COMMAND_LINE_CAP} (cc-artifacts.md Rule 3)`,
+        status: STATUS.PASS,
+        detail: `${bodyLines} body lines > ${COMMAND_LINE_CAP}; ratified procedural overage ≤ ${exempt.maxBodyLines} per ${exempt.receipt} (cc-artifacts.md Rule 3 exception)`,
       });
+      continue;
     }
+    // No entry, OR grew past the ratified ceiling (fail-closed: needs a NEW
+    // named rationale in a NEW receipt per Rule 3 condition (c)).
+    const overCeiling = exempt
+      ? `${bodyLines} body lines > ratified ${exempt.maxBodyLines} per ${exempt.receipt} — new overage needs a new named rationale`
+      : `${bodyLines} body lines > ${COMMAND_LINE_CAP} (cc-artifacts.md Rule 3)`;
+    results.push({
+      artifact: rel,
+      status: STATUS.FAIL,
+      detail: overCeiling,
+    });
   }
   return { id, source_rule: "cc-artifacts.md Rule 3", results };
 }
@@ -1215,20 +1300,48 @@ function checkAuditFixtureCoverage(root) {
   return { id, source_rule: "cc-artifacts.md Rule 9 / hook-output-discipline.md MUST-4", results };
 }
 
-// Declared load-bearing carve-outs (ECO-IMPL W1 / D6). A positive allowlist
-// (cc-artifacts.md Rule 10) of CONCRETE (wildcard-free) loom_only files that are
-// permitted to sit UNDER a synced tier glob. Such a file is NOT a contradiction:
-// sync-tier-aware.mjs::classifyFile suppresses it at step 2b (loom_only PRECEDES
-// tier inclusion), so the one file is carved out of the synced tier while the
-// rest of the tier still syncs — the INTENDED never-sync fence for a
-// committed-but-ecosystem-private artifact (e.g. the D6 ecosystem registry,
-// deliberately placed under bin/** so loom_only is LOAD-BEARING + this validator-
-// checked). Adding an entry here is the EXPLICIT, auditable act of declaring such
-// a fence; any within-tier loom_only file NOT on this list still FAILS loud
-// (catching the inverse bug: a real synced artifact accidentally loom_only'd,
-// which would silently starve every consumer). Paths are `.claude/`-relative,
-// matching the loom_only stanza shape.
-const LOOM_ONLY_TIER_CARVEOUTS = new Set(["bin/ecosystem.json"]);
+// Declared load-bearing carve-outs. A positive allowlist (cc-artifacts.md Rule 10)
+// of CONCRETE (wildcard-free) loom_only files that are permitted to sit UNDER a
+// synced tier glob. Such a file is NOT a contradiction: sync-tier-aware.mjs::
+// classifyFile suppresses it at step 2b (loom_only PRECEDES tier inclusion), so the
+// one file is carved out of the synced tier while the rest of the tier still syncs.
+// Adding an entry here is the EXPLICIT, auditable act of declaring such a fence; any
+// within-tier loom_only file NOT on this list still FAILS loud (catching the inverse
+// bug: a real synced artifact accidentally loom_only'd). Paths are `.claude/`-relative.
+//
+// F1030d (#1051, 2026-07-15) — this Set collapsed from ~26 entries to 7. The broad
+// `bin/**` synced glob was the collision source for every `bin/`-prefixed carve-out
+// (the D6 ecosystem registry, the sync-from-canon engine, the #825 edition machinery,
+// the F1030a/F1030c loom-links + fleet clusters). F1030d removed `bin/**` from BOTH
+// force-ship paths (ALWAYS_INCLUDE → explicit consumer-runtime allowlist; the
+// kailash-tier `- bin/**` glob deleted), so NO bin/ loom_only file collides with a
+// synced tier anymore — each now passes check-8 as a plain "never-sync, in no synced
+// tier" PASS and needs no carve-out. The ONLY synced glob still broad is
+// `hooks/lib/**` (kept this shard), so the surviving carve-outs are the `hooks/lib/**`
+// cluster: the WEFT conformance adapters PLUS the O1-citation SHAPE gate (#1067
+// F1030d-B). journal/0500.
+const LOOM_ONLY_TIER_CARVEOUTS = new Set([
+  // loom#830/#834 — the WEFT conformance adapter (RFC-8785 JCS canonicalizer,
+  // envelope validator, standalone must-ignore chain verifier + emit/distributor/
+  // dataprotection/anchor). loom is the WEFT REFERENCE implementation (mint F7); the
+  // modules are consumed only by the loom-only WEFT conformance suite (test-harness),
+  // so shipping them via the synced `hooks/lib/**` tier would orphan them on every
+  // consumer. loom_only is LOAD-BEARING here. After F1030d dissolved the `bin/**`-collision
+  // class, the surviving `hooks/lib/**` carve-outs are these WEFT adapters PLUS the
+  // O1-citation SHAPE gate added below (#1067 F1030d-B) — see the note above.
+  "hooks/lib/weft-jcs.js",
+  "hooks/lib/weft-envelope.js",
+  "hooks/lib/weft-chain.js",
+  "hooks/lib/weft-emit.js",
+  "hooks/lib/weft-distributor.js",
+  "hooks/lib/weft-dataprotection.js",
+  "hooks/lib/weft-anchor.js",
+  // #1067 F1030d-B — the O1-citation SHAPE gate (run only by the loom-only /govern
+  // command + the loom-only sync-from-canon-objects.mjs pre-screen; no consumer hook
+  // imports it). Under the synced `hooks/lib/**` glob → LOAD-BEARING carve-out, the
+  // same class as the weft-* siblings above.
+  "hooks/lib/o1-citation-check.js",
+]);
 
 // Check 8 — loom-only mutual exclusion (F104).
 //   FAIL  a loom_only glob that ALSO appears as / swallows a tier entry (any
@@ -1304,6 +1417,208 @@ function checkLoomOnlyMutualExclusion(root) {
       detail: isCarveout
         ? `load-bearing carve-out (declared in LOOM_ONLY_TIER_CARVEOUTS): concrete loom_only file under synced tier(s) ${collisions.map((c) => `${c.tier}:${c.glob}`).join(", ")} — emit suppresses at classifyFile loom_only step (2b) before tier inclusion; the rest of the tier still syncs`
         : "never-sync, in no synced tier, matches on-disk file",
+    });
+  }
+  return { id, source_rule, results };
+}
+
+// =======================================================================
+//  CHECK — community-edition completeness (#825 Wave-2 Shard-03)
+// =======================================================================
+// The POSITIVE completeness floor (spec `edition-separation.md` §fences.2). The
+// Shard-02 `inCommunityEdition` predicate is a fail-SAFE allowlist — an UNLISTED
+// path defaults to enterprise-only. That direction blocks LEAKING enterprise-private
+// files into community but says NOTHING about a community primitive going MISSING
+// (the opposite failure). This check is the fail-CLOSED complement: every enumerated
+// REFERENCE_PRIMITIVE MUST resolve inCommunityEdition===true AND exist on disk, else
+// emit BLOCKS naming the missing/excluded file — the anti-bait contract (community is
+// the COMPLETE reference impl, never a stale subset; #825 HIGH-3/HIGH-4).
+//
+//   FAIL  an enumerated primitive is ABSENT from disk (stripped/deleted) OR is NOT
+//         inCommunityEdition (fenced OUT by loom_only / EXCLUDE_WITHIN drift) — either
+//         way community would ship incomplete. Blocks /sync, named (invariant 3).
+//   PASS  the primitive exists on disk AND is in the community projection.
+function checkEditionCommunityCompleteness(root, opts = {}) {
+  const id = "edition-community-completeness";
+  const source_rule =
+    "edition-separation.md §fences.2 (#825 Wave-2 Shard-03) / community-reference-primitives.mjs";
+  // F1030d (#1051) — lazy-load the loom-only edition libs (they do NOT ship, but this
+  // tool does). Absence = the consumer case ⇒ SKIP (a consumer has no community-edition
+  // emission to validate). A NON-absence load error (present-but-broken) is re-thrown so
+  // a real loom-side breakage surfaces — never silently skipped (evidence-first MUST-3).
+  // A test may inject `opts.inCommunityEdition` / `opts.primitives` to bypass the load.
+  // Node floor: `_require` of an `.mjs` needs require(esm) (Node ≥22.12; loom runs v25).
+  // The CONSUMER path is version-independent (absent lib → MODULE_NOT_FOUND before any
+  // ESM parse → SKIP); only the loom-side present-lib path needs the floor, and it
+  // fail-LOUDs (ERR_REQUIRE_ESM re-throws, caught by CI test B2) rather than mis-skipping.
+  let inCommunityEdition = opts.inCommunityEdition;
+  let REFERENCE_PRIMITIVES = opts.primitives;
+  if (!inCommunityEdition || !REFERENCE_PRIMITIVES) {
+    try {
+      if (!inCommunityEdition) {
+        ({ inCommunityEdition } = _require("./lib/in-community-edition.mjs"));
+      }
+      if (!REFERENCE_PRIMITIVES) {
+        ({ REFERENCE_PRIMITIVES } = _require(
+          "./lib/community-reference-primitives.mjs",
+        ));
+      }
+    } catch (e) {
+      if (e && (e.code === "MODULE_NOT_FOUND" || e.code === "ERR_MODULE_NOT_FOUND")) {
+        return {
+          id,
+          source_rule,
+          results: [
+            {
+              artifact: "edition-libs",
+              status: STATUS.SKIP,
+              detail:
+                "loom-only edition libs (lib/in-community-edition.mjs / lib/community-reference-primitives.mjs) not present — community-edition completeness is a loom-only concern; skipped at a consumer (F1030d fail-closed bin allowlist)",
+            },
+          ],
+        };
+      }
+      throw e; // present-but-broken at loom — surface, never silently skip
+    }
+  }
+  // `primitives` + `loomOnly` are injectable for hermetic tests (the CLI never
+  // passes them). Inject loom_only from validate-emit's OWN root-relative manifest
+  // parse so the predicate resolves the community projection against `root`, not a
+  // second manifest-resolution path (no-drift with check-8's parseLoomOnly).
+  const primitives = REFERENCE_PRIMITIVES;
+  const loomOnly = opts.loomOnly ?? parseLoomOnly(root);
+  if (loomOnly === null) {
+    return {
+      id,
+      source_rule,
+      results: [{ artifact: "sync-manifest.yaml", status: STATUS.SKIP, detail: "manifest unreadable — cannot resolve loom_only for the community projection" }],
+    };
+  }
+  const results = [];
+  for (const rel of primitives) {
+    const abs = join(root, rel);
+    if (!existsSync(abs)) {
+      results.push({
+        artifact: rel,
+        status: STATUS.FAIL,
+        detail: "enumerated community reference-primitive is ABSENT from disk (stripped/deleted) — the community edition would ship incomplete (anti-bait §fences.2)",
+      });
+      continue;
+    }
+    // A reference PRIMITIVE is a concrete file, not a directory: existsSync +
+    // inCommunityEdition both resolve true for a directory path, so without this guard a
+    // primitive silently degraded to a directory (or an entry pointing at a dir) would PASS
+    // vacuously — the anti-bait floor MUST pin real files.
+    if (!statSync(abs).isFile()) {
+      results.push({
+        artifact: rel,
+        status: STATUS.FAIL,
+        detail: "enumerated community reference-primitive is NOT a file (directory or non-regular) — a reference primitive MUST be a concrete file (anti-bait §fences.2)",
+      });
+      continue;
+    }
+    if (!inCommunityEdition(rel, { loomOnly })) {
+      results.push({
+        artifact: rel,
+        status: STATUS.FAIL,
+        detail: "enumerated community reference-primitive is FENCED OUT of the community projection (inCommunityEdition===false — loom_only / EXCLUDE_WITHIN drift) — community would ship crippled (anti-bait §fences.2)",
+      });
+      continue;
+    }
+    results.push({ artifact: rel, status: STATUS.PASS, detail: "present on disk AND in the community projection" });
+  }
+  return { id, source_rule, results };
+}
+
+// =======================================================================
+//  CHECK — no runtime license/entitlement surface in loom code (#825 06a)
+// =======================================================================
+// The HONESTY-LEDGER negative complement of the edition machinery (spec
+// `edition-separation.md` §"Protection model"; brief §"Protection model"):
+//   "loom has NO runtime license check and MUST NOT gain one. … Any optional
+//    soft entitlement check lives in the enterprise loom-command edition, NEVER
+//    in loom. `coordination.enabled` is a plain behavioral boolean with zero
+//    license/billing semantics — it is NOT the enforcement point."
+// Enterprise is gated by ACCESS + LICENSE (BSL-1.1) + BUNDLING — NOT by a runtime
+// DRM/entitlement check baked into loom (futile in open JS, and off-model). This
+// check is the fail-CLOSED guardrail that BLOCKS emit if a future edit introduces
+// such a runtime-enforcement surface into loom's executable code.
+//
+// SCOPE: loom's own runtime CODE only — `.claude/bin/**/*.mjs` + `.claude/hooks/**/*.{js,mjs}`
+//   + `scripts/**/*.mjs`. `scripts/` is included because `scripts/publish-to-public.mjs` (the
+//   disclosure fence itself) IS loom runtime code — the honesty-ledger invariant ("no runtime
+//   license check") must cover the fence file too (two-reviewer R1 finding). NOT markdown
+//   (rules/specs/briefs discuss "license" freely — BSL, this very spec, the honesty-ledger todo);
+//   the pattern is identifier-shaped (no space) so prose "source-available license" cannot match,
+//   but scoping to code keeps intent aligned with "into loom code" AND avoids the whole prose surface.
+// SELF-EXCLUSION: `validate-emit.mjs` (this file — carries the pattern + message as
+//   string literals) and `*.test.*` files (fixtures deliberately carry the pattern).
+// PATTERN: a license/entitlement/drm identifier ADJACENT to an enforcement verb/noun
+//   (key|token|check|guard|gate|verify|validate|enforce), either order, identifier form.
+//   Verified CLEAN on the current loom surface AND non-matching on `coordination.enabled`
+//   / `licensed` / the BSL `LICENSE` file (#825 06a authoring).
+//   FAIL  a runtime license/entitlement enforcement surface appears in loom code
+//         (file:line + matched token) — blocks /sync (the invariant loom MUST NOT gain one).
+//   PASS  no such surface — loom stays DRM-free (protection = ACCESS + LICENSE + BUNDLING).
+const RUNTIME_LICENSE_RE =
+  /\b(?:license|entitlement|drm)[-_]?(?:key|token|check|guard|gate|verify|validate|enforce)|\b(?:check|verify|validate|enforce|require)[-_]?(?:license|entitlement)\b/i;
+
+// Recursively enumerate files under `dir` matching `extRe`, skipping `*.test.*`.
+function walkCodeFiles(dir, extRe, out = []) {
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) { walkCodeFiles(full, extRe, out); continue; }
+    if (!e.isFile()) continue;
+    if (/\.test\.[cm]?js$/.test(e.name)) continue; // fixtures carry the pattern by design
+    if (extRe.test(e.name)) out.push(full);
+  }
+  return out;
+}
+
+function checkEditionNoRuntimeLicense(root, opts = {}) {
+  const id = "edition-no-runtime-license";
+  const source_rule =
+    "edition-separation.md §Protection model (#825 06a) / briefs/00-brief.md §Protection model";
+  // Injectable scan dirs for hermetic tests; the CLI never passes them.
+  const scanDirs = opts.scanDirs ?? [
+    { dir: join(root, ".claude", "bin"), extRe: /\.mjs$/ },
+    { dir: join(root, ".claude", "hooks"), extRe: /\.[cm]?js$/ },
+    { dir: join(root, "scripts"), extRe: /\.mjs$/ }, // publish-to-public.mjs (the fence) is runtime code
+  ];
+  const results = [];
+  for (const { dir, extRe } of scanDirs) {
+    for (const file of walkCodeFiles(dir, extRe)) {
+      // SELF-EXCLUSION: this validator file carries the pattern + message as string
+      // literals — scanning it would self-flag. It is not a plausible home for a
+      // runtime license gate (it is the validator).
+      if (basename(file) === "validate-emit.mjs") continue;
+      const text = safeRead(file);
+      if (text === null) continue;
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const m = RUNTIME_LICENSE_RE.exec(lines[i]); // non-global → always starts at 0
+        if (m) {
+          results.push({
+            artifact: `${relative(root, file)}:${i + 1}`,
+            status: STATUS.FAIL,
+            detail:
+              `runtime license/entitlement enforcement surface in loom code (matched \`${m[0]}\`) — ` +
+              "loom MUST NOT gain a runtime license/DRM check (§Protection model; protection = " +
+              "ACCESS + BSL-1.1 LICENSE + kailash-rs BUNDLING). Any soft entitlement check belongs " +
+              "in the enterprise loom-command edition, NEVER in loom. If this is a false match, the " +
+              "token is not an enforcement point — rename it (e.g. `coordination.enabled` is fine).",
+          });
+        }
+      }
+    }
+  }
+  if (!results.length) {
+    results.push({
+      artifact: ".claude/bin + .claude/hooks + scripts",
+      status: STATUS.PASS,
+      detail: "no runtime license/entitlement enforcement surface — loom stays DRM-free (§Protection model)",
     });
   }
   return { id, source_rule, results };
@@ -1476,6 +1791,118 @@ function checkSurfaceRoleMembership(root) {
 }
 
 // =======================================================================
+//  CHECK — CLAUDE.md command-table <-> manifest surface_roles parity
+//          (journal/0357; onboarding-portability Wave-4 focused validator)
+// =======================================================================
+// The surface-role-membership check above verifies manifest <-> repos.role
+// (config<->config) — it is STRUCTURALLY BLIND to the human-readable CLAUDE.md
+// command-table drifting out of sync with the manifest's surface_roles block
+// (the W6 G2 case: CLAUDE.md said "no surface_roles entry yet" for 11 commands
+// the manifest had already assigned [build, use-consumer]; the green validator
+// never saw it). This check closes that class: parse the manifest (the
+// authoritative side) AND the CLAUDE.md "Distributed to targets" bullets, then
+// assert bidirectional set-equality on the de-surfaced set + disjointness of the
+// doc's universal set from it. Structural (set-equality over parsed `/cmd`
+// tokens, no LLM) per probe-driven-verification.md MUST-3.
+
+// Parse the CLAUDE.md "Distributed to targets" bullets into two sets of command
+// stems: `desurfaced` (bullets whose text marks "de-surfaced at the platform
+// role") and `universal` (the bullet marking "default-surfaced for every role").
+// Reads backticked `/cmd` tokens only (the table's command citations). Returns
+// { desurfaced:Set, universal:Set } or null when CLAUDE.md is unreadable.
+function parseClaudeMdCommandRoles(root) {
+  const md = safeRead(join(root, "CLAUDE.md"));
+  if (md === null) return null;
+  const desurfaced = new Set();
+  const universal = new Set();
+  for (const line of md.split(/\r?\n/)) {
+    if (!/^\s*[-*]\s/.test(line)) continue; // bullet lines only
+    const cmds = [...line.matchAll(/`\/([a-z0-9-]+)`/g)].map((m) => m[1]);
+    if (cmds.length === 0) continue;
+    if (/de-surfaced at the platform role/i.test(line)) {
+      for (const c of cmds) desurfaced.add(c);
+    } else if (/default-surfaced for every role/i.test(line)) {
+      for (const c of cmds) universal.add(c);
+    }
+  }
+  return { desurfaced, universal };
+}
+
+// Check body. FAIL on: (1) a command de-surfaced in the manifest but absent from
+// CLAUDE.md's de-surfaced bullets (the G2 case) OR present in the doc but absent
+// from the manifest (the reverse); (2) a CLAUDE.md universal command that carries
+// a de-surfacing manifest entry. SKIP when either source is unreadable. PASS when
+// both sides agree.
+function checkClaudeMdSurfaceRoleParity(root) {
+  const id = "claude-md-surface-role-parity";
+  const source_rule =
+    "CLAUDE.md command-table <-> sync-manifest.yaml surface_roles (journal/0357; W6 G2 closure)";
+  const sr = parseSurfaceRoles(root);
+  const cmd = parseClaudeMdCommandRoles(root);
+  if (sr === null || cmd === null) {
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: sr === null ? "sync-manifest.yaml" : "CLAUDE.md",
+          status: STATUS.SKIP,
+          detail: "source unreadable — cannot check doc<->config parity",
+        },
+      ],
+    };
+  }
+  // Manifest side: command artifacts whose surface_roles list EXCLUDES platform.
+  const manifestDesurfaced = new Set();
+  for (const [p, roles] of sr) {
+    const m = p.match(/^commands\/([a-z0-9-]+)\.md$/);
+    if (!m) continue;
+    if (!roles.includes("platform")) manifestDesurfaced.add(m[1]);
+  }
+  const results = [];
+  // (1) bidirectional set equality on the de-surfaced set.
+  const inManifestNotDoc = [...manifestDesurfaced]
+    .filter((c) => !cmd.desurfaced.has(c))
+    .sort();
+  const inDocNotManifest = [...cmd.desurfaced]
+    .filter((c) => !manifestDesurfaced.has(c))
+    .sort();
+  for (const c of inManifestNotDoc) {
+    results.push({
+      artifact: `CLAUDE.md:/${c}`,
+      status: STATUS.FAIL,
+      detail: `manifest surface_roles de-surfaces /${c} at platform, but CLAUDE.md's "de-surfaced at the platform role" bullets do not list it (doc<->config drift — the W6 G2 class)`,
+    });
+  }
+  for (const c of inDocNotManifest) {
+    results.push({
+      artifact: `sync-manifest.yaml:/${c}`,
+      status: STATUS.FAIL,
+      detail: `CLAUDE.md marks /${c} de-surfaced at platform, but the manifest surface_roles block has no de-surfacing entry for it (doc claims an assignment the config lacks)`,
+    });
+  }
+  // (2) doc-universal must be disjoint from manifest de-surfaced.
+  const universalButDesurfaced = [...cmd.universal]
+    .filter((c) => manifestDesurfaced.has(c))
+    .sort();
+  for (const c of universalButDesurfaced) {
+    results.push({
+      artifact: `CLAUDE.md:/${c}`,
+      status: STATUS.FAIL,
+      detail: `CLAUDE.md lists /${c} as universal (default-surfaced for every role), but the manifest de-surfaces it at platform — contradiction`,
+    });
+  }
+  if (results.length === 0) {
+    results.push({
+      artifact: "CLAUDE.md",
+      status: STATUS.PASS,
+      detail: `command-table <-> surface_roles consistent (${manifestDesurfaced.size} de-surfaced, ${cmd.universal.size} universal)`,
+    });
+  }
+  return { id, source_rule, results };
+}
+
+// =======================================================================
 //  CHECK 9 — provenance-event cross-CLI parity (F101-4 / loom#411 item 5)
 // =======================================================================
 // The CC lane captures provenance events (the F101-2 hooks) of the closed
@@ -1502,13 +1929,13 @@ const PROVENANCE_KIND_SET = new Set(EVENT_KINDS);
 //   cc_capture:  "<kind>|<hook-file>|<cc-event>"
 //   lanes (deferred): "<lane>|<kind>|deferred|<#tracking>|<reason…>"
 //   lanes (wired):    "<lane>|<kind>|wired|<hook-file>|<lane-event>"
-// Returns { present, enabled, ccCapture[], lanes[] } or null when absent.
+// Returns { present, enabled, ccCapture[], lanes[], loomSelfOnly[] } or null.
 function parseProvenanceParity(manifestText) {
   if (manifestText == null) return null;
   const lines = manifestText.split(/\r?\n/);
   let inBlock = false;
-  let section = null; // "cc_capture" | "lanes"
-  const out = { present: false, enabled: false, ccCapture: [], lanes: [] };
+  let section = null; // "cc_capture" | "lanes" | "loom_self_only"
+  const out = { present: false, enabled: false, ccCapture: [], lanes: [], loomSelfOnly: [] };
   for (const raw of lines) {
     if (/^  provenance_parity:\s*$/.test(raw)) {
       inBlock = true;
@@ -1539,6 +1966,10 @@ function parseProvenanceParity(manifestText) {
       section = "lanes";
       continue;
     }
+    if (/^    loom_self_only:\s*$/.test(raw)) {
+      section = "loom_self_only";
+      continue;
+    }
     // Any OTHER 4-space key header (e.g. `subagent_internal_capture:` — the
     // F128/#445 depth axis) terminates the current list section so its items
     // are NOT mis-collected into cc_capture/lanes. enabled/cc_capture/lanes are
@@ -1556,6 +1987,15 @@ function parseProvenanceParity(manifestText) {
           kind: parts[0] || "",
           hook: parts[1] || "",
           event: parts[2] || "",
+          raw: item[1],
+        });
+      } else if (section === "loom_self_only") {
+        // "<hook>.js|#NNN|<reason…>" — a hook wired in loom-local .codex/hooks.json
+        // but deliberately NOT (yet) in the shipped codex-templates/hooks.json.
+        out.loomSelfOnly.push({
+          hook: parts[0] || "",
+          track: parts[1] || "",
+          reason: parts.slice(2).join("|"),
           raw: item[1],
         });
       } else {
@@ -1667,6 +2107,15 @@ function evaluateProvenanceParity({
   // exported capture contract, NOT the native lane emit target. Default false →
   // a guard-mechanism cell fails closed when no predicate is injected.
   guardCapturesHook = () => false,
+  // F820b (loom#820): does the SHIPPED template for <lane> (codex-templates/hooks.json
+  // or gemini-templates/settings.json) register <hookFile>? A codex/gemini `wired`
+  // NATIVE cell passes laneHookPresent against loom's OWN dogfood config; if the
+  // shipped template lacks the hook the `wired` guarantee is loom-self-only, NOT
+  // downstream. Default true → a missing injected predicate does NOT manufacture a
+  // divergence finding (fail-open on the ADVISORY-comparison axis; the primary wired
+  // guarantee is unaffected, and a dropped real injection is caught by the
+  // stale-declaration branch — see checkProvenanceParity's load-bearing comment).
+  templateHookPresent = () => true,
 }) {
   const MANIFEST = "sync-manifest.yaml::provenance_parity";
   if (!block) {
@@ -1885,6 +2334,93 @@ function evaluateProvenanceParity({
     }
   }
 
+  // (g) F820b template-vs-loom-local parity (loom#820). A codex/gemini-lane `wired`
+  // NATIVE cell's presence check (branch above) is satisfied by loom's OWN dogfood
+  // config (.codex/hooks.json / .gemini/settings.json). But downstream consumers
+  // receive the SHIPPED template (codex-templates/hooks.json /
+  // gemini-templates/settings.json) — so a hook wired loom-local but ABSENT from the
+  // template means the `wired` guarantee holds for loom-self ONLY, and downstream
+  // silently drops that capture. Every such divergence MUST be declared in
+  // provenance_parity.loom_self_only with a #NNN tracking ref (the deferred|#NNN
+  // non-decaying idiom, value-prioritization.md MUST-2); an UNDECLARED divergence
+  // is a silent downstream drop → FAIL, and a STALE declaration (no live
+  // divergence on ANY lane) → FAIL so the list cannot rot. Declarations are
+  // HOOK-keyed (one entry covers a hook across every lane it diverges on); findings
+  // are LANE-tagged so each divergent (lane, hook) is individually surfaced.
+  const declaredSelfOnly = new Map(); // hook → entry
+  for (const e of block.loomSelfOnly || []) {
+    const art = `loom_self_only:${e.raw}`;
+    if (!/^[A-Za-z0-9_-]+\.js$/.test(e.hook)) {
+      results.push({
+        artifact: art,
+        status: STATUS.FAIL,
+        detail: `loom_self_only entry field 1 must be a bare hook filename matching /^[A-Za-z0-9_-]+\\.js$/; got "${e.hook}"`,
+      });
+      continue;
+    }
+    if (!/^#\d+$/.test(e.track)) {
+      results.push({
+        artifact: art,
+        status: STATUS.FAIL,
+        detail: `loom_self_only entry MUST carry a #NNN tracking ref (got "${e.track}") — value-prioritization.md MUST-2`,
+      });
+      continue;
+    }
+    declaredSelfOnly.set(e.hook, e);
+  }
+  // Per-lane dogfood config vs shipped template: which shipped template file names
+  // each lane, for the finding detail. laneHookPresent + templateHookPresent are the
+  // per-lane presence oracles injected by the IO wrapper.
+  const dogfoodFile = { codex: ".codex/hooks.json", gemini: ".gemini/settings.json" };
+  const templateFile = {
+    codex: ".claude/codex-templates/hooks.json",
+    gemini: ".claude/gemini-templates/settings.json",
+  };
+  const divergentHooks = new Set(); // hook (stale-check, lane-agnostic)
+  const seenDivergence = new Set(); // "lane|hook" (dedup — a lane may wire one hook across ≥2 kinds)
+  for (const cell of block.lanes) {
+    if (cell.status !== "wired") continue;
+    if (cell.lane !== "codex" && cell.lane !== "gemini") continue;
+    const rawHook = cell.f4 || "";
+    const atIdx = rawHook.indexOf("@");
+    const hook = atIdx === -1 ? rawHook : rawHook.slice(0, atIdx);
+    const mechanism = atIdx === -1 ? "native" : rawHook.slice(atIdx + 1);
+    // Only the NATIVE mechanism reads the lane's dogfood config; a non-native
+    // mechanism (e.g. @codex-mcp-guard) is delivered via the guard (server.js), NOT
+    // the shipped template, so it is not a template-vs-loom-local divergence surface.
+    if (mechanism !== "native") continue;
+    if (!/^[A-Za-z0-9_-]+\.js$/.test(hook)) continue; // shape already FAILed in the wired branch
+    if (!laneHookPresent(cell.lane, hook) || templateHookPresent(cell.lane, hook)) continue;
+    // Divergent (present loom-local, absent from the shipped template).
+    divergentHooks.add(hook);
+    const key = `${cell.lane}|${hook}`;
+    if (seenDivergence.has(key)) continue; // one finding per (lane, hook)
+    seenDivergence.add(key);
+    const decl = declaredSelfOnly.get(hook);
+    if (!decl) {
+      results.push({
+        artifact: `loom_self_only:${key}`,
+        status: STATUS.FAIL,
+        detail: `${cell.lane} wired provenance hook "${hook}" is registered in loom-local ${dogfoodFile[cell.lane]} but ABSENT from the shipped ${templateFile[cell.lane]} — downstream ${cell.lane} consumers do NOT capture it (the wired claim is loom-self-only). Declare it in provenance_parity.loom_self_only with a #NNN tracking ref, or wire it into the template.`,
+      });
+    } else {
+      results.push({
+        artifact: `loom_self_only:${key}`,
+        status: STATUS.SKIP,
+        detail: `loom-self-only (tracked ${decl.track}): ${decl.reason || "(no reason given)"}`,
+      });
+    }
+  }
+  for (const [hook, e] of declaredSelfOnly) {
+    if (!divergentHooks.has(hook)) {
+      results.push({
+        artifact: `loom_self_only:${e.raw}`,
+        status: STATUS.FAIL,
+        detail: `loom_self_only declares "${hook}" as a template divergence, but no live codex/gemini wired-loom-local-and-absent-from-template divergence exists for it (resolved or hook removed) — stale declaration, remove it`,
+      });
+    }
+  }
+
   return results;
 }
 
@@ -1926,6 +2462,26 @@ function checkProvenanceParity(root) {
   const extraction = extractHookKinds(root, block ? block.ccCapture : []);
   const codexCmds = collectHookCommands(safeRead(join(root, ".codex", "hooks.json")));
   const geminiCmds = collectHookCommands(safeRead(join(root, ".gemini", "settings.json")));
+  // F820b: the SHIPPED templates (what downstream consumers actually receive), as
+  // distinct from loom's own dogfood configs above. Per lane: codex ← codex-templates/
+  // hooks.json; gemini ← gemini-templates/settings.json (collectHookCommands walks
+  // either shape for `command` values).
+  const templateCmds = {
+    codex: collectHookCommands(safeRead(join(root, ".claude", "codex-templates", "hooks.json"))),
+    gemini: collectHookCommands(safeRead(join(root, ".claude", "gemini-templates", "settings.json"))),
+  };
+  // Segment-exact presence in the shipped template for <lane> (same idiom as
+  // laneHookPresent). LOAD-BEARING INJECTION: checkProvenanceParity MUST pass this
+  // into evaluateProvenanceParity. The evaluator's default is fail-open
+  // (() => true) for backward-compat, so a dropped injection would silently no-op
+  // the divergence check — BUT that drop is caught structurally: with no divergence
+  // detected, every declared loom_self_only entry becomes STALE and validate-emit
+  // FAILs (the stale-declaration branch), so the injection is pinned by red-on-drop.
+  const templateHookPresent = (lane, hookFile) => {
+    if (!hookFile) return false;
+    const cmds = templateCmds[lane] || [];
+    return cmds.some((c) => c.split(/[\s/"']+/).includes(hookFile));
+  };
   const laneHookPresent = (lane, hookFile) => {
     if (!hookFile) return false;
     const cmds = lane === "codex" ? codexCmds : lane === "gemini" ? geminiCmds : [];
@@ -1983,6 +2539,7 @@ function checkProvenanceParity(root) {
     laneHookPresent,
     hookEmitsKind,
     guardCapturesHook,
+    templateHookPresent,
   });
   return { id, source_rule, results };
 }
@@ -2070,6 +2627,486 @@ function checkProvenanceSubagentHooks(root) {
     } else {
       results.push({ artifact: `${MANIFEST} [${lane}]`, status: STATUS.FAIL, detail: `${lane} status="${cell.status}" unrecognized (expected wired | residual-absent | residual-unverified)` });
     }
+  }
+  return { id, source_rule, results };
+}
+
+// =======================================================================
+//  CHECK 22 — operator-ref credential separation (loom#411 B2)
+// =======================================================================
+// #411 identity correction: "the shared model key signs nothing." The RUNTIME
+// guard already lives in provenance-event.js — OPERATOR_REF_ALLOWED rejects a
+// stray model/API key ON operator_ref, and _scanForbiddenKeys + CREDENTIAL_KEY_RE
+// reject a credential-shaped key ANYWHERE in a permanent signed governance
+// record. This check is the STRUCTURAL LINT that catches a FUTURE emitter
+// regression at /sync time — before a signed, hash-chained, ledger-anchored
+// record already carries a model key (redaction-after-anchor is impossible) —
+// rather than after.
+//
+// Four structural predicates (probe-driven-verification.md MUST-3 — behavioral
+// require() + source set-membership, NEVER regex-over-prose):
+//   P1 ssot-value     OPERATOR_REF_ALLOWED set-equals {verified_id, person_id,
+//                     display_id} exactly — no credential-shaped member crept
+//                     in, no identity member dropped, no extra field.
+//   P2 ssot-singular  exactly ONE `const OPERATOR_REF_ALLOWED =` definition
+//                     across the JS surface, in provenance-event.js (a 2nd is a
+//                     forked allowlist that drifts from the guard).
+//   P3 guard-fires    validateProvenanceEvent REJECTS an event with
+//                     operator_ref.model_key AND one with payload.api_key — the
+//                     runtime separation is live, not silently deleted.
+//   P4 no-bypass      no capture-surface .js (hooks / bin / codex-mcp-guard)
+//                     mentions operator_ref / operatorRef IN CODE without
+//                     referencing the schema (buildProvenanceEvent /
+//                     chainProvenanceEvent / validateProvenanceEvent /
+//                     OPERATOR_REF_ALLOWED) in the same file. File-level
+//                     co-occurrence, NOT a per-call-site audit — see
+//                     scanOperatorRefBypassSites for the disclosed limits
+//                     (same-file sibling, dynamic key). Catches the common
+//                     regression: a NEW emitter hand-building the ref with the
+//                     guard nowhere in the loop.
+
+// The canonical identity-only operator_ref SSOT value, sorted for set-equality.
+const OPERATOR_REF_IDENTITY_FIELDS = Object.freeze([
+  "display_id",
+  "person_id",
+  "verified_id",
+]);
+
+// Recursive *.js / *.mjs walker (mirrors listMarkdown's symlink + depth DoS
+// guards). Skips dotdirs + symlinks; bounds recursion at depth 20.
+function listJsFiles(dir, depth = 0) {
+  const out = [];
+  if (depth > 20) return out;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    const full = join(dir, e.name);
+    if (e.isSymbolicLink()) continue;
+    if (e.isDirectory()) {
+      if (e.name.startsWith(".")) continue;
+      out.push(...listJsFiles(full, depth + 1));
+    } else if (e.isFile() && (e.name.endsWith(".js") || e.name.endsWith(".mjs"))) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+// P2 helper — every JS file under the hooks/bin/codex-mcp-guard trees that
+// DEFINES the allowlist as an ARRAY constant: `const|let|var OPERATOR_REF_ALLOWED
+// = [` or `= Object.freeze([`. Requiring the array-open RHS is what keeps this
+// off the linter's OWN prose mentions of the name (doc-comments + FAIL-detail
+// strings reference `const OPERATOR_REF_ALLOWED =` followed by a backtick, never
+// an array open). Destructure imports (`const { OPERATOR_REF_ALLOWED } = …`), the
+// export entry (`OPERATOR_REF_ALLOWED,`), uses (`OPERATOR_REF_ALLOWED.includes`),
+// and the regex-source literal here (a keyword is followed by `\s+`, not real
+// whitespace) all fail to match. Test files excluded. Exported for the suite.
+const OPERATOR_REF_DEFN_RE =
+  /\b(?:const|let|var)\s+OPERATOR_REF_ALLOWED\s*=\s*(?:Object\.freeze\s*\(\s*)?\[/;
+function scanOperatorRefSsotDefinitions(root) {
+  const roots = [
+    join(root, ".claude", "hooks"),
+    join(root, ".claude", "bin"),
+    join(root, ".claude", "codex-mcp-guard"),
+  ];
+  const sites = [];
+  for (const r of roots) {
+    for (const f of listJsFiles(r)) {
+      if (/\.test\.(?:js|mjs)$/.test(f)) continue; // tests may build fixtures
+      const text = safeRead(f);
+      if (text === null) continue;
+      if (OPERATOR_REF_DEFN_RE.test(text)) sites.push(relative(root, f));
+    }
+  }
+  return sites.sort();
+}
+
+// Strip JS line + block comments so a schema-token reference that lives ONLY in
+// a comment cannot satisfy the route check (reviewer R1 M1: a hand-built bypass
+// record with `// later we validateProvenanceEvent this` would otherwise pass).
+// Conservative by design — over-stripping (a `//` inside a string literal) can
+// only produce a FALSE FLAG (recoverable via --allow), never a false clear,
+// which is the safe direction for a credential-separation lint.
+function stripJsComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, "");
+}
+
+// P4 helper — capture-surface scan. Returns { scanned, flagged } where flagged
+// is the rel-paths of capture-surface .js files whose CODE (comments stripped)
+// mentions operator_ref / operatorRef but never references the provenance-event
+// schema. SCOPE + LIMITS (disclosed, not claimed-away — reviewer R1 M1/L2):
+//   • This is a per-FILE co-occurrence check, NOT a per-call-site audit: a file
+//     that BOTH routes through the schema elsewhere AND hand-builds a bypass in
+//     a sibling function is NOT flagged. The runtime guard in provenance-event.js
+//     is the actual defense; this is the /sync-time early-warning for the common
+//     regression (a NEW file/emitter that hand-builds operator_ref with no schema
+//     in the loop, or a dropped guard / forked allowlist).
+//   • A dynamically-constructed key (`obj["operator"+"_ref"]=…`) evades the token
+//     RE — out of structural scope by design (catching it needs data-flow).
+//   • `bin/` IS scanned (a future bin emitter could hand-build a ref); the linter
+//     itself (validate-emit.mjs) mentions the token in strings but self-clears
+//     because it genuinely references the schema (requires + calls the validator).
+//   • A token-only match on `OPERATOR_REF_ALLOWED` does NOT satisfy the token RE
+//     (the `\b` after `ref` fails on the trailing `_`), so a constant CONSUMER is
+//     not mis-scanned as a construction site.
+// Exported for tests.
+const OPERATOR_REF_TOKEN_RE = /\boperator_?ref\b/i; // operator_ref OR operatorRef
+const OPERATOR_REF_SCHEMA_RE =
+  /\b(?:buildProvenanceEvent|chainProvenanceEvent|validateProvenanceEvent|OPERATOR_REF_ALLOWED)\b/;
+function scanOperatorRefBypassSites(root) {
+  const roots = [
+    join(root, ".claude", "hooks"),
+    join(root, ".claude", "bin"),
+    join(root, ".claude", "codex-mcp-guard"),
+  ];
+  let scanned = 0;
+  const flagged = [];
+  for (const r of roots) {
+    for (const f of listJsFiles(r)) {
+      if (/\.test\.(?:js|mjs)$/.test(f)) continue;
+      const raw = safeRead(f);
+      if (raw === null) continue;
+      const text = stripJsComments(raw);
+      if (!OPERATOR_REF_TOKEN_RE.test(text)) continue;
+      scanned++;
+      if (!OPERATOR_REF_SCHEMA_RE.test(text)) flagged.push(relative(root, f));
+    }
+  }
+  return { scanned, flagged: flagged.sort() };
+}
+
+function checkOperatorRefCredentialSeparation(root) {
+  const id = "operator-ref-credential-separation";
+  const source_rule =
+    'loom#411 B2 (signing-vs-model-key separation) + security.md "no secrets in logs"';
+  const results = [];
+  const schemaRel = ".claude/hooks/lib/provenance-event.js";
+
+  // ── P1 + P3: behavioral — require the ACTUAL schema module (not a source
+  //    parse) so the probe exercises the real exported value + validator the
+  //    runtime uses. require relative to `root` so a synthetic root is faithful.
+  let schemaMod = null;
+  try {
+    schemaMod = _require(join(root, ".claude", "hooks", "lib", "provenance-event.js"));
+  } catch (e) {
+    results.push({
+      artifact: schemaRel,
+      status: STATUS.FAIL,
+      detail: `provenance-event.js (the operator_ref SSOT + guard) failed to load: ${String(
+        e && e.message,
+      ).slice(0, 160)}`,
+    });
+  }
+  if (schemaMod) {
+    // P1 — SSOT value set-equality.
+    const allowed = Array.isArray(schemaMod.OPERATOR_REF_ALLOWED)
+      ? [...schemaMod.OPERATOR_REF_ALLOWED].sort()
+      : null;
+    if (!allowed) {
+      results.push({
+        artifact: `${schemaRel} :: OPERATOR_REF_ALLOWED`,
+        status: STATUS.FAIL,
+        detail:
+          "OPERATOR_REF_ALLOWED is not exported as an array — the operator_ref SSOT is gone",
+      });
+    } else if (
+      JSON.stringify(allowed) !== JSON.stringify([...OPERATOR_REF_IDENTITY_FIELDS])
+    ) {
+      results.push({
+        artifact: `${schemaRel} :: OPERATOR_REF_ALLOWED`,
+        status: STATUS.FAIL,
+        detail: `OPERATOR_REF_ALLOWED drifted from the identity-only SSOT: got [${allowed.join(
+          ", ",
+        )}], expected [${[...OPERATOR_REF_IDENTITY_FIELDS].join(
+          ", ",
+        )}] — a credential-shaped or extra field on operator_ref breaks the #411 separation`,
+      });
+    } else {
+      results.push({
+        artifact: `${schemaRel} :: OPERATOR_REF_ALLOWED`,
+        status: STATUS.PASS,
+        detail: "operator_ref SSOT = {verified_id, person_id, display_id}",
+      });
+    }
+
+    // P3 — the runtime guard rejects a model key on operator_ref AND a
+    //      credential key in payload. Behavioral probe against the real validator.
+    const validate = schemaMod.validateProvenanceEvent;
+    const sv = typeof schemaMod.SCHEMA_VERSION === "number" ? schemaMod.SCHEMA_VERSION : 1;
+    if (typeof validate !== "function") {
+      results.push({
+        artifact: `${schemaRel} :: validateProvenanceEvent`,
+        status: STATUS.FAIL,
+        detail:
+          "validateProvenanceEvent is not exported — the runtime separation guard is gone",
+      });
+    } else {
+      const base = () => ({
+        schema_version: sv,
+        kind: "Action",
+        ts: "2026-01-01T00:00:00Z",
+        session: "lint-probe",
+        operator_ref: { verified_id: "fpr", person_id: "pid" },
+        payload: { tool: "Bash" },
+        prev_link: null,
+      });
+      const baseOk = validate(base());
+      if (!baseOk || baseOk.ok !== true) {
+        results.push({
+          artifact: `${schemaRel} :: validateProvenanceEvent`,
+          status: STATUS.FAIL,
+          detail: `the probe base event does not validate (${JSON.stringify(
+            (baseOk && baseOk.errors) || [],
+          ).slice(0, 160)}) — cannot assert the guard fires`,
+        });
+      } else {
+        // Probe BOTH rejection mechanisms the #411 guard relies on, exercising
+        // each path it claims — not just a top-level exact-name match:
+        //   - operator_ref.model_key      → the OPERATOR_REF_ALLOWED allowlist;
+        //   - payload.api_key             → CREDENTIAL_KEY_RE, top-level;
+        //   - payload.meta.signing_key    → CREDENTIAL_KEY_RE via the NESTED
+        //                                   _scanForbiddenKeys RECURSION, AND the
+        //                                   exact #411-named "signing key";
+        //   - payload.db_password         → the CREDENTIAL_KEY_RE `_password$`
+        //                                   SUFFIX family.
+        // A guard regression that dropped the recursion OR narrowed the RE to
+        // drop signing_key/the suffix family would pass a top-level-only probe
+        // while still leaking (security-reviewer R1 HIGH-1).
+        const credentialProbes = [
+          ["operator_ref.model_key", (e) => { e.operator_ref = { verified_id: "fpr", person_id: "pid", model_key: "sk-leak" }; }],
+          ["payload.api_key", (e) => { e.payload = { tool: "Bash", api_key: "sk-leak" }; }],
+          ["payload.meta.signing_key (nested)", (e) => { e.payload = { tool: "Bash", meta: { signing_key: "sk-leak" } }; }],
+          ["payload.db_password (suffix)", (e) => { e.payload = { tool: "Bash", db_password: "sk-leak" }; }],
+        ];
+        const leaked = [];
+        for (const [name, mutate] of credentialProbes) {
+          const evt = base();
+          mutate(evt);
+          const v = validate(evt);
+          if (!v || v.ok !== false) leaked.push(name);
+        }
+        if (leaked.length === 0) {
+          results.push({
+            artifact: `${schemaRel} :: validateProvenanceEvent`,
+            status: STATUS.PASS,
+            detail:
+              "guard rejects operator_ref.model_key + payload.api_key + nested payload.meta.signing_key + suffix-family payload.db_password",
+          });
+        } else {
+          results.push({
+            artifact: `${schemaRel} :: validateProvenanceEvent`,
+            status: STATUS.FAIL,
+            detail: `the #411 runtime separation guard ACCEPTED credential-shaped input it MUST reject: ${leaked.join(
+              "; ",
+            )} — a permanent signed record could carry a secret`,
+          });
+        }
+      }
+    }
+  }
+
+  // ── P2: SSOT singularity — exactly one definition, in provenance-event.js.
+  const defnSites = scanOperatorRefSsotDefinitions(root);
+  if (defnSites.length === 1 && defnSites[0] === schemaRel) {
+    results.push({
+      artifact: "OPERATOR_REF_ALLOWED (SSOT)",
+      status: STATUS.PASS,
+      detail: `single definition site: ${schemaRel}`,
+    });
+  } else if (defnSites.length === 0) {
+    results.push({
+      artifact: "OPERATOR_REF_ALLOWED (SSOT)",
+      status: STATUS.FAIL,
+      detail: `no \`const OPERATOR_REF_ALLOWED =\` definition found — the operator_ref SSOT is gone (expected ${schemaRel})`,
+    });
+  } else {
+    results.push({
+      artifact: "OPERATOR_REF_ALLOWED (SSOT)",
+      status: STATUS.FAIL,
+      detail: `OPERATOR_REF_ALLOWED defined in ${defnSites.length} site(s) (${defnSites.join(
+        ", ",
+      )}) — a forked allowlist drifts from the runtime guard; the SSOT MUST be ${schemaRel} alone`,
+    });
+  }
+
+  // ── P4: no-bypass — every capture-surface hook handling operator_ref routes
+  //    through the schema.
+  const { scanned, flagged } = scanOperatorRefBypassSites(root);
+  if (flagged.length > 0) {
+    for (const f of flagged) {
+      results.push({
+        artifact: f,
+        status: STATUS.FAIL,
+        detail:
+          "constructs/handles operator_ref but never routes through the provenance-event schema (buildProvenanceEvent/chainProvenanceEvent/validateProvenanceEvent/OPERATOR_REF_ALLOWED) — a capture site that hand-builds operator_ref outside the guard could carry a model key the guard never validates (#411 B2)",
+      });
+    }
+  } else if (scanned > 0) {
+    results.push({
+      artifact: "capture-surface operator_ref construction",
+      status: STATUS.PASS,
+      detail: `${scanned} capture-surface file(s) mentioning operator_ref all route through the schema`,
+    });
+  } else {
+    results.push({
+      artifact: "capture-surface operator_ref construction",
+      status: STATUS.SKIP,
+      detail: "no capture-surface .js references operator_ref (nothing to bypass-check)",
+    });
+  }
+
+  return { id, source_rule, results };
+}
+
+// =======================================================================
+//  CHECK 25 — signing-vs-model-key emit-time lint (loom#411 GAP-5)
+// =======================================================================
+// #411 identity correction: "the shared model key signs nothing." Sibling
+// check-22 (operator-ref-credential-separation) guards the PER-EVENT operator_ref
+// surface + the CREDENTIAL_KEY_RE payload scan in provenance-event.js. This check
+// is the REPO-WIDE companion: a purely-structural /sync-time lint that flags any
+// code line, across the capture-surface JS trees, that BINDS a model / LLM key
+// token into a signing-key sink — the "a model key signs a governance record"
+// regression — BEFORE a permanent signed, hash-chained, ledger-anchored record
+// carries it (redaction-after-anchor is impossible).
+//
+// Predicate (POSITIVE detection, cc-artifacts.md Rule 10): a source line
+// (block + line comments stripped) co-occurs BOTH a signing-key SINK token
+// (`signing[_-]?key`, incl. git-config `user.signingkey`) AND a model / LLM key
+// SOURCE token (`model[_-]?key`, `_MODEL_KEY`, or an enumerable LLM-provider
+// API-key env name — the env-models.md Model-Key-Pairings allowlist). The
+// co-occurrence approximates "a model key bound as a signing key."
+//
+// SEVERITY (invariant iv + hook-output-discipline.md MUST-2): this is a LEXICAL
+// signal (per-line regex co-occurrence, NOT a behavioral probe or structural
+// env / exit-code anchor), so a finding surfaces as a NON-BLOCKING WARN (emitted
+// as SKIP + `WARN:` per the check-8 idiom) — advisory, NEVER a /sync block. The
+// BLOCKING defense stays the runtime guard in provenance-event.js.
+//
+// SCOPE + LIMITS (disclosed, mirrors check-22's scanOperatorRefBypassSites):
+//   - Per-LINE co-occurrence, NOT data-flow: a sink on one line and the model
+//     key on the next is NOT flagged (structural scope — catching it needs
+//     data-flow). Over-flagging is the safe direction for a credential lint.
+//   - The validator's OWN file (validate-emit.mjs) is skipped: it carries
+//     credential-shape vocabulary in check-22's detection STRINGS by design
+//     (the line "... model_key + ... signing_key ..."), which is not a signing
+//     site.
+//   - A distinctness ASSERTION line would false-flag; recoverable via --allow,
+//     and no such line exists in the tree. Over-flag is the safe direction.
+//   - resolveIdentity (operator-id.js) — the legitimate per-dev verified_id
+//     signing path — references `user.signingkey` but NO model-key token, so the
+//     co-occurrence requirement never fires on it (invariant ii).
+
+// A signing-key SINK: the key USED TO SIGN. Matches signingKey / signing_key /
+// signingkey (git-config `user.signingkey`) / SIGNING_KEY. NOTE the regex SOURCE
+// `signing[_-]?key` does NOT self-match (signing is followed by `[`, not `key`),
+// so this definition line does not trip the scanner.
+const SIGNING_SINK_RE = /\bsigning[_-]?key\b/i;
+
+// A model / LLM key SOURCE: model_key / MODEL_KEY / modelKey / a `_MODEL_KEY`
+// suffix, OR an enumerable LLM-provider API-key env name (env-models.md
+// Model-Key-Pairings — a POSITIVE allowlist per cc-artifacts.md Rule 10, NOT a
+// denylist). The provider alternation does NOT self-match its own source
+// (`OPENAI` is followed by `|`, not `_API_KEY`).
+const MODEL_KEY_SOURCE_RE =
+  /\bmodel[_-]?key\b|_model[_-]?key\b|\b(?:OPENAI|ANTHROPIC|GOOGLE|GEMINI|DEEPSEEK|MISTRAL)_API_KEY\b/i;
+
+// Line-preserving comment strip (block + line): a token that lives ONLY in a
+// comment cannot satisfy the co-occurrence, AND reported line numbers stay exact
+// (block comments are blanked, not collapsed, so newline count is preserved).
+function stripJsCommentsLinePreserving(text) {
+  const noBlock = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+  return noBlock.replace(/\/\/[^\n]*/g, "");
+}
+
+// Pure predicate — the testable core (exported for the audit-fixture runner).
+// Returns [{ lineNo, line }] for every code line co-occurring a signing sink +
+// a model-key source. lineNo is 1-based.
+function flagsSigningModelKeyBindings(text) {
+  const stripped = stripJsCommentsLinePreserving(text);
+  const lines = stripped.split(/\r?\n/);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (SIGNING_SINK_RE.test(ln) && MODEL_KEY_SOURCE_RE.test(ln)) {
+      out.push({ lineNo: i + 1, line: ln.trim().slice(0, 120) });
+    }
+  }
+  return out;
+}
+
+// Repo-wide scan of the capture-surface JS trees (mirrors check-22's roots +
+// test-file skip + the own-file skip). Returns { scanned, flagged:[{file,lineNo,line}] }.
+const VALIDATE_EMIT_BASENAME = "validate-emit.mjs";
+function scanSigningModelKeyBindings(root) {
+  const roots = [
+    join(root, ".claude", "hooks"),
+    join(root, ".claude", "bin"),
+    join(root, ".claude", "codex-mcp-guard"),
+  ];
+  let scanned = 0;
+  const flagged = [];
+  for (const r of roots) {
+    for (const f of listJsFiles(r)) {
+      if (/\.test\.(?:js|mjs)$/.test(f)) continue; // tests build fixtures
+      // Own-file skip: validate-emit.mjs carries the SINK/SOURCE detection vocab in
+      // string literals (which comment-strip does not remove), so it would self-flag.
+      // KNOWN BLIND SPOT (LOW, disclosed): a real signing↔model-key binding authored
+      // INTO validate-emit.mjs is unscanned — acceptable because this is a lint tool
+      // that signs nothing. Covered by scanSigningModelKeySeparation.test.mjs.
+      if (basename(f) === VALIDATE_EMIT_BASENAME) continue;
+      const text = safeRead(f);
+      if (text === null) continue;
+      scanned++;
+      for (const hit of flagsSigningModelKeyBindings(text)) {
+        flagged.push({ file: relative(root, f), lineNo: hit.lineNo, line: hit.line });
+      }
+    }
+  }
+  flagged.sort((a, b) =>
+    a.file === b.file ? a.lineNo - b.lineNo : a.file < b.file ? -1 : 1,
+  );
+  return { scanned, flagged };
+}
+
+function checkSigningModelKeySeparation(root) {
+  const id = "signing-model-key-separation";
+  const source_rule =
+    'loom#411 GAP-5 (the shared model key signs nothing) + security.md "no secrets in logs" + hook-output-discipline.md MUST-2';
+  const results = [];
+  const { scanned, flagged } = scanSigningModelKeyBindings(root);
+  if (flagged.length > 0) {
+    for (const h of flagged) {
+      results.push({
+        artifact: `${h.file}:${h.lineNo}`,
+        // Advisory, NOT a block: lexical co-occurrence (hook-output-discipline.md
+        // MUST-2) → SKIP + WARN so it surfaces without halting /sync. The runtime
+        // guard in provenance-event.js is the blocking defense.
+        status: STATUS.SKIP,
+        detail: `WARN: a signing-key sink co-occurs a model / LLM key token on one line — a model key must never sign a permanent governance record (loom#411 GAP-5): ${h.line}`,
+      });
+    }
+  } else if (scanned > 0) {
+    results.push({
+      artifact: "capture-surface signing sites",
+      status: STATUS.PASS,
+      // Scope-honest: advisory per-line lexical co-occurrence scan over the
+      // enumerated model/LLM key allowlist (env-models.md) — NOT a proof that no
+      // signing path anywhere binds a model key (variable-indirection / cross-line
+      // bindings are out of the per-line scan's reach). The fail-closed defense is
+      // the runtime guard in provenance-event.js; this is defense-in-depth.
+      detail: `${scanned} capture-surface file(s) scanned; no per-line co-occurrence of a signing-key sink + an enumerated model/LLM key (advisory lexical scan)`,
+    });
+  } else {
+    results.push({
+      artifact: "capture-surface signing sites",
+      status: STATUS.SKIP,
+      detail: "no capture-surface .js/.mjs files scanned (nothing to lint)",
+    });
   }
   return { id, source_rule, results };
 }
@@ -2848,6 +3885,199 @@ function allowlistGlobCovers(glob, entry) {
   return false;
 }
 
+// =======================================================================
+//  CHECK — gitignore-learning-parity (#707)
+// =======================================================================
+//
+// The distributable managed-`.gitignore` block sync-tier-aware.mjs writes into
+// every consumer is `sync-manifest.yaml::gitignore_additions`. Its
+// `.claude/learning/**` subset MUST stay a SUPERSET of loom's own root
+// `.gitignore` `.claude/learning/**` set, MINUS the documented loom-only
+// exclusions below. It drifted three times (each caught only at redteam):
+//   1. F1-redteam 2026-06-26 — observations.jsonl + violations.jsonl missing.
+//   2. F19 2026-05-27 — coordination-log.jsonl fixed in loom's .gitignore, not here.
+//   3. journal/0368 2026-06-29 — 8 per-clone-state files still missing (a consumer
+//      could commit its signed trust root + operator-attributed provenance PII).
+// This gate turns "noticed at redteam" into a /sync-time structural FAIL.
+
+// #707 — loom-ONLY .claude/learning/** basenames DELIBERATELY excluded from the
+// consumer-facing gitignore_additions parity set (a single named constant, per
+// the issue's AC). A basename here is loom-RESIDUAL: loom generates it, but no
+// consumer's SYNCED hooks produce it, so omitting it downstream is correct, not
+// a one-at-a-time miss.
+//
+//   .autocommit.lock — lock file for coc-telemetry-autocommit.js, a writer
+//     REMOVED pre-M9.1. A consumer never runs the writer, never creates the lock.
+//     (loom's own .gitignore keeps it for loom's residual file.)
+//
+// DELIBERATELY NOT excluded (the 2026-06-29 base-lane sync correction, #707
+// comment): `observations.archive/` — created by .claude/hooks/lib/learning-utils.js,
+// a SYNCED hook lib that runs at every consumer → consumer-generated per-clone
+// state → BELONGS in gitignore_additions. PR #708 wrongly listed it as loom-only;
+// this gate would have flagged that miss. It is now in gitignore_additions, NOT here.
+//
+// The non-learning loom-only scratch (SURVEY-F40-4*, test-harness/.claude/) lives
+// OUTSIDE .claude/learning/, so it never enters this comparison and needs no entry.
+const LOOM_ONLY_LEARNING_EXCLUSIONS = new Set([".autocommit.lock"]);
+
+const LEARNING_PREFIX = ".claude/learning/";
+
+// Normalize a `.claude/learning/<x>` path entry to its comparable basename:
+// strip the prefix, any trailing `*` glob suffix, and any trailing `/`. So
+// `.claude/learning/.heartbeat-cache*` and `.claude/learning/.heartbeat-cache`
+// both normalize to `.heartbeat-cache`; `provenance/` → `provenance`.
+function normalizeLearningEntry(value) {
+  if (!value.startsWith(LEARNING_PREFIX)) return null;
+  let base = value.slice(LEARNING_PREFIX.length);
+  base = base.replace(/\*+$/, "").replace(/\/+$/, "");
+  return base.length ? base : null;
+}
+
+// Parse loom's OWN root .gitignore in ONE read. Returns:
+//   null  → file unreadable/absent (the detector cannot run).
+//   { learning, sawLearningLine } otherwise:
+//     learning        — Set of normalized `.claude/learning/**` basenames.
+//     sawLearningLine — true iff ANY non-comment line referenced
+//                       `.claude/learning/` at all, regardless of whether it
+//                       normalized to a basename. This is the discriminator
+//                       between parser SHAPE-DRIFT (lines present, zero entries
+//                       → FAIL) and GENUINELY-EMPTY (no learning lines → SKIP).
+function parseLoomGitignore(root) {
+  const text = safeRead(join(root, ".gitignore"));
+  if (text === null) return null;
+  const learning = new Set();
+  let sawLearningLine = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const t = raw.trim();
+    if (!t || t.startsWith("#")) continue;
+    // .gitignore negations (`!path`) re-include — strip the `!` for shape
+    // comparison (same handling as the entry derivation below).
+    const v = t.startsWith("!") ? t.slice(1) : t;
+    if (v.startsWith(LEARNING_PREFIX)) sawLearningLine = true;
+    const base = normalizeLearningEntry(v);
+    if (base) learning.add(base);
+  }
+  return { learning, sawLearningLine };
+}
+
+// Parse the `gitignore_additions:` block of sync-manifest.yaml, returning the
+// normalized `.claude/learning/**` basename set. Scoped to the block (a new
+// top-level key ends it) so unrelated learning-path mentions elsewhere in the
+// manifest cannot leak in.
+function parseManifestGitignoreLearning(root) {
+  const text = safeRead(join(root, ".claude", "sync-manifest.yaml"));
+  if (text === null) return null;
+  const out = new Set();
+  let inBlock = false;
+  for (const raw of text.split(/\r?\n/)) {
+    if (/^gitignore_additions:\s*$/.test(raw)) {
+      inBlock = true;
+      continue;
+    }
+    if (!inBlock) continue;
+    // A new top-level key (no indent, `key:`) ends the block.
+    if (/^[A-Za-z0-9_]+:/.test(raw)) break;
+    const item = raw.match(/^\s+-\s+(.*)$/);
+    if (!item) continue;
+    const val = item[1].trim().replace(/^["']|["']$/g, "");
+    const base = normalizeLearningEntry(val);
+    if (base) out.add(base);
+  }
+  return out;
+}
+
+function checkGitignoreLearningParity(root) {
+  const id = "gitignore-learning-parity";
+  const source_rule =
+    "#707 gitignore_additions ⊇ loom .gitignore learning/** (disclosure parity; F1-redteam / F19 / journal-0368 one-at-a-time-miss class)";
+
+  const loom = parseLoomGitignore(root);
+  const manifestSet = parseManifestGitignoreLearning(root);
+  // FAIL-CLOSED on detector-cannot-run. This is a DISCLOSURE-parity gate: an
+  // unreadable/absent `.gitignore` or `sync-manifest.yaml` means the superset
+  // invariant CANNOT be verified, so the only safe verdict is FAIL (blocking),
+  // never SKIP. SKIP here would be fail-OPEN — a missing input would silently
+  // pass /sync, the exact `evidence-first-claims.md` MUST-3 anti-pattern (an
+  // errored/empty detector is not an all-clear) and inconsistent with the S1
+  // sibling `filterSourceIgnored`, which throws fail-closed on cannot-run.
+  if (loom === null || manifestSet === null) {
+    const missing = [];
+    if (loom === null) missing.push(".gitignore");
+    if (manifestSet === null) missing.push(".claude/sync-manifest.yaml");
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: missing.join(" + "),
+          status: STATUS.FAIL,
+          detail: `disclosure-parity gate cannot run — ${missing.join(" and ")} unreadable or absent. Fail-closed: a missing input cannot prove gitignore_additions ⊇ loom .gitignore learning/**, so this BLOCKS rather than silently passing (fail-open SKIP would defeat the fence).`,
+        },
+      ],
+    };
+  }
+  const loomSet = loom.learning;
+  if (loomSet.size === 0) {
+    // Distinguish parser SHAPE-DRIFT (FAIL) from GENUINELY-EMPTY (SKIP).
+    if (loom.sawLearningLine) {
+      // The .gitignore demonstrably contains `.claude/learning/**` line(s) but
+      // the parser normalized ZERO entries → the entry-shape drifted out from
+      // under `normalizeLearningEntry`. Fail-closed: the required set silently
+      // collapsed to empty, so the per-entry superset loop below would vacuously
+      // PASS while protecting nothing — the journal/0368 disclosure class one
+      // layer deeper. BLOCK until the parser/entry-shape is reconciled.
+      return {
+        id,
+        source_rule,
+        results: [
+          {
+            artifact: ".gitignore",
+            status: STATUS.FAIL,
+            detail:
+              "loom .gitignore references `.claude/learning/` but the parser normalized ZERO entries (parser shape-drift) — the required-set derivation is broken and the parity check would vacuously pass. Fail-closed: BLOCK until normalizeLearningEntry / the .gitignore entry shape are reconciled.",
+          },
+        ],
+      };
+    }
+    // GENUINELY no `.claude/learning/**` entries at all — nothing under
+    // learning/ to protect, so SKIP remains correct (not a fail-open).
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: ".gitignore",
+          status: STATUS.SKIP,
+          detail:
+            "no .claude/learning/** entries in loom .gitignore (no per-clone learning state to protect) — SKIP is correct",
+        },
+      ],
+    };
+  }
+
+  // Required = loom's learning set MINUS the documented loom-only exclusions.
+  const required = [...loomSet]
+    .filter((b) => !LOOM_ONLY_LEARNING_EXCLUSIONS.has(b))
+    .sort();
+  // The FULL required set, printed (AC: enumerate the full set, not a sample).
+  const requiredList = required
+    .map((b) => `.claude/learning/${b}`)
+    .join(", ");
+
+  const results = [];
+  for (const base of required) {
+    const present = manifestSet.has(base);
+    results.push({
+      artifact: `.claude/learning/${base}`,
+      status: present ? STATUS.PASS : STATUS.FAIL,
+      detail: present
+        ? `present in gitignore_additions`
+        : `MISSING from sync-manifest.yaml::gitignore_additions — loom's own .gitignore ignores it as per-clone state but the distributable block does not, so a consumer can git-commit it (the journal/0368 disclosure class). Add it to gitignore_additions, OR (if loom-only) add its basename to LOOM_ONLY_LEARNING_EXCLUSIONS with rationale. FULL required set (loom learning/** minus exclusions [${[...LOOM_ONLY_LEARNING_EXCLUSIONS].join(", ")}]): ${requiredList}`,
+    });
+  }
+  return { id, source_rule, results };
+}
+
 function checkAllowlistPathsCoverage(root) {
   const id = "allowlist-paths-coverage";
   const source_rule =
@@ -2893,8 +4123,249 @@ function checkAllowlistPathsCoverage(root) {
   return { id, source_rule, results };
 }
 
+// ── CHECK 20 — Codex hooks.json top-level schema (only `hooks` allowed) ───────
+// Codex's hooks-config parser uses serde `deny_unknown_fields` on the top-level
+// object: the ONLY accepted key is `hooks`. Any annotation/comment key
+// ($comment, $env_var_note, _note, $schema, …) makes Codex reject the ENTIRE
+// file with `unknown field '<k>', expected 'hooks'` — silently disabling every
+// Codex hook in the consuming repo. (Gemini's parser is more lenient and
+// tolerates a top-level `_template_note`; Codex tolerates nothing but `hooks`,
+// so this guard is Codex-only.) Positive allowlist per cc-artifacts.md Rule 10:
+// flag every top-level key NOT in CODEX_HOOKS_ALLOWED_TOP_KEYS, so a future
+// annotation key is caught at /sync, not by a broken downstream Codex session.
+//
+// SCOPE — intentionally TOP-LEVEL only: the empirically-confirmed Codex
+// rejection point (the reported `unknown field '$comment', expected 'hooks'`)
+// is the top-level object. Whether Codex ALSO applies deny_unknown_fields to
+// nested hook entries is unverified against the Codex parser source, so a
+// nested-annotation guard is a documented follow-up contingent on that evidence
+// — not a guess at the nested schema here.
+// Origin: 2026-06-30 — a downstream Codex session failed to parse
+// .codex/hooks.json (`$comment` + `$env_var_note` top-level keys); the Gemini
+// side had learned this lesson (gemini-templates note) but it was never
+// propagated to Codex nor enforced (the parity gap closed by
+// checkGeminiSettingsSchema below).
+const CODEX_HOOKS_ALLOWED_TOP_KEYS = new Set(["hooks"]);
+
+// Validate ONE codex hooks.json document against the strict top-level schema.
+// Returns a results[] fragment (0..1 entry) tagged with `tag`. Both the shipped
+// TEMPLATE (`.claude/codex-templates/hooks.json`) and loom's own dogfood config
+// (root `.codex/hooks.json`) are validated — a `$`-key in EITHER silently
+// disables every Codex hook in that surface, so both MUST be schema-clean.
+function checkOneCodexHooksFile(hooksPath, tag, { skipDetail }) {
+  if (!existsSync(hooksPath)) {
+    return { artifact: tag, status: STATUS.SKIP, detail: skipDetail };
+  }
+  const text = safeRead(hooksPath);
+  if (text === null) {
+    return { artifact: tag, status: STATUS.FAIL, detail: "unreadable or exceeds the size cap" };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    return { artifact: tag, status: STATUS.FAIL, detail: `does not parse as JSON: ${e.message}` };
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { artifact: tag, status: STATUS.FAIL, detail: "top-level value MUST be a JSON object" };
+  }
+  const extras = Object.keys(parsed).filter((k) => !CODEX_HOOKS_ALLOWED_TOP_KEYS.has(k));
+  if (extras.length) {
+    return {
+      artifact: tag,
+      status: STATUS.FAIL,
+      detail: `top-level key(s) ${JSON.stringify(extras)} rejected by Codex (deny_unknown_fields; only "hooks" allowed) — Codex fails the WHOLE file with \`unknown field '${extras[0]}', expected 'hooks'\` and silently disables every Codex hook. Move annotation/comment content to codex-templates/README.md.`,
+    };
+  }
+  if (!("hooks" in parsed)) {
+    return { artifact: tag, status: STATUS.FAIL, detail: "missing required top-level `hooks` key" };
+  }
+  return { artifact: tag, status: STATUS.PASS, detail: "only `hooks` top-level key" };
+}
+
+function checkCodexHooksSchema(root) {
+  const id = "codex-hooks-schema";
+  const source_rule =
+    "Codex hooks.json strict schema — only `hooks` top-level key (serde deny_unknown_fields); annotation/comment content belongs in codex-templates/README.md, NOT the JSON";
+  // Two surfaces, same schema contract: the shipped template AND the loom-local
+  // dogfood config. CHECK 20 originally guarded only the template, which let the
+  // loom-local `.codex/hooks.json` silently retain `$comment`/`$env_var_note`
+  // (loom#820 F820b) — loom dogfoods Codex, so its own config must be clean too.
+  const results = [
+    checkOneCodexHooksFile(
+      join(root, ".claude", "codex-templates", "hooks.json"),
+      "codex-templates/hooks.json",
+      { skipDetail: "no codex hooks template (CC-only / non-Codex loom)" },
+    ),
+    checkOneCodexHooksFile(
+      join(root, ".codex", "hooks.json"),
+      ".codex/hooks.json",
+      { skipDetail: "no loom-local .codex/hooks.json (loom does not dogfood Codex)" },
+    ),
+  ];
+  return { id, source_rule, results };
+}
+
+// ── CHECK 21 — Gemini settings.json forbids `$`-prefixed keys ─────────────────
+// The Gemini CLI (0.41.2+) rejects `$comment`-class keys inside object schemas
+// (documented in gemini-templates/settings.json itself). A `$`-prefixed
+// annotation key ANYWHERE in the emitted .gemini/settings.json therefore breaks
+// Gemini and silently disables every hook — the SAME bug class as the Codex
+// top-level guard above, with a different rejection surface (nested, not just
+// top-level). Gemini TOLERATES a top-level `_template_note` (underscore, NOT
+// `$`), which is how the template documents itself; only `$`-prefixed keys are
+// the rejected class. This is a DENYLIST pattern (flag `$`-prefixed) — correct
+// per cc-artifacts.md Rule 10's scope clarification: a settings.json key
+// vocabulary is NOT enumerable (arbitrary nested config), so a positive
+// allowlist is infeasible; the known-rejected `$`-prefix class is the right
+// pattern. Recurses every nesting level because the rejection is "inside object
+// schemas", not top-level only.
+// Origin: 2026-06-30 — closed in the same session as checkCodexHooksSchema; the
+// gemini-templates note captured the lesson in prose but no validator enforced it.
+function collectDollarPrefixedKeys(value, pathStr, acc) {
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      collectDollarPrefixedKeys(value[i], `${pathStr}[${i}]`, acc);
+    }
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
+  for (const k of Object.keys(value)) {
+    if (k.startsWith("$")) acc.push(`${pathStr}.${k}`);
+    collectDollarPrefixedKeys(value[k], `${pathStr}.${k}`, acc);
+  }
+}
+
+function checkGeminiSettingsSchema(root) {
+  const id = "gemini-settings-schema";
+  const source_rule =
+    "Gemini settings.json forbids `$`-prefixed keys (Gemini CLI 0.41.2+ rejects $comment-class keys inside object schemas); annotation content uses a top-level `_template_note` (underscore) or the gemini-templates docs, never a `$`-key";
+  const tag = "gemini-templates/settings.json";
+  const p = join(root, ".claude", "gemini-templates", "settings.json");
+  if (!existsSync(p)) {
+    return {
+      id,
+      source_rule,
+      results: [{ artifact: tag, status: STATUS.SKIP, detail: "no gemini settings template (CC-only / non-Gemini loom)" }],
+    };
+  }
+  const text = safeRead(p);
+  if (text === null) {
+    return { id, source_rule, results: [{ artifact: tag, status: STATUS.FAIL, detail: "unreadable or exceeds the size cap" }] };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    return { id, source_rule, results: [{ artifact: tag, status: STATUS.FAIL, detail: `does not parse as JSON: ${e.message}` }] };
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { id, source_rule, results: [{ artifact: tag, status: STATUS.FAIL, detail: "top-level value MUST be a JSON object" }] };
+  }
+  const dollarKeys = [];
+  collectDollarPrefixedKeys(parsed, "settings", dollarKeys);
+  if (dollarKeys.length) {
+    return {
+      id,
+      source_rule,
+      results: [{
+        artifact: tag,
+        status: STATUS.FAIL,
+        detail: `\`$\`-prefixed key(s) ${JSON.stringify(dollarKeys)} rejected by Gemini (CLI 0.41.2+ rejects $comment-class keys inside object schemas) → the WHOLE settings.json is rejected and every Gemini hook silently disabled. Use a top-level \`_template_note\` (underscore) or the gemini-templates docs instead.`,
+      }],
+    };
+  }
+  return { id, source_rule, results: [{ artifact: tag, status: STATUS.PASS, detail: "no `$`-prefixed keys" }] };
+}
+
+// #771: every top-level .claude/hooks/*.js MUST be either registered in
+// .claude/settings.json OR carry an `@settings-registration:` header marker
+// documenting how it is invoked OUTSIDE settings.json (git-hook, optional
+// consumer-registered deploy gate, etc.). Closes the class the #771
+// template-stale bug surfaced: a rule-mandated guard (analyze-completeness-guard,
+// PreToolUse:Skill) shipped INERT because its settings.json registration was
+// never propagated to the template. A top-level hook that is NEITHER registered
+// NOR documented is a silent fail-open — flagged FAIL (blocks /sync).
+//
+// Scope: loom's OWN top-level .claude/hooks/*.js only (NOT lib/, NOT variant
+// hooks under variants/<lang>/hooks/ — the per-variant settings overlay is a
+// deliberately-deferred net-new mechanism; build-cache-* variant hooks are
+// documented as a residual in sync-manifest.yaml). The check reads the marker
+// from the hook header; it does NOT parse settings.json structure, only the set
+// of *.js basenames any command string references (robust to nesting/matcher shape).
+function checkSettingsRegistration(root) {
+  const id = "settings-hook-registration";
+  const source_rule =
+    "analyze-output-completeness.md Trust Posture Wiring (settings.json registers the guard under a Skill matcher) + #771";
+  const hooksDir = join(root, ".claude", "hooks");
+  let diskHooks;
+  try {
+    diskHooks = readdirSync(hooksDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith(".js"))
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: ".claude/hooks",
+          status: STATUS.SKIP,
+          detail: "hooks dir absent (consumer emitted tree — no source hooks)",
+        },
+      ],
+    };
+  }
+  const settingsText = safeRead(join(root, ".claude", "settings.json"));
+  if (settingsText == null) {
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: ".claude/settings.json",
+          status: STATUS.SKIP,
+          detail: "settings.json unreadable — skipping registration cross-check",
+        },
+      ],
+    };
+  }
+  // Registered = any *.js basename referenced by ANY settings.json command string.
+  const registered = new Set(settingsText.match(/[a-zA-Z0-9._-]+\.js/g) || []);
+  const MARKER = /@settings-registration:/;
+  const results = [];
+  for (const h of diskHooks) {
+    if (registered.has(h)) {
+      results.push({
+        artifact: `hooks/${h}`,
+        status: STATUS.PASS,
+        detail: "registered in settings.json",
+      });
+      continue;
+    }
+    const header = (safeRead(join(hooksDir, h)) || "").slice(0, 2500);
+    if (MARKER.test(header)) {
+      results.push({
+        artifact: `hooks/${h}`,
+        status: STATUS.PASS,
+        detail: "documented @settings-registration (invoked outside settings.json)",
+      });
+      continue;
+    }
+    results.push({
+      artifact: `hooks/${h}`,
+      status: STATUS.FAIL,
+      detail:
+        "top-level hook is NEITHER registered in settings.json NOR documented via an `@settings-registration:` header marker — a rule-mandated guard shipped this way is inert (fails open, #771). Register it in settings.json, or add `@settings-registration: <how-it-is-invoked>` to the header.",
+    });
+  }
+  return { id, source_rule, results };
+}
+
 const CHECK_FNS = {
   "command-frontmatter": checkCommandFrontmatter,
+  "settings-hook-registration": checkSettingsRegistration,
   "command-line-cap": checkCommandLineCap,
   "readonly-specialist-tools": checkReadonlySpecialistTools,
   "tool-canonicality": checkToolCanonicality,
@@ -2902,6 +4373,8 @@ const CHECK_FNS = {
   "paths-annotation-consistency": checkPathsAnnotationConsistency,
   "audit-fixture-coverage": checkAuditFixtureCoverage,
   "loom-only-mutual-exclusion": checkLoomOnlyMutualExclusion,
+  "edition-community-completeness": checkEditionCommunityCompleteness,
+  "edition-no-runtime-license": checkEditionNoRuntimeLicense,
   "provenance-parity": checkProvenanceParity,
   "provenance-subagent-hooks": checkProvenanceSubagentHooks,
   "hook-delivery": checkHookDelivery,
@@ -2911,6 +4384,12 @@ const CHECK_FNS = {
   "variant-orphan": checkVariantOrphan,
   "allowlist-paths-coverage": checkAllowlistPathsCoverage,
   "surface-role-membership": checkSurfaceRoleMembership,
+  "claude-md-surface-role-parity": checkClaudeMdSurfaceRoleParity,
+  "gitignore-learning-parity": checkGitignoreLearningParity,
+  "codex-hooks-schema": checkCodexHooksSchema,
+  "gemini-settings-schema": checkGeminiSettingsSchema,
+  "operator-ref-credential-separation": checkOperatorRefCredentialSeparation,
+  "signing-model-key-separation": checkSigningModelKeySeparation,
 };
 
 function runChecks(root, only, opts) {
@@ -3031,10 +4510,25 @@ function main() {
     for (const c of checks) {
       const fails = c.results.filter((r) => isBlocking(r.status) && !r.allowed);
       const allowedHere = c.results.filter((r) => isBlocking(r.status) && r.allowed);
-      const mark = fails.length ? "FAIL" : "ok";
+      // Advisory findings ride on a non-blocking SKIP with a `WARN:`-prefixed
+      // detail (hook-output-discipline.md MUST-2: a lexical signal MUST NOT block).
+      // Surface them so a real hit is VISIBLE in the default (non-JSON) output —
+      // otherwise a genuine advisory finding renders under `[ok]` and is silently
+      // dropped (the check would report clean on a true positive). Does NOT touch
+      // `mark` / `isBlocking` / exit code — the finding stays advisory, never blocks.
+      const warns = c.results.filter(
+        (r) =>
+          r.status === STATUS.SKIP &&
+          typeof r.detail === "string" &&
+          r.detail.startsWith("WARN:"),
+      );
+      const mark = fails.length ? "FAIL" : warns.length ? "warn" : "ok";
       process.stdout.write(`[${mark}] ${c.id}  (${c.source_rule})\n`);
       for (const r of fails) {
         process.stdout.write(`      ✗ ${r.artifact} — ${r.detail || r.status}\n`);
+      }
+      for (const r of warns) {
+        process.stdout.write(`      ⚠ ${r.artifact} — ${r.detail}\n`);
       }
       for (const r of allowedHere) {
         process.stdout.write(`      ~ ${r.artifact} — ALLOWED (${r.detail || r.status})\n`);
@@ -3055,10 +4549,33 @@ function main() {
 
 // Export internals for the audit-fixture harness.
 const __filename = fileURLToPath(import.meta.url);
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(__filename);
+
+// Symlink-robust "was this module invoked directly?" test. `filename` (from
+// import.meta.url) is already realpath-resolved by the module loader, while
+// `argv1` is the path exactly as the user invoked it — which may traverse a
+// symlink (e.g. macOS `/tmp` → `/private/tmp`, or a symlinked checkout prefix).
+// A plain resolve() does NOT dereference symlinks, so the two can differ for the
+// same file, making main-detection silently false → main() never runs → the
+// validator no-ops and reports a false-clean (an audit-integrity defect).
+// realpathSync canonicalizes BOTH sides so the comparison holds through symlinks.
+function isInvokedAsMain(argv1, filename) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(filename);
+  } catch {
+    // realpathSync throws when argv1 does not resolve on disk (e.g. a virtual
+    // entrypoint). Fall back to the resolve()-comparison — the non-symlink path,
+    // correct whenever no symlink is in play (the only case reachable here).
+    return resolve(argv1) === resolve(filename);
+  }
+}
+
+const isMain = isInvokedAsMain(process.argv[1], __filename);
 
 export {
   parseFrontmatter,
+  COMMAND_LINE_CAP,
+  COMMAND_LINE_CAP_EXCEPTIONS,
   parseToolList,
   matchesGlob,
   emitFresh,
@@ -3068,6 +4585,7 @@ export {
   enumerateDetectors,
   classifyFixtures,
   checkCommandFrontmatter,
+  checkSettingsRegistration,
   checkCommandLineCap,
   checkReadonlySpecialistTools,
   checkToolCanonicality,
@@ -3075,6 +4593,8 @@ export {
   checkPathsAnnotationConsistency,
   checkAuditFixtureCoverage,
   checkLoomOnlyMutualExclusion,
+  checkEditionCommunityCompleteness,
+  checkEditionNoRuntimeLicense,
   checkProvenanceParity,
   parseProvenanceParity,
   checkProvenanceSubagentHooks,
@@ -3086,6 +4606,10 @@ export {
   extractRulesIndexCitations,
   checkCodexPoliciesFresh,
   canonicalPolicies,
+  checkCodexHooksSchema,
+  CODEX_HOOKS_ALLOWED_TOP_KEYS,
+  checkGeminiSettingsSchema,
+  collectDollarPrefixedKeys,
   checkVariantOrphan,
   parseVariantsBlock,
   parseVariantOnlyAll,
@@ -3118,6 +4642,22 @@ export {
   CHECK_IDS,
   STATUS,
   findRepoRoot,
+  parseClaudeMdCommandRoles,
+  checkClaudeMdSurfaceRoleParity,
+  checkGitignoreLearningParity,
+  parseLoomGitignore,
+  parseManifestGitignoreLearning,
+  normalizeLearningEntry,
+  LOOM_ONLY_LEARNING_EXCLUSIONS,
+  checkOperatorRefCredentialSeparation,
+  scanOperatorRefSsotDefinitions,
+  scanOperatorRefBypassSites,
+  listJsFiles,
+  OPERATOR_REF_IDENTITY_FIELDS,
+  checkSigningModelKeySeparation,
+  scanSigningModelKeyBindings,
+  flagsSigningModelKeyBindings,
+  isInvokedAsMain,
 };
 
 if (isMain) main();

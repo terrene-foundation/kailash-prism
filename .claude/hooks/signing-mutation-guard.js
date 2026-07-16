@@ -103,6 +103,9 @@ const { isMutationTool } = require(
 const { isCoordinationEnabled } = require(
   path.join(__dirname, "lib", "coordination-mode.js"),
 );
+const { resolveMainCheckout } = require(
+  path.join(__dirname, "lib", "state-resolver.js"),
+);
 
 function passthrough() {
   clearTimeout(fallback);
@@ -110,15 +113,7 @@ function passthrough() {
   process.exit(0);
 }
 
-function readStdinSync() {
-  try {
-    const data = fs.readFileSync(0, "utf8");
-    if (!data || !data.trim()) return {};
-    return JSON.parse(data);
-  } catch {
-    return {};
-  }
-}
+const { readStdinBounded } = require("./lib/read-stdin-bounded.js");
 
 function resolveRepoDir(payload) {
   const envDir = process.env.COC_OPERATOR_REPO_DIR;
@@ -307,7 +302,7 @@ function wouldMutateWorkingTree(opKind, repoDir, candidateRel) {
 
 (async function main() {
   try {
-    const payload = readStdinSync();
+    const payload = await readStdinBounded();
     const hookEvent = payload.hook_event_name || "PreToolUse";
 
     const op = classifyOperation(payload);
@@ -324,7 +319,16 @@ function wouldMutateWorkingTree(opKind, repoDir, candidateRel) {
     // an absent signing key is "un-enrolled", NOT "degraded" — blocking every
     // tracked-path Edit/Write/commit because no GPG key is configured is THE
     // disruption (analysis gate #3). Passthrough. When ENABLED, byte-unchanged.
-    if (!isCoordinationEnabled(repoDir)) {
+    //
+    // MO-OPT holistic post-multi-wave redteam (Cluster A): the predicate's tier-2
+    // local-override (.claude/learning/coordination-mode.json) is GITIGNORED →
+    // ABSENT in a worktree. Reading it against the worktree cwd would split a
+    // tier-2-enrolled repo OFF here while integrity-guard / journal-write-guard
+    // read it ON from main (cross-shard inconsistency + S6 weakening on the
+    // local-override path). Resolve the MAIN checkout for the predicate ONLY (the
+    // same main-checkout discipline as trust-posture.md MUST-1 / integrity-guard
+    // .js:362); repoDir stays the worktree cwd for §4.2 porcelain + repoRelative.
+    if (!isCoordinationEnabled(resolveMainCheckout(repoDir) || repoDir)) {
       passthrough();
     }
 

@@ -18,3 +18,8 @@ web/.claude/
 
 # Dart library lockfile — kailash_prism is published via pub.dev; lockfile is per-consumer
 flutter/pubspec.lock
+
+# >>> coc:gitignore_additions — managed by loom /sync; do not edit between markers >>>
+!.claude/bin/lib/
+!.claude/hooks/lib/
+# <<< coc:gitignore_additions <<<
