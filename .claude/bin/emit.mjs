@@ -66,6 +66,11 @@ function safeReadFileSync(filePath, encoding) {
 
 import { parseSlotsV5, applyOverlay } from "./lib/slot-parser.mjs";
 import { resolveOverlay } from "./lib/variant-overlay.mjs";
+// F-353 Item 4 — deployment-local rules (ADD-ONLY). The emit/compose path
+// composes canon ∪ declared-local baseline rules so a deployment's local rule
+// LOADS alongside canon; the loader enforces the add-only-no-override invariant
+// (a collision with a canon rule is a LOUD throw that BLOCKS the emit).
+import { loadLocalRules } from "./lib/local-rules.mjs";
 import { extractPolicies } from "../codex-mcp-guard/extract-policies.mjs";
 // Validator 18 (#408 AC#5-a) shares the EMITTER's canonical manifest parser +
 // glob matcher so the validator's cc-only certification provably matches what
@@ -91,6 +96,7 @@ const REPO = path.resolve(__dirname, "..", "..");
 // ────────────────────────────────────────────────────────────────
 // Strip sections:
 //   - Origin: lines (and continuation paragraphs)
+//   - Trust Posture Wiring H2 sections                     [v6 M-2]
 //   - Evidence / Verified / Measured H3+ sub-sections
 //   - BLOCKED rationalizations: enumerated bullet lists
 //   - BLOCKED responses: enumerated bullet lists           [v6 M-1]
@@ -129,6 +135,27 @@ export function abridgeV6(raw) {
     if (/^Origin:/i.test(trimmed) || /^\*\*Origin:/i.test(trimmed)) {
       i++;
       while (i < lines.length && lines[i].trim() !== "") i++;
+      continue;
+    }
+
+    // Trust Posture Wiring H2 section — strip entire section until next H1/H2.
+    // [v6 M-2] Wiring is loom-INTERNAL enforcement metadata (severity, grace
+    // period, cumulative posture math, detection mechanism, receipt/violation
+    // scope) — bookkeeping for loom's own posture machinery, NOT agent-behavioral
+    // instruction. A Codex/Gemini consumer of a USE template never runs that
+    // machinery, so the Wiring prose is dead weight in its always-on baseline —
+    // the same loom-internal class abridge already strips for `Origin:` above.
+    // It stays in the SOURCE rule: CC full-rule load sees it, and the
+    // cc-architect canonical-8-field sweep greps `**Violation scope:**` against
+    // `.claude/rules/*.md` (source), never the abridged baseline, so the
+    // grep-token contract (`trust-posture.md` MUST-8) is unaffected.
+    if (hMatch && hMatch[1].length === 2 && /^##\s+Trust Posture Wiring\b/.test(line)) {
+      i++;
+      while (i < lines.length) {
+        const n = lines[i].match(/^(#{1,6})\s/);
+        if (n && n[1].length <= 2) break; // next H1/H2 section begins
+        i++;
+      }
       continue;
     }
 
@@ -273,10 +300,15 @@ export function stripRuleFrontmatter(raw) {
 // rs override of framework-first.md was invisible to emit because only
 // CLI-only and ternary paths composed into the baseline.
 export function composeRule(ruleName, cli, lang = null) {
-  // Rule-name validation: must be a simple .md filename — no traversal.
-  if (!/^[a-z][a-z0-9-]*\.md$/.test(ruleName)) {
+  // Rule-name validation: a simple `.md` filename, OR a `local/<name>.md`
+  // deployment-local rule (F-353 Item 4). The optional single `local/` segment
+  // is the ONLY subdir form permitted — no other traversal. A local rule is a
+  // fork-local ADDITION with NO variant overlays (never py/rs/cli-specialized),
+  // so it composes as the raw global body and SKIPS the axis-overlay passes.
+  const isLocal = /^local\/[a-z][a-z0-9-]*\.md$/.test(ruleName);
+  if (!isLocal && !/^[a-z][a-z0-9-]*\.md$/.test(ruleName)) {
     throw new Error(
-      `invalid rule name '${ruleName}' — must match /^[a-z][a-z0-9-]*\\.md$/`,
+      `invalid rule name '${ruleName}' — must match /^[a-z][a-z0-9-]*\\.md$/ (or a local/<name>.md deployment-local rule)`,
     );
   }
 
@@ -287,6 +319,11 @@ export function composeRule(ruleName, cli, lang = null) {
 
   let composed = safeReadFileSync(globalPath, "utf8");
   const warnings = [];
+
+  // Deployment-local rules carry no variant overlays — compose the body as-is.
+  if (isLocal) {
+    return { composed, warnings };
+  }
 
   // Axis resolution defers to resolveOverlay() so sync-manifest.yaml::variants
   // is the source of truth. `null` declarations skip the axis even if a
@@ -480,8 +517,13 @@ export function loadCliCaps() {
 }
 
 export function getCritBaseline() {
-  // CRIT baseline = rules with priority: 0 in frontmatter.
+  // CRIT baseline = CANON rules with priority: 0 in frontmatter.
   // Empirically matches the per_rule_size_budget_bytes keys in the manifest.
+  // NON-recursive by design: the `.claude/rules/local/` subtree (F-353 Item 4)
+  // is a dirent, not a `.md` file, so canon's baseline NEVER enumerates a
+  // deployment-local rule (mechanism #1 — canon stays local-blind). Local
+  // baseline rules are composed SEPARATELY (getLocalBaselineRules, below) so the
+  // add-only overlay is additive, never a canon-baseline mutation.
   const rulesDir = path.join(REPO, ".claude", "rules");
   const files = fs.readdirSync(rulesDir).filter((f) => f.endsWith(".md"));
   const crit = [];
@@ -493,6 +535,25 @@ export function getCritBaseline() {
     if (prio && parseInt(prio[1], 10) === 0) crit.push(f);
   }
   return crit.sort();
+}
+
+// F-353 Item 4 — deployment-local baseline rules composed ALONGSIDE canon.
+// Returns `local/<name>.md` rule names (composeRule joins them under
+// `.claude/rules/`, resolving `.claude/rules/local/<name>.md`) for declared
+// local rules that carry `priority: 0` (baseline-active parity with canon).
+// INERT for canon loom + any deployment with no `local-manifest.yaml` → []. The
+// loader ENFORCES the add-only invariant: a local id/path colliding with a canon
+// rule is a LOUD `add-only-violation` throw that BLOCKS the emit — a local rule
+// can never silently override, shadow, or soften a canon rule.
+export function getLocalBaselineRules(repoRoot = REPO) {
+  // loadLocalRules enforces the ADD-ONLY invariant (LOUD throw on a canon
+  // collision) AND the baseline-only contract (every returned local rule is
+  // `priority: 0`), so the returned set is exactly the always-on baseline local
+  // rules — no re-filter needed. r.path is repo-relative
+  // `.claude/rules/local/<name>.md`; the ruleName composeRule expects is the
+  // path UNDER `.claude/rules/` → `local/<name>.md`.
+  const { rules } = loadLocalRules(repoRoot);
+  return rules.map((r) => r.path.replace(/^\.claude\/rules\//, "")).sort();
 }
 
 // #423 AC#4 — pure binding-token guard, exported so the violation shape is
@@ -606,7 +667,10 @@ export function getProximityBandAdvisory({
 }
 
 export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun = false } = {}) {
-  const crit = getCritBaseline();
+  // Canon ∪ deployment-local baseline (F-353 Item 4). getLocalBaselineRules is
+  // INERT ([]) for canon loom, so this is a no-op here; in a fork with declared
+  // local rules it composes them alongside canon (add-only enforced at load).
+  const crit = [...getCritBaseline(), ...getLocalBaselineRules()];
   const budgets = loadPerRuleBudgets();
   const tolerance = loadBudgetTolerance();
   const blockThreshold = loadBudgetBlockThreshold();
@@ -1039,13 +1103,18 @@ export function validateCliDelivery() {
 
 // ────────────────────────────────────────────────────────────────
 // Validator 15 — manifest tier-completeness (loom 2026-05-16, journal
-// 0078). Every .claude/rules/*.md MUST have its distribution fate
+// 0078; agents + skill-dir + command coverage added 2026-07-05, knowledge-
+// cascade-routing.md MUST-2). Every .claude/rules/*.md — AND every
+// .claude/agents/**/*.md file AND every .claude/skills/<dir>/ directory AND
+// every .claude/commands/*.md file — MUST have its distribution fate
 // consciously declared in sync-manifest.yaml — exactly one of:
-//   (a) tier-listed (cc/co/coc/onboarding) — shipped to subscribers,
-//   (b) use_obsoleted: — actively purged from USE templates,
-//   (c) use_exclude:   — deliberately loom-only (never fanned out).
-// The failure mode this blocks is SILENT omission: a rule that is in
-// none of the three falls out of the subscription-based /sync model
+//   (a) tier-listed (cc/coc-core/kailash/onboarding) — shipped to subscribers,
+//   (b) use_obsoleted:/obsoleted: — actively purged from templates,
+//   (c) use_exclude:/exclude:/loom_only: — deliberately loom-only (never
+//       fanned out; rules conventionally use use_exclude, agents+skills+
+//       commands use loom_only).
+// The failure mode this blocks is SILENT omission: an artifact that is in
+// none of these falls out of the subscription-based /sync model
 // unnoticed. Before this validator, 16 rules authored at loom were
 // never added to a tier and were frozen in templates (matching only by
 // the luck of a pre-subscription full-sync). use_exclude IS a conscious
@@ -1053,6 +1122,118 @@ export function validateCliDelivery() {
 // as managed prevents false positives on deliberately-excluded rules
 // while still hard-failing the unmanaged class. Regex-scoped section
 // parse (no YAML dep) consistent with loadManifestConfig.
+// Base-exclusion advisory heuristic (journal/0362 STEP-2). Returns true when a
+// rule body shows NEITHER Kailash-framework coupling NOR loom-tooling coupling —
+// i.e. it reads as GENERAL COC coding methodology. A general rule sitting in the
+// `kailash` tier (which the non-Kailash `base` axis does not subscribe to) is
+// the F10 base-coverage gap; the caller flags it as a non-blocking advisory.
+// Loom-tooling coupling suppresses the flag because COC-tooling rules (sync /
+// variant / cross-CLI) legitimately stay kailash-only (base never runs loom's
+// sync machinery). Pure + exported so the heuristic is unit-testable in
+// isolation (positive + negative) without live-manifest injection.
+const _KAILASH_COUPLING_RE =
+  /(kailash|dataflow|nexus|kaizen|\bpact\b|\beatp\b|trust[ -]?plane|workflowbuilder|connection[ -]?pool|infrastructure[ -]?sql|tenant[_ -]?isolation|core sdk|cross-?sdk|build[ -]repo|@db\.model)/i;
+const _LOOM_TOOLING_RE =
+  /(sync-to-|\/sync\b|sync-manifest|\bloom\b|\bvariant|emit-cli|use template|build repo|cross-?cli|\bcodex\b|\bgemini\b|coc-sync|tier_subscriptions)/i;
+export function isBaseExclusionAdvisoryCandidate(ruleBody) {
+  if (typeof ruleBody !== "string" || ruleBody.length === 0) return false;
+  return !_KAILASH_COUPLING_RE.test(ruleBody) && !_LOOM_TOOLING_RE.test(ruleBody);
+}
+
+// ── Agent + skill-directory completeness (loom 2026-07-05, knowledge-cascade-
+// routing.md MUST-2) ──────────────────────────────────────────────────────────
+// V15 originally hard-failed on an unmanaged rules/*.md ONLY. A NEW agent file
+// or a NET-NEW skill DIRECTORY with no manifest declaration silently orphans in
+// EXACTLY the same way — it falls out of the subscription-based /sync model
+// unnoticed. knowledge-cascade-routing.md MUST-2 names this precise gap ("for
+// artifact types V15 does not yet cover (agents, net-new skill directories),
+// the author MUST declare the fate consciously, because the backstop will not
+// catch the omission"). These two pure helpers extend the SAME completeness
+// contract to agents (per-file) and skills (per-directory).
+//
+// An artifact is MANAGED when its manifest-relative path is declared in ANY
+// distribution-fate block: a tier, loom_only, exclude, use_exclude, obsoleted,
+// or use_obsoleted. Declarations may be exact files (agents/x.md), directory
+// globs (agents/frontend/**, skills/<name>/**), the codex TOML-safety overlay
+// form (foo/**.md), or `.claude/`-prefixed trailing-slash dir entries
+// (obsoleted:/use_obsoleted: use the `.claude/` prefix; the others do not).
+// Regex block-slice + entry-scan (no YAML dep), consistent with
+// validateTierCompleteness / loadManifestConfig. Exported for unit test.
+export function _collectDeclaredArtifactPatterns(manifestText) {
+  const sliceBlock = (key) => {
+    const re = new RegExp(`^${key}:\\s*$`, "m");
+    const start = manifestText.search(re);
+    if (start === -1) return "";
+    const bodyStart = manifestText.indexOf("\n", start);
+    if (bodyStart === -1) return "";
+    const after = manifestText.slice(bodyStart + 1);
+    const nextRel = after.search(/^[A-Za-z_][\w-]*:\s*$/m);
+    return after.slice(0, nextRel === -1 ? undefined : nextRel);
+  };
+  // `- <path>` at any indent; strip an optional quote + trailing `# comment`;
+  // normalize away the `.claude/` prefix so obsoleted/use_obsoleted entries
+  // (which carry it) compare equal to tier entries (which do not).
+  const entriesOf = (block) =>
+    [...block.matchAll(/^\s*-\s*"?([A-Za-z0-9_.\/*-]+?)"?\s*(?:#.*)?$/gm)].map(
+      (m) => m[1].replace(/^\.claude\//, ""),
+    );
+  const patterns = new Set();
+  for (const key of [
+    "tiers",
+    "loom_only",
+    "exclude",
+    "use_exclude",
+    "obsoleted",
+    "use_obsoleted",
+  ]) {
+    for (const e of entriesOf(sliceBlock(key))) patterns.add(e);
+  }
+  // Defense-in-depth: a type-root catch-all (agents/**, skills/**, commands/**,
+  // OR the trailing-slash dir agents/ etc.) would trivially satisfy the
+  // per-artifact completeness check for that whole type — silently defeating
+  // this validator. No legitimate manifest declaration is a bare type-root
+  // wildcard (each artifact is declared specifically, e.g. skills/NN-name/**),
+  // so drop them. Keeps completeness non-vacuous against a future footgun.
+  for (const overBroad of [
+    "agents/**",
+    "skills/**",
+    "commands/**",
+    // the `**.md` overlay form is established manifest vocabulary (cli_variants
+    // uses `agents/**.md:`), so a future author could write it into a fate block
+    // by analogy — and since agent/command paths end in `.md`, `agents/**.md` /
+    // `commands/**.md` would vacuously satisfy that whole type's completeness
+    // (R2 security-reviewer). Drop them too. (skills/**.md is harmless — a skill
+    // `rel` is a directory with no `.md` suffix — but dropped for symmetry.)
+    "agents/**.md",
+    "skills/**.md",
+    "commands/**.md",
+    "agents/",
+    "skills/",
+    "commands/",
+  ]) {
+    patterns.delete(overBroad);
+  }
+  return patterns;
+}
+
+// True when `rel` (a manifest-relative artifact path, e.g. agents/x.md or the
+// skill-directory path skills/<name>) is covered by any declared pattern. Glob
+// semantics: exact match; `pre/**` (directory glob — matches the dir itself AND
+// anything under it); `pre/**.md` (codex TOML-safety overlay form); `pre/`
+// (trailing-slash dir prefix, the obsoleted-dir shape). A skill DIRECTORY is
+// managed by its `skills/<name>/**` tier glob because `pre/** → pre === rel`.
+export function _artifactIsManaged(rel, patterns) {
+  for (const p of patterns) {
+    if (p === rel) return true;
+    if (p.endsWith("/**") && (rel === p.slice(0, -3) || rel.startsWith(p.slice(0, -2))))
+      return true;
+    if (p.endsWith("/**.md") && rel.endsWith(".md") && rel.startsWith(p.slice(0, -5)))
+      return true;
+    if (p.endsWith("/") && (rel === p.slice(0, -1) || rel.startsWith(p))) return true;
+  }
+  return false;
+}
+
 export function validateTierCompleteness() {
   const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
   const rulesDir = path.join(REPO, ".claude", "rules");
@@ -1099,13 +1280,138 @@ export function validateTierCompleteness() {
     if (!tiered.has(f) && !obsoleted.has(f) && !excluded.has(f)) {
       failures.push(
         `${f}: unmanaged — declare its distribution fate in ` +
-          `sync-manifest.yaml: add to a tier (cc/co/coc/onboarding), OR ` +
+          `sync-manifest.yaml: add to a tier (cc/coc-core/kailash/onboarding), OR ` +
           `use_obsoleted: (purge from templates), OR use_exclude: ` +
           `(loom-only). (journal 0078)`,
       );
     }
   }
-  return { pass: failures.length === 0, failures };
+
+  // ── Agents + skill-directory completeness (knowledge-cascade-routing MUST-2) ──
+  // Same hard-fail contract as rules above, extended to agents (per-file, minus
+  // the non-agent agents/_README.md) and skills (per-directory). A NEW agent or
+  // net-new skill dir with no declared distribution fate is an unmanaged orphan
+  // that silently falls out of /sync — exactly the rule-orphan failure V15 was
+  // built to block, one artifact-type over.
+  const declaredPatterns = _collectDeclaredArtifactPatterns(text);
+  const agentsDir = path.join(REPO, ".claude", "agents");
+  const skillsDir = path.join(REPO, ".claude", "skills");
+  const walkMd = (dir) => {
+    let out = [];
+    if (!fs.existsSync(dir)) return out;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fp = path.join(dir, e.name);
+      if (e.isDirectory()) out = out.concat(walkMd(fp));
+      else if (e.name.endsWith(".md")) out.push(fp);
+    }
+    return out;
+  };
+  for (const fp of walkMd(agentsDir)) {
+    const rel = "agents/" + path.relative(agentsDir, fp).split(path.sep).join("/");
+    if (rel.endsWith("/_README.md") || rel === "agents/_README.md") continue;
+    if (!_artifactIsManaged(rel, declaredPatterns)) {
+      failures.push(
+        `${rel}: unmanaged agent — declare its distribution fate in ` +
+          `sync-manifest.yaml: add to a tier (cc/coc-core/kailash/onboarding), OR ` +
+          `loom_only: (loom-internal), OR exclude:/obsoleted: (never/no-longer ` +
+          `synced). (knowledge-cascade-routing.md MUST-2)`,
+      );
+    }
+  }
+  if (fs.existsSync(skillsDir)) {
+    for (const e of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue;
+      const rel = "skills/" + e.name;
+      if (!_artifactIsManaged(rel, declaredPatterns)) {
+        failures.push(
+          `${rel}/: unmanaged skill directory — declare its distribution fate in ` +
+            `sync-manifest.yaml: add a ${rel}/** entry to a tier (cc/coc-core/` +
+            `kailash/onboarding), OR loom_only: (loom-internal), OR ` +
+            `obsoleted: (no longer synced). (knowledge-cascade-routing.md MUST-2)`,
+        );
+      }
+    }
+  }
+  // COMMANDS: every .claude/commands/*.md is manifest-tier-managed by an
+  // individual entry (there is NO commands/** catch-all in any fate block), so
+  // a new command with no declaration silently skips emission
+  // (emit-cli-artifacts.mjs::emitCommands tierFilter skip) exactly as an
+  // unmanaged agent does. Same completeness contract (self-ref redteam R1
+  // cc-architect HIGH-1: commands are the same orphan class; reconcile-notes.md
+  // was a live instance). surface_roles: de-surfacing does NOT confer
+  // managed-ness — a de-surfaced command still ships to build/use, so tier
+  // membership remains the fate axis.
+  const commandsDir = path.join(REPO, ".claude", "commands");
+  for (const fp of walkMd(commandsDir)) {
+    const rel = "commands/" + path.relative(commandsDir, fp).split(path.sep).join("/");
+    if (!_artifactIsManaged(rel, declaredPatterns)) {
+      failures.push(
+        `${rel}: unmanaged command — declare its distribution fate in ` +
+          `sync-manifest.yaml: add to a tier (cc/coc-core/kailash/onboarding), OR ` +
+          `loom_only: (loom-internal), OR exclude:/obsoleted: (never/no-longer ` +
+          `synced). (knowledge-cascade-routing.md MUST-2)`,
+      );
+    }
+  }
+
+  // ── Base-exclusion advisory (journal/0362 STEP-2; F10 base-coverage class) ──
+  // The `kailash` tier is the Kailash-framework SUBSET of COC; the non-Kailash
+  // `base` axis does NOT subscribe to it (subscribes cc + coc-core + onboarding).
+  // A GENERAL COC coding rule mis-placed in `kailash` is therefore SILENTLY
+  // excluded from base (classifyFile -> no_tier_match -> skip) — the exact F10
+  // gap the 2026-06-26 base-coverage reconciliation fixed by hand. This is the
+  // ADVISORY-flag heuristic (owner-approved 2026-06-28) that prevents RECURRENCE:
+  // a kailash-only rule with ZERO Kailash-framework AND ZERO loom-tooling
+  // coupling is probably general and belongs in `coc-core` so base receives it.
+  // ADVISORY only (non-blocking) — it is a content heuristic, not a structural
+  // fact, so per hook-output-discipline.md MUST-2 it MUST NOT block /sync; a
+  // human verifies, then moves or annotates. Suppressed by loom-tooling tokens
+  // because COC-tooling rules (coc-sync-landing/sync-completeness/variant-
+  // authoring/cross-cli-parity) legitimately stay kailash-only (base consumers
+  // never run loom's sync/variant machinery).
+  // SCOPE (rules-only): this advisory walks `rules/*.md` only — validator-15's
+  // pre-existing domain. The F10 base-coverage walk also found kailash-only
+  // COMMANDS / SKILLS / AGENTS the reconciliation hand-moved to coc-core; a
+  // future general command/skill/agent mis-placed in `kailash` is NOT caught by
+  // this advisory. Extending the heuristic to those classes is a follow-up
+  // (out of journal/0362 STEP-2's validator-15 scope).
+  const tierRulesOf = (name) => {
+    const re = new RegExp(`^  ${name}:\\s*$`, "m");
+    const start = tiersBlock.search(re);
+    if (start === -1) return new Set();
+    const bodyStart = tiersBlock.indexOf("\n", start);
+    if (bodyStart === -1) return new Set();
+    const after = tiersBlock.slice(bodyStart + 1);
+    const nextRel = after.search(/^  [A-Za-z_][\w-]*:\s*$/m);
+    const body = after.slice(0, nextRel === -1 ? undefined : nextRel);
+    return new Set(
+      [...body.matchAll(/^\s*-\s*rules\/([a-z0-9-]+)\.md\s*$/gm)].map(
+        (m) => `${m[1]}.md`,
+      ),
+    );
+  };
+  const kailashRules = tierRulesOf("kailash");
+  const baseReaching = new Set([
+    ...tierRulesOf("cc"),
+    ...tierRulesOf("coc-core"),
+    ...tierRulesOf("onboarding"),
+  ]);
+  const advisories = [];
+  for (const f of kailashRules) {
+    if (baseReaching.has(f)) continue; // reaches base via another tier
+    const fp = path.join(rulesDir, f);
+    if (!fs.existsSync(fp)) continue;
+    const body = safeReadFileSync(fp, "utf8");
+    if (!isBaseExclusionAdvisoryCandidate(body)) continue;
+    advisories.push(
+      `${f}: in the \`kailash\` tier (excluded from the non-Kailash \`base\` ` +
+        `axis) but shows NO Kailash-framework or loom-tooling coupling — likely ` +
+        `GENERAL COC coding methodology that belongs in \`coc-core\` so base ` +
+        `receives it. Verify by hand, then move to coc-core OR annotate why it ` +
+        `is Kailash-scoped. (F10 base-coverage class; journal/0362 STEP-2)`,
+    );
+  }
+  return { pass: failures.length === 0, failures, advisories };
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -1120,17 +1426,17 @@ export function validateTierCompleteness() {
 // out, so emit.mjs stays Node-dependency-free) MUST succeed or emit
 // hard-fails. Runs BEFORE Validator 15 in main() — V15's regex section
 // parse is only trustworthy on a syntactically valid manifest.
-export function validateManifestYaml() {
-  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
-  const r = spawnSync(
-    "python3",
-    [
-      "-c",
-      "import sys,yaml\ntry:\n yaml.safe_load(open(sys.argv[1]))\nexcept yaml.YAMLError as e:\n sys.stderr.write(str(e))\n sys.exit(1)",
-      manifestPath,
-    ],
-    { encoding: "utf8" },
-  );
+// Pure classification of the python-YAML-probe result → {pass, failures}.
+// Exported for test. Distinguishes FOUR dispositions so an ENVIRONMENT gap is
+// never reported as a manifest defect (evidence-first-claims: assert only what
+// the probe found):
+//   • python3 absent (spawn ENOENT)      → env-gap advisory, pass:false
+//   • PyYAML absent (ModuleNotFoundError) → env-gap advisory, pass:false
+//   • non-zero + YAMLError                → real defect, pass:false
+//   • status 0                            → pass:true
+// The two env-gap branches fail-loud (pass:false) — an env that cannot verify
+// MUST NOT silently pass — but say WHY honestly, never "not valid YAML".
+export function _classifyManifestYamlProbe(r) {
   if (r.error && r.error.code === "ENOENT") {
     // python3 absent — degrade to a clear advisory, do NOT silently pass.
     return {
@@ -1141,15 +1447,49 @@ export function validateManifestYaml() {
       ],
     };
   }
-  if (r.status !== 0) {
+  const stderr = (r.stderr || "").trim();
+  // Anchor on the `ModuleNotFoundError:` prefix (the uncaught `import yaml`
+  // failure always carries it; a `yaml.YAMLError` str never does) so a broken
+  // manifest whose parse-error text happens to contain "No module named yaml"
+  // cannot be misclassified as an env gap. Both dispositions are pass:false, so
+  // this only sharpens the MESSAGE — but an honest classifier asserts only what
+  // the probe found (evidence-first-claims). (R1 redteam LOW-1, #764 follow-up.)
+  if (r.status !== 0 && /ModuleNotFoundError: No module named ['"]?yaml['"]?/.test(stderr)) {
+    // PyYAML absent — mirror the python3-ENOENT branch. This is an ENVIRONMENT
+    // gap, NOT a manifest defect: reporting "not valid YAML" here would assert a
+    // defect the probe never found (the manifest may be perfectly valid; the env
+    // just cannot check). #764: the emit-side twin of the test-harness skip-guard.
     return {
       pass: false,
       failures: [
-        `sync-manifest.yaml is not valid YAML: ${(r.stderr || "").trim().slice(0, 400)}`,
+        "PyYAML not installed — cannot strict-YAML-validate the manifest. " +
+          "Install PyYAML (`pip install pyyaml`) OR validate manually before emit. " +
+          "(Environment gap, not a manifest defect.)",
       ],
     };
   }
+  if (r.status !== 0) {
+    return {
+      pass: false,
+      failures: [`sync-manifest.yaml is not valid YAML: ${stderr.slice(0, 400)}`],
+    };
+  }
   return { pass: true, failures: [] };
+}
+
+export function validateManifestYaml(
+  manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml"),
+) {
+  const r = spawnSync(
+    "python3",
+    [
+      "-c",
+      "import sys,yaml\ntry:\n yaml.safe_load(open(sys.argv[1]))\nexcept yaml.YAMLError as e:\n sys.stderr.write(str(e))\n sys.exit(1)",
+      manifestPath,
+    ],
+    { encoding: "utf8" },
+  );
+  return _classifyManifestYamlProbe(r);
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -1236,7 +1576,7 @@ export function validateRosterSchemaCoupling() {
         `ship without their runtime data; consumer repos receiving the ` +
         `substrate via /sync will fail-close every commit ("operators ` +
         `roster missing; trust root not established"). Add ` +
-        `\`- operators.roster.schema.json\` to a tier (recommended: coc, ` +
+        `\`- operators.roster.schema.json\` to a tier (recommended: kailash, ` +
         `alongside commands/whoami.md). Origin: F67 / GH #379 / journal 0161. ` +
         `Note: an entry in \`use_exclude:\` or \`use_obsoleted:\` does NOT ` +
         `satisfy this check — the schema must be IN a tier so /sync ships ` +
@@ -1318,10 +1658,10 @@ export function validateRosterSchemaCoupling() {
     }
     const files =
       plan && plan.plan && Array.isArray(plan.plan.files) ? plan.plan.files : [];
-    // F70 scope: only fail on targets that subscribe to the `coc` tier
+    // F70 scope: only fail on targets that subscribe to the `kailash` tier
     // (where the schema lives per F67's tier choice in journal/0161).
-    // Targets not subscribed to coc are out of #379's scope — they
-    // don't receive the substrate hooks' coc-tier siblings either.
+    // Targets not subscribed to kailash are out of #379's scope — they
+    // don't receive the substrate hooks' kailash-tier siblings either.
     // F70's regression-lock binds the schema's distribution to the
     // tier-subscriptions that ARE supposed to ship it; widening the
     // scope to every target would re-open a different architectural
@@ -1331,8 +1671,8 @@ export function validateRosterSchemaCoupling() {
       plan && plan.plan && Array.isArray(plan.plan.tier_subscriptions)
         ? plan.plan.tier_subscriptions
         : [];
-    if (!subs.includes("coc")) {
-      // Target does not subscribe to coc tier — out of F70 scope.
+    if (!subs.includes("kailash")) {
+      // Target does not subscribe to kailash tier — out of F70 scope.
       // Documented as advisory note so the operator sees the skip.
       continue;
     }
@@ -1583,6 +1923,13 @@ function main() {
       `VALIDATOR 15 FAIL (sync-manifest tier-completeness, journal 0078):\n${v15.failures.map((l) => "  " + l).join("\n")}\n`,
     );
     process.exit(1);
+  }
+  // Base-exclusion advisories (journal/0362 STEP-2) — ADVISORY, never blocking.
+  if (Array.isArray(v15.advisories) && v15.advisories.length > 0) {
+    console.log(
+      `[validator-15] base-exclusion advisories (${v15.advisories.length}; non-blocking):`,
+    );
+    for (const a of v15.advisories) console.log(`  ⚠ ${a}`);
   }
 
   // Validator 17 — multi-operator substrate hook ⇔ data coupling (F67

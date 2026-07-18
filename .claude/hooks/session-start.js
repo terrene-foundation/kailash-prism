@@ -35,6 +35,16 @@ const {
   findAllSessionNotes,
 } = require("./lib/workspace-utils");
 const { checkVersion } = require("./lib/version-utils");
+const {
+  computeOpenPrState,
+  formatOpenPrBlock,
+} = require("./lib/open-pr-surface");
+const {
+  migrateMonolithToSplit,
+  regenerateAggregate,
+} = require("./lib/session-notes-layout");
+const { ensureCanonicalDriver } = require("./lib/coc-ledger-driver");
+const { resolveIdentity } = require("./lib/operator-id");
 
 // Timeout fallback — prevents hanging the Claude Code session
 const TIMEOUT_MS = 10000;
@@ -46,7 +56,7 @@ const _timeout = setTimeout(() => {
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (input += chunk));
-const { readPosture } = require("./lib/state-io");
+const { readPosture, isPendingWithinGrace } = require("./lib/state-io");
 
 process.stdin.on("end", () => {
   try {
@@ -66,8 +76,11 @@ process.stdin.on("end", () => {
           (posture._fresh ? " (fresh repo)" : ""),
       );
       lines.push(`since: ${posture.since}`);
+      // loom#875 — only surface entries still WITHIN their grace window; a
+      // grace-expired entry must not drive the trust-gate banner (it would
+      // render a nonsensical "day N of 7" for N > 7 and nag forever).
       const pv = (posture.pending_verification || []).filter(
-        (e) => e && e.rule_id,
+        (e) => e && e.rule_id && isPendingWithinGrace(e),
       );
       if (pv.length) {
         lines.push("\n⚠️ TRUST GATE — Verification Pending:");
@@ -89,8 +102,21 @@ process.stdin.on("end", () => {
         "\n## Trust Posture: UNREADABLE — manual /posture init required";
     }
 
+    // Open-PR session-start surface (orphan-PR guard, issue #574). Fail-open:
+    // computeOpenPrState never throws; a null/undefined state degrades to no
+    // block (undefined) or a "could-not-verify" warning (null). Gated on a
+    // github.com remote so a local-only repo gets no false warning. Prepended
+    // ABOVE the session notes so the live queue outranks any note's claim.
+    let openPrBlock = null;
+    try {
+      openPrBlock = formatOpenPrBlock(computeOpenPrState(data.cwd));
+    } catch {
+      openPrBlock = null; // belt-and-suspenders: never block session start
+    }
+
     const output = { continue: true };
     const ctxParts = [];
+    if (openPrBlock) ctxParts.push(openPrBlock);
     if (result.sessionNotesContext) ctxParts.push(result.sessionNotesContext);
     if (trustGate) ctxParts.push(trustGate);
     if (ctxParts.length) {
@@ -231,6 +257,51 @@ function initializeSession(data) {
       const todos = getTodoProgress(ws.path);
       console.error(
         `[WORKSPACE] ${ws.name} | Phase: ${phase} | Todos: ${todos.active} active / ${todos.completed} done`,
+      );
+    }
+  } catch {}
+
+  // ── Session-notes coherence: zero-touch migrate + aggregate (C5, #743) ─
+  // Migrate a legacy monolith into the per-operator split ONCE (idempotent —
+  // no-op when already split or no monolith present) and regenerate the
+  // read-only by-name aggregate. EVERY path is wrapped so a failure NEVER
+  // blocks session start (C5.2 fail-open; cc-artifacts.md Rule 7). Runs BEFORE
+  // the notes surface below so the dashboard reflects current on-disk truth.
+  try {
+    const identity = resolveIdentity(cwd, {});
+    if (identity) {
+      const mig = migrateMonolithToSplit(cwd, identity);
+      if (mig && mig.ok && mig.migrated) {
+        console.error(
+          "[SESSION-NOTES] Migrated legacy .session-notes → per-operator split (.session-notes.d/); original preserved as .session-notes.migrated.",
+        );
+      }
+    }
+    // Regenerate the aggregate regardless (belt: reflects any fragment change).
+    // The writer self-refuses if the target is not gitignored (C2.2), so an
+    // errored/absent-gitignore state is a silent no-op here, never a throw.
+    regenerateAggregate(cwd);
+  } catch (e) {
+    console.error(`[SESSION-NOTES] Coherence pass skipped: ${e.message}`);
+  }
+
+  // ── Ledger merge-driver self-heal (G1, journal/0418) ─────────────────────
+  // If this repo opts into the coc-ledger 3-way merge driver (.gitattributes)
+  // but this clone's local registration is missing or NON-CANONICAL (the
+  // loom#741 bare-path form that fails `Permission denied` and silently falls
+  // back to the default line-merge, clobbering .session-notes.shared.md rows),
+  // register the canonical driver in LOCAL git config. Idempotent + fail-open;
+  // a not-referenced / already-canonical repo writes nothing. Closes the silent
+  // multi-operator clobber window without a manual `loom doctor --fix`.
+  try {
+    const drv = ensureCanonicalDriver({ repoRoot: cwd });
+    if (drv && drv.action === "registered") {
+      console.error(
+        "[MERGE-DRIVER] Registered canonical coc-ledger 3-way merge driver" +
+          (drv.before
+            ? ` (was non-canonical: ${drv.before})`
+            : " (was unregistered)") +
+          " — protects .session-notes.shared.md from clobber (journal/0418 G1).",
       );
     }
   } catch {}
