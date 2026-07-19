@@ -22,4 +22,5 @@ flutter/pubspec.lock
 # >>> coc:gitignore_additions — managed by loom /sync; do not edit between markers >>>
 !.claude/bin/lib/
 !.claude/hooks/lib/
+!.claude/test-harness/lib/
 # <<< coc:gitignore_additions <<<
