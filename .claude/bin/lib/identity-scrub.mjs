@@ -105,7 +105,8 @@ export function walkFiles(dir, cb) {
  * A FRESH operator-home-path regex each call. The pattern matches any
  * /Users/<name>/ or /home/<name>/ that is NOT the placeholder or a CI runner →
  * structural scrub of operator paths the literal token list misses (e.g. a
- * test-fixture /Users/jack/). Returned as a factory — NOT a shared module-level
+ * test fixture carrying a real developer's home directory). Returned as a
+ * factory — NOT a shared module-level
  * const — because the `g` flag carries mutable `lastIndex` state; a shared
  * instance would race between the scrub `.replace()` and the gate `.exec()`.
  */
