@@ -77,8 +77,18 @@ const { createFilesystemTransport } = require(
 // records as the main checkout. integrity-guard.js (the sibling
 // PreToolUse hook for Edit/Write on integrity-critical paths) already
 // uses this pattern at line 325; journal-write-guard.js drifted.
-const { resolveMainCheckout } = require(
+const { requireMainCheckout } = require(
   path.join(__dirname, "lib", "state-resolver.js"),
+);
+// loom#1414: worktree-aware root resolution, shared with integrity-guard.js.
+// resolveMainCheckout above deliberately redirects repoDir to the MAIN
+// checkout for REGISTRY I/O (the fold + reservation records live there) —
+// but the same repoDir was ALSO being used for the watched-PATH decision,
+// which made this guard blind to every journal write inside a worktree.
+// Registry I/O still routes to main; only the path decision is now
+// evaluated against the tree the target actually lives in.
+const { matchFirstCandidate, matchJournalEntryRel } = require(
+  path.join(__dirname, "lib", "guard-path-scope.js"),
 );
 // M9.1 R4 Sec-R4-S-06 — route tool-name check through the mutation-tool
 // SSOT per `cc-artifacts.md` Rule 8. Pre-fix: hardcoded `tool !== "Write"`
@@ -119,9 +129,12 @@ function resolveRepoDir(payload) {
 }
 
 /**
- * Watched-tool predicate. The hook fires on Write only (Edit on an
- * existing journal entry is governed by integrity-guard.js's
- * codify-branch+lease check, NOT by journal-write-guard).
+ * Watched-tool predicate. The hook is registered in settings.json under the
+ * PreToolUse matcher `Edit|Write|NotebookEdit` and gates every tool in
+ * `tool-classes.js::MUTATION_TOOLS` (Edit, Write, MultiEdit, NotebookEdit) —
+ * NOT Write alone. An Edit against an existing journal entry is blocked here;
+ * integrity-guard.js's codify-branch+lease check is an ADDITIONAL, separate
+ * gate on the same path, not a substitute for this one.
  *
  * Returns {watched, targetPath} | {watched: false}.
  */
@@ -152,48 +165,24 @@ function isWatchedTool(payload) {
  *          "workspaces/<name>/journal" or with /.pending/ suffix)
  */
 function isWatchedPath(absPath, repoDir) {
-  // Normalize to repo-relative.
-  let rel;
-  if (path.isAbsolute(absPath)) {
-    // F14 MED-4 follow-up: macOS realpath normalization. After
-    // resolveMainCheckout redirects repoDir to the canonical main
-    // checkout (which may be the realpath, e.g. /private/var/...),
-    // and the caller's absPath was passed unresolved (e.g. /var/...),
-    // path.relative produces a `..`-prefixed string and incorrectly
-    // marks the path unwatched. Mirror integrity-guard.js's pattern
-    // (lines 143-167): realpath both sides of the relative-path math.
-    let normalizedAbs = absPath;
-    let normalizedRepo = repoDir;
-    try {
-      let ancestor = absPath;
-      while (ancestor && !fs.existsSync(ancestor)) {
-        const parent = path.dirname(ancestor);
-        if (parent === ancestor) break;
-        ancestor = parent;
-      }
-      if (ancestor && fs.existsSync(ancestor)) {
-        const real = fs.realpathSync(ancestor);
-        normalizedAbs = real + absPath.slice(ancestor.length);
-      }
-      if (fs.existsSync(repoDir)) {
-        normalizedRepo = fs.realpathSync(repoDir);
-      }
-    } catch {
-      // best-effort — fall back to raw paths
-    }
-    const r = path.relative(normalizedRepo, normalizedAbs);
-    if (r.startsWith("..") || path.isAbsolute(r)) return { watched: false };
-    rel = r.replace(/\\/g, "/");
-  } else {
-    rel = absPath.replace(/\\/g, "/");
-  }
-  // Match the journal-entry shape per rules/journal.md +
-  // architecture v11 §5.2: <dir>/<NNNN>-<TYPE>-<slug>.md
-  const m = rel.match(
-    /^((?:workspaces\/[^/]+\/)?journal(?:\/\.pending)?)\/(\d+)(?:-[^/]*)?\.md$/,
+  // loom#1414: the realpath normalisation that used to sit inline here
+  // (F14 MED-4) was correct for the macOS /var vs /private/var case but did
+  // NOT address a target in a DIFFERENT TREE. Since repoDir is the MAIN
+  // checkout, every journal Write from inside a linked worktree produced a
+  // `../`-prefixed rel and returned watched:false — measured: the identical
+  // Write passed silently unpinned and fenced with CLAUDE_TRUST_STATE_DIR
+  // pinned to the worktree. Root/rel resolution (including that realpath
+  // normalisation) now lives in lib/guard-path-scope.js.
+  //
+  // loom#1422: the journal-entry SHAPE has now moved there too. It used to be
+  // owned here — the fourth of four surfaces that each had to learn the
+  // case-insensitivity dimension separately, and the one found ONLY because
+  // #1414's shard happened to sweep for siblings.
+  return (
+    matchFirstCandidate(absPath, repoDir, matchJournalEntryRel, {
+      markers: ["/journal/"],
+    }) || { watched: false }
   );
-  if (!m) return { watched: false };
-  return { watched: true, slot: m[2], dir: m[1], rel };
 }
 
 function loadRoster(repoDir) {
@@ -297,7 +286,33 @@ function extractFrontmatterAuthor(content) {
     // either passthroughs or halt-and-reports incorrectly. Mirrors
     // integrity-guard.js:324-325.
     const sessionCwd = resolveRepoDir(payload);
-    const repoDir = resolveMainCheckout(sessionCwd) || sessionCwd;
+    // loom#1471 F7b — fail CLOSED when git cannot identify the main checkout.
+    // The former `|| sessionCwd` could not fire; an unidentified root makes the
+    // fold below read an empty log and see no slot reservations, which is
+    // indistinguishable from "no reservations exist" — the guard then
+    // passthroughs on a repo whose reservation state it never actually read.
+    const mainRes = requireMainCheckout(sessionCwd);
+    if (!mainRes.ok) {
+      clearTimeout(fallback);
+      emit({
+        hookEvent,
+        severity: "block",
+        what_happened: `Journal-write check could not run: the MAIN checkout could not be identified — ${mainRes.reason}`,
+        why: "multi-operator-coc/journal-write-guard — slot reservations live in the MAIN checkout's coordination log. With the root unidentified the fold reads an empty log, which reads as `no reservations` and passes the write through; that is a fail-OPEN on the collision fence. Refusing is the fail-closed direction (`rules/security.md` § Enforcement-Surface Parity).",
+        agent_must_report: [
+          `Session cwd: ${sessionCwd}`,
+          `Resolver reason: ${mainRes.reason}`,
+          "Journal slot-reservation checking did NOT run — its result is UNKNOWN, not clean.",
+          "A differently-owned checkout reports `detected dubious ownership`; take ownership, or set CLAUDE_TRUST_STATE_DIR.",
+        ],
+        agent_must_wait:
+          "Do not retry the journal write until git can identify the main checkout, or the operator pins CLAUDE_TRUST_STATE_DIR.",
+        user_summary:
+          "journal-write-guard — main checkout unidentifiable; refused rather than passed through",
+      });
+      // emit() exits
+    }
+    const repoDir = mainRes.repoDir;
     const wp = isWatchedPath(watch.targetPath, repoDir);
     if (!wp.watched) {
       // Outside-repo path OR not a journal entry — silent passthrough.
@@ -322,11 +337,11 @@ function extractFrontmatterAuthor(content) {
         agent_must_report: [
           `Target path: ${wp.rel}`,
           `Slot: ${wp.slot}`,
-          "Open a NEW journal entry with a fresh slot (run reserveJournalSlot(dir) via /journal --new) rather than overwriting the existing entry.",
-          "If amending the existing entry is genuinely required, route through /journal --amend which appends an addendum block rather than overwriting.",
+          "Open a NEW journal entry with a fresh slot (run reserveJournalSlot(dir) via /journal new <TYPE> <topic>) rather than overwriting the existing entry.",
+          "If amending the existing entry is genuinely required, open a NEW entry of type AMENDMENT carrying `relates_to: <NNNN-slug>` pointing at the original (rules/journal.md § types). There is no in-place amend: entries are immutable once created, and no /journal flag edits one.",
         ],
         agent_must_wait:
-          "Do not retry the Write against this path. Acquire a fresh slot via /journal --new and Write the new entry there.",
+          "Do not retry the Write against this path. Acquire a fresh slot via /journal new <TYPE> <topic> and Write the new entry there.",
         user_summary: `journal-write-guard — BLOCK on existing journal file ${wp.rel}`,
       });
       // emit() exits
@@ -357,6 +372,7 @@ function extractFrontmatterAuthor(content) {
 
     const transport = createFilesystemTransport(repoDir);
     let accepted = [];
+    let readIndeterminate = null;
     try {
       const records = await transport.readAllRecords();
       const roster = loadRoster(repoDir);
@@ -375,11 +391,37 @@ function extractFrontmatterAuthor(content) {
       );
       const fold = engine.foldLog(records, roster, {});
       accepted = fold && Array.isArray(fold.accepted) ? fold.accepted : [];
-    } catch {
-      // Structural-NULL: log read or fold failed. Surface as
-      // halt-and-report (slot-reservation cannot be verified) — the
-      // honest disposition is "we can't tell" rather than passthrough.
+    } catch (err) {
+      // INDETERMINATE — the log could not be read or folded. The comment that
+      // stood here said the honest disposition is "we can't tell", but the code
+      // rebuilt `[]` and fell through to the UNRESERVED emit below, which tells
+      // the agent the opposite: that the log WAS read and the slot is free.
+      // `[]` is the same input a genuinely empty log produces, so the two states
+      // became indistinguishable downstream (rules/instrument-discipline.md
+      // MUST-1). Keep the disposition the comment always claimed, in the emit.
+      readIndeterminate = err && err.message ? err.message : String(err);
       accepted = [];
+    }
+
+    if (readIndeterminate) {
+      clearTimeout(fallback);
+      emit({
+        hookEvent,
+        severity: "block",
+        what_happened: `Write to journal slot ${wp.slot} in ${wp.dir}, but the coordination log could not be read or folded: ${readIndeterminate}`,
+        why: "multi-operator-coc/journal-write-guard MUST-NOT-2 — the slot-reservation check reads the folded coordination log, and that read FAILED. The slot's reservation state is UNKNOWN, not unreserved: this branch must not reuse the UNRESERVED message below, which asserts the fold was computed and held no reservation. Severity is block, matching this guard's own indeterminate-ROOT branch above and for the same reason: halt-and-report maps to continue:true (lib/instruct-and-wait.js), so on a mutation fence it is no refusal and the Write would land — the precise clobber MUST-NOT-2 exists to prevent, since a sibling's reservation may be sitting in the log we could not read. The signal is distinct from the unreserved case one layer down: that one is registry-level, held BELOW block by hook-output-discipline.md MUST-2; this one is a filesystem/process-state failure (EACCES/EISDIR/EIO), the structural class MUST-2 accepts.",
+        agent_must_report: [
+          `Target path: ${wp.rel}`,
+          `Slot: ${wp.slot} in ${wp.dir} — reservation state UNKNOWN`,
+          `Why the check could not answer: ${readIndeterminate}`,
+          "State explicitly that the slot's reservation is UNKNOWN — NOT that the slot is free. A sibling operator may hold it.",
+          "Remediation: make .claude/learning/coordination-log.jsonl readable (check permissions, and that it is a regular file), then retry.",
+        ],
+        agent_must_wait:
+          "Do not retry the Write until the coordination log is readable and the reservation can actually be verified.",
+        user_summary: `journal-write-guard — coordination log UNREADABLE; slot ${wp.slot} INDETERMINATE (not a clean result)`,
+      });
+      // emit() exits
     }
 
     const reservation = findSlotReservation(accepted, wp.dir, wp.slot);
@@ -392,11 +434,11 @@ function extractFrontmatterAuthor(content) {
         hookEvent,
         severity: "halt-and-report",
         what_happened: `Journal slot ${wp.slot} in ${wp.dir} is not reserved in the coordination log.`,
-        why: "multi-operator-coc/journal-write-guard MUST-NOT-2 — under N concurrent operators a naive slot pick silently clobbers (architecture v11 §5.2). Reserve via /journal --new (M6 D writes the signed `journal-slot-reservation` record) before writing. Registry-record signal, not structural: hook-output-discipline.md MUST-2 — severity=halt-and-report, not block.",
+        why: "multi-operator-coc/journal-write-guard MUST-NOT-2 — under N concurrent operators a naive slot pick silently clobbers (architecture v11 §5.2). Reserve via /journal new <TYPE> <topic> (M6 D writes the signed `journal-slot-reservation` record) before writing. Registry-record signal, not structural: hook-output-discipline.md MUST-2 — severity=halt-and-report, not block.",
         agent_must_report: [
           `Target path: ${wp.rel}`,
           `Slot: ${wp.slot} (UNRESERVED in fold)`,
-          "Run /journal --new (or reserveJournalSlot(dir) directly) to append a signed journal-slot-reservation record BEFORE writing the entry.",
+          "Run /journal new <TYPE> <topic> (or reserveJournalSlot(dir) directly) to append a signed journal-slot-reservation record BEFORE writing the entry.",
           "If the slot was JUST reserved by this session and the log is stale, run a log fetch (the heartbeat hook does this on stop) and retry.",
         ],
         agent_must_wait:
@@ -469,7 +511,7 @@ function extractFrontmatterAuthor(content) {
         `Target path: ${wp.rel}`,
         `Slot: ${wp.slot}`,
         `Reserved by: sibling operator ${siblingDisplay} (verified_id ${reservation.verified_id.slice(0, 24)}...)`,
-        "Acquire a different slot via /journal --new (the writer will allocate the next available NNNN) and write the entry there.",
+        "Acquire a different slot via /journal new <TYPE> <topic> (the writer will allocate the next available NNNN) and write the entry there.",
         "If handoff is genuinely required, coordinate with the sibling operator (the slot is theirs by reservation precedence).",
       ],
       agent_must_wait:
