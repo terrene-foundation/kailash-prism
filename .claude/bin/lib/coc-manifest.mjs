@@ -27,6 +27,18 @@ import { fileURLToPath } from "node:url";
 import { applyOverlay } from "./slot-parser.mjs";
 import { resolveOverlay } from "./variant-overlay.mjs";
 import { stripBuildInternalReferences } from "./strip-build-internal.mjs";
+// loom#1386 — this module is ALWAYS_INCLUDE (shipped verbatim to every repo
+// class), and on the three classes that FORBID sync-manifest.yaml each of the
+// seven manifest reads below threw ENOENT. `readManifestSource` is the ONE
+// class-aware discriminator: `null` ⇔ the manifest is EXPECTED-absent; a LOUD
+// throw covers absent-at-loom AND present-but-unreadable (never conflated —
+// zero-tolerance.md Rule 3). See lib/manifest-source.mjs for the D1/D2/D3
+// disposition contract each call site below cites.
+import {
+  readManifestSource,
+  requireManifestSource,
+  requireManifestSourceForTarget,
+} from "./manifest-source.mjs";
 
 // REPO = repo root. This module lives at `.claude/bin/lib/`, i.e. THREE
 // levels below the root (lib → bin → .claude → root), so REPO resolves
@@ -88,10 +100,20 @@ function globToRegex(glob) {
   // a literal (not left as a regex 0-or-1 quantifier) — the manifest globs are
   // exact-path / prefix patterns, never POSIX single-char wildcards.
   const escaped = glob.replace(/[.+^${}()|[\]\\?]/g, "\\$&");
+  // A `**/` at the START of the pattern OR immediately after a `/` matches ZERO
+  // or more path segments, so it compiles to `(?:.*/)?` — which keeps the `/`
+  // boundary (a bare `.*` would substring-match `yx` for `**/x`). Measured
+  // against Claude Code 2.1.226: the LEADING case 2/2 (loom#1597), the INTERIOR
+  // case 2/2 on three glob shapes (S21-GLOB-INTERIOR.md). Both positions are
+  // zero-or-more in CC; treating the interior as >=1 silently defeated 12 corpus
+  // globs' stated intent.
+  // Escaping never rewrites `*` or `/`, so a `**/` still reads as `**/` here.
   const withStars = escaped
+    .replace(/(^|\/)\*\*\//g, "$1__ANYSEGS__")
     .replace(/\*\*/g, "__DOUBLESTAR__")
     .replace(/\*/g, "[^/]*")
-    .replace(/__DOUBLESTAR__/g, ".*");
+    .replace(/__DOUBLESTAR__/g, ".*")
+    .replace(/__ANYSEGS__/g, "(?:.*/)?");
   return new RegExp(`^${withStars}$`);
 }
 
@@ -112,8 +134,13 @@ function matchesAnyGlob(relPath, globs) {
 // the wrong thing (exclusions absent → emit everything → caller sees
 // unexpected files and investigates).
 function loadExclusions() {
-  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
-  const src = safeReadFileSync(manifestPath, "utf8");
+  // D1 DISTRIBUTION-DECLARATION (loom#1386). `cli_emit_exclusions` names paths
+  // loom withholds from a per-CLI emission. A repo whose class FORBIDS the
+  // manifest distributes NOTHING, so "no CLI exclusions" is the TRUE answer
+  // there, not a degraded one — the same value the existing stanza-absent path
+  // below already returns.
+  const src = readManifestSource(REPO);
+  if (src === null) return { codex: [], gemini: [] };
   const lines = src.split("\n");
 
   const result = { codex: [], gemini: [] };
@@ -168,8 +195,12 @@ function loadExclusions() {
 // globs (`agents/management/coc-sync.md`) matched against the manifest-
 // relative path the emit functions build (`agents/...`).
 function loadLoomOnly() {
-  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
-  const src = safeReadFileSync(manifestPath, "utf8");
+  // D1 DISTRIBUTION-DECLARATION (loom#1386). `loom_only` is a POSITIVE
+  // never-sync list — artifacts loom keeps for itself. A consumer holds no such
+  // list because it fans nothing out; the empty set is exact, and it is what the
+  // stanza-absent path below already returns.
+  const src = readManifestSource(REPO);
+  if (src === null) return [];
   const lines = src.split("\n");
 
   const result = [];
@@ -206,8 +237,25 @@ function loadLoomOnly() {
 // tiers stanza is structurally identical to cli_emit_exclusions (a
 // top-level key with sub-keys whose values are list-of-string).
 function loadTiers() {
-  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
-  const src = safeReadFileSync(manifestPath, "utf8");
+  // D3 REFUSE-LOUDLY (loom#1386, reclassified from D1 by loom#1394's partition
+  // audit). Tiers are subscription buckets a SPLITTER offers its targets; on a
+  // manifest-forbidden class there are none.
+  //
+  // Returning `{}` was SAFE, but only as a CALL-GRAPH property: the sole caller
+  // `buildTierFilter` returns early when no `--target` is named, and with one it
+  // refuses at `loadTargetTierSubscriptions` (D3) first — so the empty map was
+  // unreachable. Two problems with resting on that. It is ORDER-DEPENDENT (swap
+  // the `loadTargetTierSubscriptions` and `loadTiers` calls in buildTierFilter
+  // and `{}` becomes reachable, with nothing enforcing the order), and
+  // `loadTiers` is exported here AND re-exported by emit-cli-artifacts.mjs, so
+  // "its only caller" is a forward-looking assumption rather than a guarantee —
+  // any new caller or out-of-tree script would get `{}` silently.
+  //
+  // Refusing makes the guarantee structural at zero behavioural cost: the one
+  // legitimate reader already sits behind a D3 refusal. An empty tier map is
+  // especially dangerous because it matches NOTHING — a caller would compose an
+  // emission that drops every artifact while reporting success.
+  const src = requireManifestSource("tiers", REPO);
   const lines = src.split("\n");
 
   const result = {};
@@ -256,8 +304,12 @@ function loadTiers() {
 // Returns empty array [] if the target declares an empty subscription
 // (e.g. retired prism — manifest declares [] structurally).
 function loadTargetTierSubscriptions(target) {
-  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
-  const src = safeReadFileSync(manifestPath, "utf8");
+  // D3 TARGET-RESOLUTION (loom#1386) — REFUSE, never answer. `null` here is
+  // already overloaded ("target unknown → caller halts"), so folding
+  // "manifest-forbidden class" into it would produce a halt whose message names
+  // the wrong defect. A repo that FORBIDS the manifest has no sync targets at
+  // all; refusing names that.
+  const src = requireManifestSourceForTarget(target, "tier_subscriptions", REPO);
   const lines = src.split("\n");
 
   let inRepos = false;
@@ -300,15 +352,17 @@ function loadTargetTierSubscriptions(target) {
 // ────────────────────────────────────────────────────────────────
 // sync-manifest.yaml → repos.<target>.variant
 // ────────────────────────────────────────────────────────────────
-// Returns the language-axis variant slug (py / rs / rb / base / null).
+// Returns the language-axis variant slug (py / rs / base / null).
 // The variant determines which `variants/<lang>/...` overlay tree applies
 // when composing per-CLI artifacts (commands, skills, agents) for the
 // target's language axis. Returns null when target is unknown OR when
 // repos.<target>.variant is absent.
 function loadTargetVariant(target) {
   if (!target) return null;
-  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
-  const src = safeReadFileSync(manifestPath, "utf8");
+  // D3 TARGET-RESOLUTION (loom#1386) — REFUSE. Answering `null` would read as
+  // "target declares no variant" and SILENTLY drop the language overlay axis,
+  // emitting a base-composed tree under a language target's name.
+  const src = requireManifestSourceForTarget(target, "repos.<target>.variant", REPO);
   const lines = src.split("\n");
 
   let inRepos = false;
@@ -347,8 +401,11 @@ function loadTargetVariant(target) {
 // intentionally unset → full emission, invariant #7 back-compat).
 function loadTargetRole(target) {
   if (!target) return null;
-  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
-  const src = safeReadFileSync(manifestPath, "utf8");
+  // D3 TARGET-RESOLUTION (loom#1386) — REFUSE. `null` means "role unset →
+  // surface EVERYTHING" (invariant #7 back-compat), so answering null on a
+  // manifest-forbidden class would fail OPEN: every de-surfaced command would
+  // surface for a target whose role could not be read.
+  const src = requireManifestSourceForTarget(target, "repos.<target>.role", REPO);
   const lines = src.split("\n");
 
   let inRepos = false;
@@ -392,8 +449,15 @@ function loadTargetRole(target) {
 // membership check, NOT this loader (a dumb data endpoint per
 // agent-reasoning.md).
 function loadSurfaceRoles() {
-  const manifestPath = path.join(REPO, ".claude", "sync-manifest.yaml");
-  const src = safeReadFileSync(manifestPath, "utf8");
+  // D1 DISTRIBUTION-DECLARATION (loom#1386). `surface_roles` restricts which
+  // ROLE an artifact surfaces for at a DESTINATION. Empty is safe by
+  // construction here: `surfaceRolesAllow` short-circuits `true` whenever
+  // targetRole is null, which it always is on a manifest-forbidden class (its
+  // D3 sibling `loadTargetRole` refuses before any role can be resolved). So the
+  // empty map is never the thing that decides surfacing — it is the
+  // default-surfaced state the stanza-absent path already returns.
+  const src = readManifestSource(REPO);
+  if (src === null) return {};
   const lines = src.split("\n");
 
   const result = {};
@@ -558,9 +622,58 @@ function rewriteClaudePathsForCli(body, cli) {
   return body
     // .claude/skills/ → .{codex,gemini}/skills/
     .replace(/(^|[^a-zA-Z0-9._/-])\.claude\/skills\//g, `$1.${cli}/skills/`)
-    // .claude/commands/ → .codex/prompts/ or .gemini/commands/
+    // .claude/commands/<name>.md → .codex/prompts/<name>.md  (Codex keeps .md)
+    //                            → .gemini/commands/<name>.toml (Gemini emits TOML)
+    // PY-3-A3: the directory was rewritten but the EXTENSION was not, so every
+    // Gemini-lane citation of a command pointed at `.gemini/commands/<name>.md`
+    // — a file that does not exist, because emitCommands writes `<name>.toml` on
+    // that lane. Measured on a full emit: 11 dangling `.md` citations across the
+    // enrollment/onboarding path (the first commands a new Gemini operator
+    // walks), 0 correct `.toml` ones. The loom SOURCE is clean (0 wrong / 169
+    // correct), so this rewrite was the sole producer.
+    // The filename-bearing form MUST run BEFORE the bare-directory form below,
+    // which would otherwise consume the prefix and strand the extension.
+    // `[A-Za-z0-9._-]+` excludes `/`, so a match cannot cross a directory
+    // boundary — commands are flat under `.claude/commands/`.
+    .replace(
+      /(^|[^a-zA-Z0-9._/-])\.claude\/commands\/([A-Za-z0-9._-]+)\.md\b/g,
+      `$1.${cli}/${commandsTarget}/$2.${cli === "gemini" ? "toml" : "md"}`,
+    )
+    // Bare-directory form (a citation naming the dir, not a specific command).
     .replace(/(^|[^a-zA-Z0-9._/-])\.claude\/commands\//g, `$1.${cli}/${commandsTarget}/`)
-    // .claude/agents/ → .{codex,gemini}/agents/
+    // PY-3-A2: `.claude/agents/<group>/<name>.md` does NOT map onto
+    // `.{cli}/agents/<group>/<name>.md` on EITHER lane — the old rewrite
+    // produced a path shape neither emitter ever writes:
+    //   codex  — has NO `agents/` namespace at all. emitCodexAgentPrompts writes
+    //            `.codex/prompts/specialist-<short>.md`, where <short> drops a
+    //            trailing "-specialist" (dataflow-specialist → specialist-dataflow).
+    //   gemini — emitGeminiAgents writes `.gemini/agents/<name>.md`, FLAT: the
+    //            `<group>/` segment is dropped entirely.
+    // MEASURED on a full emit before this fix: `.codex/agents/**` resolved 0 /
+    // dangled 31 and `.gemini/agents/**` resolved 0 / dangled 31, while the SAME
+    // probe over the same trees resolved 84 skills + 11 command citations — so
+    // the zero is a true negative, not a probe that could not fire.
+    // Name derivation mirrors both emitters, which key off `frontmatter.name ||
+    // basename(relPath)`. A sweep over all 40 source agents found
+    // basename === frontmatter.name for EVERY one, so basename is a sound proxy
+    // HERE. If an agent ever sets a `name:` that differs from its filename, this
+    // rewrite and the emitters diverge — keep the three in lockstep.
+    // Runs BEFORE the bare-directory form below, which would otherwise consume
+    // the prefix and strand the rest of the path.
+    .replace(
+      /(^|[^a-zA-Z0-9._/-])\.claude\/agents\/(?:[A-Za-z0-9._-]+\/)*([A-Za-z0-9._-]+)\.md\b/g,
+      (_m, pre, name) =>
+        cli === "gemini"
+          ? `${pre}.gemini/agents/${name}.md`
+          : `${pre}.codex/prompts/specialist-${name.replace(/-specialist$/, "")}.md`,
+    )
+    // Bare-directory form (a citation naming the dir, not a specific agent).
+    // Gemini's `.gemini/agents/` IS a real namespace, so this is correct there.
+    // On codex it is NOT — codex has no agents dir — but the only occurrences are
+    // the consumer-owned `.claude/agents/project/` paths in sync-from-template.md,
+    // whose correct codex target depends on whether Codex supports consumer-owned
+    // project agents at all. That is UNRESOLVED, so this is left as-is rather than
+    // guessed; see the S22-W4-EXEC lane report.
     .replace(/(^|[^a-zA-Z0-9._/-])\.claude\/agents\//g, `$1.${cli}/agents/`);
 }
 

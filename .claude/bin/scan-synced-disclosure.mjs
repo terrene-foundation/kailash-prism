@@ -45,6 +45,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import { SYNTHETIC_FIXTURE_USERS } from "./lib/identity-scrub.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPT_DIR = path.dirname(SCRIPT_PATH);
@@ -54,12 +56,21 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..", "..");
 // CLI args
 // ────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
-  const args = { mode: "report", root: null };
+  const args = { mode: "report", root: null, allowSyntheticFixtureHomes: false };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--check") args.mode = "check";
     else if (a === "--help" || a === "-h") args.help = true;
     else if (a === "--root") args.root = argv[++i];
+    // OPT-IN (client-template disclosure gate ONLY): tolerate a SYNTHETIC fixture home
+    // (a `jdoe`/`fakeuser`-style `/Users/<name>/` in the SYNTHETIC_FIXTURE_USERS set) inside a
+    // `*.test.mjs` / `*.test.js` fixture. The client-template edition ships loom's OWN
+    // disclosure-detector fixtures with those homes PRESERVED verbatim (loom#1318) so they
+    // still fire in a repo instantiated from the seed; a REAL operator home (username NOT in
+    // the set) in ANY file — and a synthetic home in a NON-test file — still flags. DEFAULT
+    // OFF, so a generic consumer-destination scan (and the `test-mjs-destination-flip`
+    // regression lock) is byte-identical.
+    else if (a === "--allow-synthetic-fixture-homes") args.allowSyntheticFixtureHomes = true;
     else {
       console.error(`scan-synced-disclosure: unknown argument: ${a}`);
       process.exit(2);
@@ -115,7 +126,7 @@ let REPO_ROOT_ACTIVE = REPO_ROOT;
 // thousands of non-actionable lines.
 //
 // R3 disclosure FIX (#263): `variants/` is NO LONGER blanket-excluded.
-// `.claude/variants/{py,rs,rb,prism}/**` are the language overlays that
+// `.claude/variants/{py,rs,prism}/**` are the language overlays that
 // COMPOSE INTO the USE-template synced surface at emit time (per
 // .claude/bin/emit.mjs::composeRule / variant-authoring.md) — they ARE
 // downstream-shipped. A real operator token in a committed variant
@@ -137,6 +148,12 @@ function isNeverSynced(relPath, base, segs) {
   if (pSegs[0] === ".proposals") return true;
   if (pSegs[0] === "test-harness") return true;
   if (pSegs[0] === "projects") return true;
+  // NB: `.claude/cross-repo-authz/` receipts are handled SOURCE-ONLY in isExcluded()
+  // below (mirroring the org-slug-bearing `ecosystem.json` entry) — NOT here. They
+  // carry the target `<owner>/<repo>` slug, so a DESTINATION scan (`--root <consumer>`)
+  // MUST still SCAN a leaked one (not suppress it) — flagging is best-effort, only WHEN
+  // its org matches a disclosure shape; only the loom-SOURCE self-scan self-excludes them
+  // (#1324). See the source-only guard next to `ecosystem.json` in isExcluded().
   // worktrees/ is gitignored and contains transient agent work directories
   // (each a full repo checkout under .claude/worktrees/agent-<hash>/). The
   // contents are not synced to consumers — they're operator-local agent
@@ -185,6 +202,65 @@ function isNeverSynced(relPath, base, segs) {
   return false;
 }
 
+// ────────────────────────────────────────────────────────────────
+// git-tracking probe (operator-local destination-conditional parity)
+// ────────────────────────────────────────────────────────────────
+//
+// A committed (git-TRACKED) file is public-distributable: it ships to every
+// consumer that pulls the template. So it MUST be scanned regardless of a
+// name pattern (`*.operator.local.md`) that would otherwise mark it
+// operator-local. Only a file git confirms is UNTRACKED — the gitignored
+// per-operator companion — may be skipped. TRACKED WINS over the name pattern.
+//
+// This replaces the earlier `REPO_ROOT_ACTIVE === REPO_ROOT` source/destination
+// PROXY, which skipped every `*.operator.local.md` at loom-source
+// UNCONDITIONALLY — so a TRACKED (committed) operator-local file at loom-source
+// evaded the scrub. Git-tracking is the AUTHORITATIVE signal: the real companion
+// (gitignored → untracked) is still skipped (zero-findings-on-main preserved),
+// while a committed one (tracked) is scanned (the fix). Fail-CLOSED for a
+// disclosure scanner: if git is unavailable, the root is not a work tree, or the
+// status can't be determined, treat the file as TRACKED (SCAN) — never silently
+// skip on an inconclusive probe.
+const _workTreeCache = new Map();
+function isInsideWorkTree(rootDir) {
+  if (_workTreeCache.has(rootDir)) return _workTreeCache.get(rootDir);
+  let inside = false;
+  try {
+    const out = execFileSync(
+      "git",
+      ["-C", rootDir, "rev-parse", "--is-inside-work-tree"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    );
+    inside = out.trim() === "true";
+  } catch {
+    inside = false; // git missing / not a repo → fail-closed (caller SCANs)
+  }
+  _workTreeCache.set(rootDir, inside);
+  return inside;
+}
+
+// True iff `relPath` (relative to rootDir) is git-TRACKED in the repo
+// containing rootDir. Fail-closed: only a positive "untracked" answer from a
+// live git work tree returns false — every other outcome returns true (SCAN).
+function isGitTracked(rootDir, relPath) {
+  if (!isInsideWorkTree(rootDir)) return true; // no git → treat as tracked
+  try {
+    execFileSync(
+      "git",
+      ["-C", rootDir, "ls-files", "--error-unmatch", "--", relPath],
+      { stdio: ["ignore", "ignore", "ignore"] },
+    );
+    return true; // exit 0 → tracked
+  } catch (err) {
+    // `ls-files --error-unmatch` exits status 1 for a genuinely-untracked path
+    // → skip-eligible. ANY OTHER failure (index lock, IO error, pathspec-magic)
+    // inside a confirmed work tree is INCONCLUSIVE → fail CLOSED (scan), never a
+    // silent skip — matching this control's fail-closed contract (redteam LOW).
+    if (err && err.status === 1) return false; // genuinely NOT tracked → skip-eligible
+    return true; // inconclusive → treat as tracked → SCAN (fail-closed)
+  }
+}
+
 // Path-segment / suffix exclusions (never scanned).
 function isExcluded(relPath) {
   const segs = relPath.split("/");
@@ -219,6 +295,51 @@ function isExcluded(relPath) {
   // `ecosystem.json` basename — `ecosystem.example.json` (synthetic tokens)
   // stays SCANNED in BOTH modes and is the positive fixture for that shape.
   if (base === "ecosystem.json" && REPO_ROOT_ACTIVE === REPO_ROOT) return true;
+
+  // `.claude/cross-repo-authz/` holds per-operator cross-repo authorization RECEIPTS
+  // (`<date>-<slug>.md`). By construction each embeds the target `<owner>/<repo>` slug —
+  // the WHO-authorized-WHAT-against-WHICH-repo forensic payload `repo-scope-discipline.md`
+  // § Affordance mandates — and the ceremony (`commands/cross-repo-authorize.md` Step 5)
+  // directs COMMITTING them for durable team audit AT LOOM ONLY (`type: coc-source`);
+  // every other repo class keeps them local, fenced by `sync-manifest.yaml::target_owned`
+  // `publish: local_only`. They are never DISTRIBUTED to any consumer — containment is
+  // THREE distribution fences: sync-tier-aware `no_tier_match`, edition-emit
+  // `CLIENT_TEMPLATE_REMOVE`, community-membership `EXCLUDE_WITHIN`. All three govern
+  // content flowing OUT OF LOOM and cover nothing written INTO another repo, which is why
+  // the fence, not this scanner, is the fix. THIS scanner is a DETECTOR, not a fourth fence
+  // (at a destination scan it flags a receipt that ALREADY shipped past every distribution
+  // fence — it detects, it does not contain), and a leaked receipt fails loud only WHEN its
+  // org matches a disclosure shape: best-effort detection bounded by content-shape coverage
+  // (an arbitrary client `<org>/<repo>` matching no shape would NOT flag; the receipt
+  // payload has no dedicated content shape). Matches whether the scan root is the repo
+  // (`.claude/cross-repo-authz/…`) or `.claude/` itself.
+  //
+  // 2026-08-03 — TRACKED-KEYED, generalizing the `*.operator.local.md` precedent
+  // below. This scanner walks the FILESYSTEM (`collectFiles`/`readdirSync`), so it
+  // equated PRESENT ON DISK with ON THE SYNCED SURFACE. Measured counter-example:
+  // kailash-coc-rs holds 4 receipts, 0 of them git-TRACKED (its operator had
+  // already gitignored them), and the scanner still reported 12 findings on them.
+  // Those findings are not disclosures — nothing untracked ships to any consumer —
+  // and an instrument that cries wolf on a closed hole gets allowlisted, which is
+  // how the NEXT real finding gets missed. So: a receipt git confirms is UNTRACKED
+  // is skipped at EVERY root, source or destination. TRACKED WINS over the name
+  // pattern, via the same fail-closed `isGitTracked` helper (git unavailable /
+  // not-a-work-tree / inconclusive ⇒ treated as tracked ⇒ SCANNED).
+  //
+  // Deliberately NOT a universal untracked-skip: an untracked-but-STAGED
+  // disclosure elsewhere would then evade the scrub. Scoped to this one class,
+  // mirroring the operator-local precedent.
+  //
+  // A TRACKED receipt keeps the prior source-only disposition: at loom-source it
+  // is skipped (committing is correct there and must not block the operator's
+  // commit, #1324); at a DESTINATION scan it is SCANNED — a committed receipt at a
+  // consumer IS the disclosure event, and it is exactly what the `target_owned`
+  // `publish: local_only` fence now prevents going forward.
+  const isCrossRepoAuthz =
+    segs[0] === "cross-repo-authz" ||
+    (segs[0] === ".claude" && segs[1] === "cross-repo-authz");
+  if (isCrossRepoAuthz && !isGitTracked(REPO_ROOT_ACTIVE, relPath)) return true;
+  if (isCrossRepoAuthz && REPO_ROOT_ACTIVE === REPO_ROOT) return true;
 
   // This scanner's OWN audit fixtures intentionally embed SYNTHETIC
   // disclosure shapes (invented `acme-*` / `Fakename-*` / `fakeuser`
@@ -280,15 +401,25 @@ function isExcluded(relPath) {
   // `/sync`'s LOOM_LOCAL_PATTERNS). Scan it when REPO_ROOT_ACTIVE differs
   // from REPO_ROOT (destination mode).
   //
-  // `*.operator.local.md` carries the SAME #352 parity (loom Gate-1 ingest of
-  // the kailash-py re-convergence-#9 disclosure-hygiene flag): at loom-source
-  // it is gitignored (never committed), but a committed `*.operator.local.md`
-  // that shipped to a consumer IS the disclosure event — an operator-local
-  // runbook value file committed to a repo and synced. The prior UNCONDITIONAL
-  // skip blinded the scanner at every destination scan, so a tracked
-  // operator-local file reaching a consumer was never flagged. Source-only,
-  // mirroring the `*.local.json` flip below.
-  if (/\.operator\.local\.md$/.test(base) && REPO_ROOT_ACTIVE === REPO_ROOT)
+  // `*.operator.local.md` carries the #352 parity, now keyed on git-TRACKING
+  // status rather than the source/destination PROXY. The prior guard
+  // (`REPO_ROOT_ACTIVE === REPO_ROOT`) skipped EVERY operator-local file at
+  // loom-source unconditionally — so a TRACKED (committed) `*.operator.local.md`
+  // at loom-source evaded the scrub even though a committed file is
+  // public-distributable (it ships to every consumer that pulls the template).
+  // Skip ONLY the gitignored per-operator companion — a file git confirms is
+  // UNTRACKED; a TRACKED operator-local file MUST still be scanned. TRACKED WINS
+  // over the name pattern (fail-closed via isGitTracked: git-unavailable /
+  // not-a-work-tree ⇒ treated as tracked ⇒ scanned). This SUBSUMES the old flip
+  // in both directions: at loom-source the real companion is gitignored →
+  // untracked → skipped (zero-findings-on-main preserved); a committed
+  // operator-local (loom-source OR a consumer destination) → tracked → scanned
+  // (the fix). Same shape as the `*.local.json` flip below, but via the
+  // authoritative git-tracking signal instead of the root-identity proxy.
+  if (
+    /\.operator\.local\.md$/.test(base) &&
+    !isGitTracked(REPO_ROOT_ACTIVE, relPath)
+  )
     return true;
   if (/\.local\.json$/.test(base) && REPO_ROOT_ACTIVE === REPO_ROOT) return true;
   // Generic `*.local.md` stays UNCONDITIONALLY excluded — but must NOT swallow
@@ -410,6 +541,17 @@ const ALLOWLIST = [
   // a *different* operator's home path (`/Users/<other>/`) carries a
   // different username, fails this anchored prefix, and is still flagged
   // by the operator-home-path shape.
+  //
+  // SURFACE SCOPE (GAP D, ratified 2026-07-26): the Option-1 own-coordinate
+  // ruling covers the INSTANTIATION surface as well as the SYNC surface. A
+  // client-template edition or a fresh clone generated FROM this checkout is a
+  // publish event in the same sense a sync is (`artifact-flow.md` § "The source
+  // of instantiation MUST be clean at rest"), so the same own-coordinate
+  // reasoning applies there and needs no separate ruling. What that does NOT
+  // license: the allowance stays scoped to the maintainer's OWN dev-home
+  // prefix on both surfaces — an instantiation carrying a DIFFERENT operator's
+  // home path is flagged on the instantiation surface exactly as on the sync
+  // surface.
   /\/Users\/esperie\//,
   /\/home\/esperie\//,
   // R2 detection-completeness FIX (#263): each SDK-repo-name allowlist
@@ -440,7 +582,20 @@ const ALLOWLIST = [
   /BP-\d+\b/, // bug-pattern refs
   // framework + standard names
   /\b(DataFlow|Nexus|Kaizen|PACT|ML|Align|MCP|EATP|CARE|CO|COC|CC)\b/,
-  /\bAegis\b/i, // public PACT product
+  // ALLOWLIST-NOTE (GAP B, 2026-08-10): the product-name entry that sat here was
+  // annotated "public PACT product" and that annotation was FALSE — co-owner
+  // correction 2026-07-26: the named product is NOT public; the public one is the
+  // PACT *reference platform*. Because a positive-allowlist entry suppresses the
+  // token on EVERY scanned surface in EVERY repo shipping this scanner, the false
+  // annotation made the fence structurally blind to it — a disclosure hole, not a
+  // cosmetic error. Entry REMOVED rather than re-pointed: naming the reference
+  // platform here would require a name this change cannot verify, and inventing
+  // one to fill the slot is exactly the fabrication that produced the original
+  // defect. The frameworks entry above still covers the bare `PACT` token, so the
+  // legitimate framework reference is unaffected. Removal fails SAFE — the token
+  // now flags and a human adjudicates, rather than passing silently.
+  // Paired fixture: `clean-foundation-placeholder/.claude/rules/clean.md` line 9
+  // carried the same false assertion and is corrected in this change.
   // ALLOWLIST-NOTE (R3 #263): `your-registry` is the documentation
   // placeholder container-registry host in the rs deployment-patterns
   // skill (`image: your-registry/kailash-service:latest`) — the
@@ -954,6 +1109,108 @@ function loadCustomerIdentityShape(rootActive) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// CROSS-REPO-AUTHZ RECEIPT-PAYLOAD SHAPE (#1330)
+// ────────────────────────────────────────────────────────────────
+//
+// A committed `.claude/cross-repo-authz/<date>-<slug>.md` receipt embeds
+// its target `<org>/<repo>` in two structured payload lines (the greppable
+// marker `cross-repo-authorized: <org>/<repo> <mode>` and the bounded-action
+// `- **Target repo:** <org>/<repo>`). At loom-source those receipts are
+// self-excluded (isExcluded, source-only, next to the `ecosystem.json`
+// entry); at a DESTINATION scan (`--root <consumer>`) a LEAKED receipt is
+// scanned. The pre-#1330 scanner only flagged such a leak when its target
+// org happened to match ANOTHER disclosure shape (e.g. `*-enterprise`); an
+// arbitrary client `<org>/<repo>` (a plain `slug/slug`) matched NO shape and
+// sailed through — the destination backstop was honest best-effort. This
+// shape closes that gap by matching the receipt payload's own content.
+//
+// OWN-ORG ALLOWLISTED: the OWN-ecosystem org set is derived from the D6
+// registry (`.claude/bin/ecosystem.json` — the same source
+// `checkClientTemplateCompleteness` reads), so a legitimate own-ecosystem
+// receipt reference is suppressed while a receipt naming a FOREIGN org flags.
+// Deriving from ecosystem.json (not a hardcoded own-org list) is what makes
+// the shape correct inside a client FORK, whose own org differs from canon's.
+// A consumer WITHOUT an ecosystem.json yields an EMPTY own set → the shape
+// fails CLOSED (every concrete-slug receipt flags — any receipt at a plain
+// consumer is a leak by construction).
+//
+// PATH-SCOPED to a `cross-repo-authz/` directory (see scanFile `pathScope`):
+// the shape examines ONLY receipt FILES, never a doc/journal/proposal that
+// quotes the marker in prose. That structural scope — not a placeholder
+// denylist — is what keeps the shape FALSE-POSITIVE-free at a loom-source
+// scan (`commands/cross-repo-authorize.md` uses the metavariable form
+// `<owner/repo>`, which the leading `<` breaks anyway; journals are excluded
+// wholesale; but path-scoping removes the entire class of doc false hits).
+const ECOSYSTEM_REGISTRY_REL = path.join(".claude", "bin", "ecosystem.json");
+
+// Derive the OWN-ecosystem GitHub-org set from the D6 registry at
+// `rootActive` (registry.org + every remote_links.*.org). Absent file →
+// empty set (fail-closed: all receipts flag). PRESENT-but-unparseable →
+// throw loud (a guard that silently disables itself on a typo is worse than
+// no guard — the same posture loadCustomerIdentityShape takes).
+function readEcosystemOwnOrgs(rootActive) {
+  const orgs = new Set();
+  const p = path.join(rootActive, ECOSYSTEM_REGISTRY_REL);
+  if (!fs.existsSync(p)) return orgs;
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch (e) {
+    throw new Error(
+      `ecosystem.json present but unparseable at ${p}: ${e.message} ` +
+        `(refusing to run a silently-org-blind receipt-payload guard)`,
+    );
+  }
+  const add = (v) => {
+    if (typeof v === "string" && /^[a-z0-9-]+$/i.test(v.trim())) {
+      orgs.add(v.trim().toLowerCase());
+    }
+  };
+  if (parsed && parsed.registry) add(parsed.registry.org);
+  if (parsed && parsed.remote_links && typeof parsed.remote_links === "object") {
+    for (const link of Object.values(parsed.remote_links)) {
+      if (link && typeof link === "object") add(link.org);
+    }
+  }
+  return orgs;
+}
+
+// Build the `cross-repo-authz-receipt-payload` SHAPE from the own-org set at
+// `rootActive`. The `<org>` segment carries a negative-lookahead over the
+// own-org alternation (empty set → no lookahead → every concrete slug flags,
+// fail-closed). A CONCRETE `slug/slug` is required: the metavariable
+// placeholders (`<org>/<repo>`, `<owner/repo>`) never match because the
+// leading `<` after the marker is not a slug char. `pathScope` confines the
+// shape to receipt files under a `cross-repo-authz/` directory.
+//
+// THREE org-bearing marker lines are matched — every real receipt carries all
+// three: the two body markers (`cross-repo-authorized:` + `**Target repo:**`)
+// AND the frontmatter key `target:` (#1330 L1). Matching the frontmatter line
+// closes the partial-genericize evasion where a receipt's BODY markers were
+// scrubbed but its frontmatter `target:` still carried the concrete foreign
+// org. The `target:` alternative is anchored to line-start (`^[ \t]*target:`,
+// per-line exec) so an INLINE prose "target:" cannot match — only the YAML
+// frontmatter key. All three carry the SAME own-org negative-lookahead, so an
+// own-org `target:` is suppressed exactly like the body markers.
+function loadReceiptPayloadShape(rootActive) {
+  const ownOrgs = readEcosystemOwnOrgs(rootActive);
+  const negLookahead = ownOrgs.size
+    ? `(?!(?:${[...ownOrgs].map(escapeForRegex).join("|")})\\/)`
+    : "";
+  const slug = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
+  const rx = new RegExp(
+    `(?:cross-repo-authorized:|\\*\\*Target repo:\\*\\*|^[ \\t]*target:)[ \\t]+` +
+      `${negLookahead}(${slug}\\/${slug})`,
+    "gi",
+  );
+  return {
+    id: "cross-repo-authz-receipt-payload",
+    rx,
+    pathScope: /(^|\/)cross-repo-authz\//,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────
 // Scan
 // ────────────────────────────────────────────────────────────────
 function redactContext(line, matchStart, matchText) {
@@ -969,7 +1226,7 @@ function redactContext(line, matchStart, matchText) {
     .trim();
 }
 
-function scanFile(file, findings, shapes) {
+function scanFile(file, findings, shapes, allowSyntheticFixtureHomes = false) {
   let buf;
   try {
     buf = fs.readFileSync(file);
@@ -979,6 +1236,11 @@ function scanFile(file, findings, shapes) {
   if (isProbablyBinary(buf)) return;
   const rel = path.relative(REPO_ROOT_ACTIVE, file);
   const base = path.basename(file);
+  // client-template gate opt-in: a SYNTHETIC fixture home inside a *.test.(mjs|js) fixture is
+  // PRESERVED verbatim by that projection's scrubber (loom#1318) and is benign here. Scoped to
+  // test files so a synthetic-looking home in a NON-test shipped file still flags; scoped to the
+  // shared SYNTHETIC_FIXTURE_USERS set so a REAL operator home still flags (dual-half parity).
+  const testFixtureFile = allowSyntheticFixtureHomes && /\.test\.(mjs|js)$/.test(base);
   const text = buf.toString("utf8");
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
@@ -989,11 +1251,25 @@ function scanFile(file, findings, shapes) {
       // ONLY to matching files. File-scoped shapes (e.g. the ecosystem
       // bare-org-slug shape) avoid flooding every repo-wide JSON value.
       if (shape.fileScope && !shape.fileScope.test(base)) continue;
+      // A shape may declare `pathScope` (a repo-relative-path regex); it
+      // then applies ONLY to files whose `rel` path matches. The
+      // cross-repo-authz receipt-payload shape (#1330) uses this to fire
+      // ONLY on receipt FILES inside a `cross-repo-authz/` directory — never
+      // on a doc/journal/proposal that merely quotes the marker in prose,
+      // which is a different file class and would false-positive.
+      if (shape.pathScope && !shape.pathScope.test(rel)) continue;
       shape.rx.lastIndex = 0;
       let m;
       while ((m = shape.rx.exec(line)) !== null) {
         const matchText = m[0];
         if (m.index === shape.rx.lastIndex) shape.rx.lastIndex++;
+        // Opt-in synthetic-fixture-home tolerance (client-template gate): skip an
+        // operator-home-path span in a *.test.(mjs|js) fixture whose username is in the shared
+        // synthetic set (loom#1318). A real username fails the set → still flagged.
+        if (testFixtureFile && shape.id === "operator-home-path") {
+          const uname = (matchText.match(/\/(?:Users|home)\/([\w.-]+)/) || [])[1];
+          if (uname && SYNTHETIC_FIXTURE_USERS.has(uname.toLowerCase())) continue;
+        }
         // F77 (#386): the settings-permission-absolute-path shape is
         // INTRINSICALLY wrong regardless of which operator's path it
         // wraps — a tool-call matcher in a synced settings.json's
@@ -1003,9 +1279,16 @@ function scanFile(file, findings, shapes) {
         // this shape so own-coordinate `/Users/esperie/` tokens inside
         // an `Edit(...)` matcher still flag. Every other shape retains
         // the Option-1 allowlist semantics unchanged.
+        // The cross-repo-authz-receipt-payload shape (#1330) is also skipped
+        // here: its own OWN-ORG negative-lookahead (derived from
+        // ecosystem.json) is the SOLE suppression mechanism, so the generic
+        // ALLOWLIST must NOT additionally suppress a foreign-org receipt that
+        // happens to embed a placeholder-shaped token (fail-closed toward
+        // flagging), exactly as the customer-identity-token shape self-governs.
         if (
           shape.id !== "settings-permission-absolute-path" &&
           shape.id !== "customer-identity-token" &&
+          shape.id !== "cross-repo-authz-receipt-payload" &&
           allowlistCovers(matchText)
         )
           continue;
@@ -1030,20 +1313,71 @@ if (args.help) {
 }
 
 const root = args.root ? path.resolve(args.root) : REPO_ROOT;
+
+// A NON-DISCRIMINATING RUN MUST NOT EXIT 0.
+//
+// `artifact-flow.md` § Intake Disclosure Scrub makes `--check --root <inbound-repo>`
+// exiting 0 the Gate-1 intake gate, and `/ecosystem-init` invariant 1 makes it the
+// pre-config-write gate. MEASURED 2026-08-10: a `--root` at a NONEXISTENT path
+// produced exit 0 with ZERO bytes of output — byte-identical to a genuinely clean
+// scan of a real root — so a mistyped, unresolved, or wrongly-relative path passed
+// both gates silently. An outcome consistent with both branches of the hypothesis
+// is not evidence (`instrument-discipline.md` MUST-1); the scan had not run.
+//
+// Both guards below exit 2, the code an unknown argument and a malformed denylist
+// already use for "did not run". Exit 2 is the ABSENCE of a result, never a clean
+// one — a caller that treats non-zero as "findings" must not collapse 1 and 2.
+if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+  console.error(
+    `scan-synced-disclosure: --root does not exist or is not a directory: ${root}`,
+  );
+  console.error(
+    `  The scan DID NOT RUN. Exit 2 is the absence of a result, not a clean result.`,
+  );
+  process.exit(2);
+}
+// The second guard keys on a STRUCTURAL fact about the root — does it carry any
+// synced surface at all — NOT on `files.length === 0` after filtering. That
+// distinction is load-bearing: `sync-preserve-local-skipped` and
+// `excluded-accepted-history` legitimately enumerate to ZERO files because the
+// exclusion rules they exist to test skip their only content, and a naive
+// post-filter zero-check reds both (measured: it did). A root with no `.claude/`
+// and no top-level synced path is a DIFFERENT thing — a wrong root, where a
+// "clean" verdict describes nothing.
+if (
+  !fs.existsSync(path.join(root, ".claude")) &&
+  !TOP_LEVEL_SYNCED.some((t) => fs.existsSync(path.join(root, t)))
+) {
+  console.error(
+    `scan-synced-disclosure: no synced surface under ${root} — no .claude/ and no top-level synced path`,
+  );
+  console.error(
+    `  The scan DID NOT RUN against a repo checkout. Exit 2 is the absence of a result, not a clean result.`,
+  );
+  process.exit(2);
+}
 const files = collectFiles(root); // sets REPO_ROOT_ACTIVE
 // Build the loom-only customer-identity shape from the tenant denylist at
 // the SCANNED root (inert when absent; throws loud on a malformed file so
 // the guard never silently disables itself).
 let customerShape;
+let receiptPayloadShape;
 try {
   customerShape = loadCustomerIdentityShape(REPO_ROOT_ACTIVE);
+  // #1330: own-org set derived from the D6 registry at the scanned root;
+  // throws loud on a present-but-unparseable ecosystem.json.
+  receiptPayloadShape = loadReceiptPayloadShape(REPO_ROOT_ACTIVE);
 } catch (e) {
   console.error(`scan-synced-disclosure: ${e.message}`);
   process.exit(2);
 }
-const activeShapes = customerShape ? [...SHAPES, customerShape] : SHAPES;
+const activeShapes = [
+  ...SHAPES,
+  ...(customerShape ? [customerShape] : []),
+  receiptPayloadShape,
+];
 const findings = [];
-for (const f of files) scanFile(f, findings, activeShapes);
+for (const f of files) scanFile(f, findings, activeShapes, args.allowSyntheticFixtureHomes);
 
 if (args.mode === "check") {
   if (findings.length > 0) {
@@ -1055,6 +1389,10 @@ if (args.mode === "check") {
     }
     process.exit(1);
   }
+  // The clean receipt is DISCRIMINATING: it names how many files were examined,
+  // so a caller reading a 0 exit can tell a real clean scan from a scan of
+  // nothing. Before this line, check-mode's clean path printed nothing at all.
+  console.log(`Scanned: ${files.length} files on the synced surface — 0 findings`);
   process.exit(0);
 }
 
