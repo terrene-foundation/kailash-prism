@@ -338,7 +338,14 @@ function resolveTrustRoot(acceptedRecords, roster) {
  *                     benign fresh clone, NO downgrade; new operators L2.
  *   "corrupt-L1"    — init marker + missing/truncated log WHILE
  *                     clone-init chain witness exists, OR fold integrity
- *                     failure, OR peer ref-regression → fail-closed L1.
+ *                     failure, OR peer ref-regression, OR the state dir is
+ *                     INDETERMINATE (loom#1471 F7) → fail-closed L1.
+ *
+ * Inputs are file paths plus three boolean signals the caller supplies:
+ * `peerRefRegression`, `foldIntegrityFailed`, and `stateDirIndeterminate`.
+ * The last says "I could not establish that these paths are this repository's
+ * trust state" and outranks every other branch — see the note at the top of
+ * the ordering block below.
  *
  * The 5 cases (per architecture §6.1) are: corrupt-cache, fresh-repo,
  * fresh-clone, post-init-state-damage, fold-integrity-failure. Cases 4–6
@@ -361,6 +368,9 @@ function discriminateState(input) {
     typeof o.cloneInitWitnessPath === "string" ? o.cloneInitWitnessPath : null;
   const peerRefRegression = o.peerRefRegression === true;
   const foldIntegrityFailed = o.foldIntegrityFailed === true;
+  // loom#1471 F7: the caller could not confirm that the paths below belong to
+  // THIS repository (git did not identify a main checkout). See below.
+  const stateDirIndeterminate = o.stateDirIndeterminate === true;
 
   const fs = require("fs");
 
@@ -373,6 +383,44 @@ function discriminateState(input) {
     cloneInitWitnessPath && _fileExists(fs, cloneInitWitnessPath);
 
   // Order matters: corruption signals trump benign-fresh signals.
+  //
+  // loom#1471 F7 — INDETERMINACY OUTRANKS EVERY OTHER SIGNAL, so it is tested
+  // FIRST. Every probe below asks a question ABOUT four paths; if the caller
+  // could not establish that those paths are this repository's trust state,
+  // none of the answers mean anything, and the most dangerous of them is the
+  // cheapest to obtain: an unrelated directory has no `.initialized` and no
+  // log, which reads as `fresh-repo-L5` — the MOST PERMISSIVE floor. That is
+  // an ESCALATION produced by a git failure, and it is the same endpoint
+  // loom#1338 reached from the symlink-probe side ("a nuked repo pinned at L1
+  // was handed back fresh-repo-L5"). This branch is the second, independent
+  // validator learning the dimension, per `rules/security.md` §
+  // Enforcement-Surface Parity — one control, both surfaces, ranked TIGHTEST.
+  if (stateDirIndeterminate) {
+    return {
+      disposition: "corrupt-L1",
+      reason:
+        "trust-state directory is INDETERMINATE — git could not identify the main checkout, so the probed state paths are not known to be this repository's; fail-closed to L1",
+    };
+  }
+  //
+  // loom#1338: an attacker-planted NON-REGULAR entry at any probed state path is
+  // itself a corruption signal and outranks every benign disposition below.
+  // Without this, a link at the log or cache steers the ladder by proxy (a
+  // symlink to an empty file makes a non-empty log read as empty, which is the
+  // `!logNonEmpty` input to both the fresh-repo and post-init-damage branches).
+  // Fail closed on the signal rather than letting it select the outcome.
+  const irregular = [
+    [cachePath, "posture cache"],
+    [logPath, "coordination log"],
+    [initMarkerPath, ".initialized marker"],
+    [cloneInitWitnessPath, "clone-init witness"],
+  ].find(([p]) => p && _isIrregularEntry(fs, p));
+  if (irregular) {
+    return {
+      disposition: "corrupt-L1",
+      reason: `non-regular filesystem entry at the ${irregular[1]} path — adversarial entry detected, fail-closed to L1`,
+    };
+  }
   if (foldIntegrityFailed) {
     return {
       disposition: "corrupt-L1",
@@ -449,29 +497,57 @@ function discriminateState(input) {
   };
 }
 
+// loom#1338: every probe below is `lstat`-based and link-refusing.
+//
+// `existsSync` / `statSync` / `readFileSync` all FOLLOW symlinks, which made
+// each of these discriminator inputs attacker-steerable. The load-bearing case
+// was the clone-init witness at `_fileExists`: a DANGLING symlink there reads as
+// ABSENT to `existsSync`, so the F50 adversarial-nuke detector below never fired
+// and a nuked repo pinned at L1 was handed back `fresh-repo-L5`. `state-io.js`
+// fixed this exact primitive in its own marker probe; leaving the sibling
+// validator on the following form is `security.md` § Enforcement-Surface Parity —
+// one control, two independent validators, one of them blind.
+
+/** Presence by `lstat`: a symlink (dangling or not) IS an entry, and counts. */
 function _fileExists(fs, p) {
   try {
-    return fs.existsSync(p);
+    fs.lstatSync(p);
+    return true;
   } catch {
     return false;
   }
 }
+/** True only for a REGULAR non-empty file — a link never satisfies this. */
 function _fileNonEmpty(fs, p) {
   try {
-    const stat = fs.statSync(p);
+    const stat = fs.lstatSync(p);
     return stat.isFile() && stat.size > 0;
   } catch {
     return false;
   }
 }
+/** Non-regular entries are never "parseable" — refuse before reading. */
 function _fileParseableJson(fs, p) {
   try {
+    if (!fs.lstatSync(p).isFile()) return false;
     const content = fs.readFileSync(p, "utf8");
     if (!content || !content.trim()) return false;
     JSON.parse(content);
     return true;
   } catch {
     return false;
+  }
+}
+/**
+ * True when `p` exists but is NOT a regular file (symlink, dir, FIFO, socket).
+ * Nothing legitimate ever plants one of these at a state path, so its presence
+ * is treated as a positive adversarial signal rather than merely ignored.
+ */
+function _isIrregularEntry(fs, p) {
+  try {
+    return !fs.lstatSync(p).isFile();
+  } catch {
+    return false; // absent (or unstattable) is not an irregular-entry signal
   }
 }
 
