@@ -19,6 +19,14 @@ web/.claude/
 # Dart library lockfile — kailash_prism is published via pub.dev; lockfile is per-consumer
 flutter/pubspec.lock
 
+# Operator-local registries under .claude/bin/. These files declare in their own
+# header that they are operator-local and never committed, but no rule enforced
+# it, so they were committed anyway. Deliberately scoped to .claude/bin/ rather
+# than repo-wide: the committed fixture under .claude/audit-fixtures/ is a test
+# input and must stay tracked. The *.local.example.json schema templates do not
+# match this pattern and continue to ship.
+.claude/bin/*.local.json
+
 # >>> coc:gitignore_additions — managed by loom /sync; do not edit between markers >>>
 !.claude/bin/lib/
 !.claude/hooks/lib/
