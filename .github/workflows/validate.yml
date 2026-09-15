@@ -1,0 +1,160 @@
+name: Validate
+
+# ─────────────────────────────────────────────────────────────────
+# WHY THIS WORKFLOW EXISTS
+#
+# This repo has CI (ci-web.yml, release-web.yml) but NO workflow that
+# reports a status on EVERY pull request, so `main` cannot carry a
+# required status check at all. That leaves every merge ungated: a PR
+# can land with nothing having verified it.
+#
+# The blocker is not the absence of checks — it is the absence of a
+# check that always REPORTS. GitHub treats these two situations very
+# differently, and the difference is the whole reason this file is
+# shaped the way it is:
+#
+#   - A workflow that never TRIGGERS (its `paths:` filter does not
+#     match the diff) is never instantiated, so NO check run of that
+#     name is ever created. A required context in that state is not
+#     "passing" and not "failing" — it is ABSENT, and GitHub holds the
+#     PR at "Expected — waiting for status to be reported" forever.
+#     There is no timeout, and under "do not allow bypassing" there is
+#     no admin override either. That would brick the repo.
+#
+#   - A JOB that runs and reports is unambiguous: branch protection
+#     only ever has to answer "did this context succeed?".
+#
+# ci-web.yml cannot serve this role: its `pull_request` arm is filtered
+# to `web/**`, so on a compiler-only, docs-only or spec-only PR it
+# reports nothing. It stays as-is and keeps doing its job.
+#
+# ─────────────────────────────────────────────────────────────────
+# WHAT THIS JOB ACTUALLY VERIFIES — AND HOW IT CAN FAIL
+#
+# `compiler/` (the design-token compiler, @kailash/prism-compiler) has
+# TypeScript sources, a `tsc` build, and 73 vitest cases across 2 test
+# files — and, before this workflow, no CI of any kind. It is the one
+# surface in this repo with real tests and zero coverage.
+#
+# The job runs the package's own declared commands:
+#     npm ci  ->  npm run build (tsc)  ->  npm run test:run (vitest)
+#
+# It FAILS on any of:
+#   - a type error anywhere in compiler/src (tsc exits 2)
+#   - a failing or newly-broken compiler test (vitest exits 1)
+#   - a package-lock.json out of sync with package.json (npm ci exits 1)
+#
+# Both failure paths were exercised before this workflow was proposed,
+# on this repo's own tree: injecting one type error into
+# compiler/src/types.ts took `npm run build` from rc=0 to rc=2, and
+# adding one failing assertion took `npm run test:run` from rc=0 to
+# rc=1. Reverting each restored rc=0. The check is therefore known to
+# discriminate, not merely known to be green.
+#
+# DELIBERATELY NOT INCLUDED: `.claude/bin/coc-eval-all.mjs`. Measured on
+# this tree, it exits 0 and prints "ALL STRUCTURAL PASS (0/0 structural
+# entries)" because this repo has no
+# .claude/test-harness/eval-manifest.json — a green that verifies
+# nothing. Wiring it here would flip this repo's status from "no gate"
+# to "a gate that cannot fail", which is strictly worse: it reads as
+# enforcement while enforcing nothing.
+#
+# ─────────────────────────────────────────────────────────────────
+# COST
+#
+# The `pull_request` arm carries NO `paths:` filter, so this job runs on
+# every PR — including docs-only and spec-only ones. That is the price
+# of the repo's merge gate being able to exist; the alternative is not a
+# cheaper gate but no gate. The job is deliberately small so the price
+# is small: npm ci over 3 devDependencies, a tsc build, and a vitest run
+# that completes in ~1.5s locally. Budget a couple of minutes per PR.
+#
+# If that ever needs reducing, the correct move is to gate the expensive
+# STEPS behind a changed-file classifier inside this job — never to add
+# a `paths:` filter to the `pull_request` arm, which would re-introduce
+# the never-reported-context hang described above.
+# ─────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    branches: [main]
+    # NO `paths:` FILTER — DELIBERATE AND LOAD-BEARING. Adding one back
+    # silently bricks the repo the moment branch protection is on: every
+    # PR outside the filter would wait forever on an absent required
+    # context. Same for `paths-ignore:` and `branches-ignore:`.
+  # Merge-queue capable. The queue is NOT enabled by this file; enabling
+  # it is a separate repo-ruleset change. The arm is here because under a
+  # queue the event is `merge_group`, not `pull_request` — without it the
+  # workflow would not instantiate on a queued candidate, the required
+  # context would never report, and every queued merge would hang.
+  # No filter keys here, on the same footing as the arm above.
+  merge_group:
+  # Answers a question the PR arm structurally cannot: "is main passing
+  # NOW?" Two PRs can be individually green and jointly red.
+  push:
+    branches: [main]
+    paths:
+      - "compiler/**"
+      - ".github/workflows/validate.yml"
+  # On-demand re-measurement of the accepted state, with no merge needed.
+  workflow_dispatch:
+
+concurrency:
+  # `github.event_name` is in the key so a push to main and a manual
+  # dispatch on main do not share a group and cancel one another.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  # PR runs cancel on a new push to the same PR — correct there, since
+  # only the tip of a PR branch is a merge candidate. Main pushes and
+  # queued candidates must NOT be cancelled: every push to main shares
+  # one `github.ref`, so cancelling would leave the accepted state
+  # unmeasured, and a cancelled queued run reports as a failed required
+  # check, which would eject the PR from the queue rather than save time.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least-privilege: this job only reads the checked-out tree and runs the
+# compiler's own build and tests. It opens no PR, uploads no artifact,
+# and touches no release surface.
+permissions:
+  contents: read
+
+jobs:
+  required-checks:
+    # THIS NAME IS THE CHECK CONTEXT. It is the string branch protection
+    # pins under `required_status_checks.contexts`. Renaming this job
+    # renames the context, and a required context whose name no longer
+    # exists is never reported — which hangs every PR. Change it only
+    # together with the protection setting.
+    name: Required checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Node 22 is the compiler package's declared engines.node floor.
+      # Single version, deliberately: a matrix would expand the job name
+      # into per-variant check contexts, and the context name is exactly
+      # the thing branch protection pins.
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: compiler/package-lock.json
+
+      # `npm ci` (not `npm install`) — it fails when package-lock.json is
+      # out of sync with package.json rather than silently rewriting it.
+      - name: Install compiler dependencies
+        working-directory: compiler
+        run: npm ci
+
+      # The package's OWN declared build command. Do not substitute a
+      # "simpler" one: `tsc` is what type-checks compiler/src, and
+      # bypassing it would ship type-broken code past a green check.
+      - name: Type-check and build (tsc)
+        working-directory: compiler
+        run: npm run build
+
+      - name: Test (vitest)
+        working-directory: compiler
+        run: npm run test:run
