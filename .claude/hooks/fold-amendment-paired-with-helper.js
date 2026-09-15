@@ -72,6 +72,14 @@
 const path = require("path");
 const { execFileSync } = require("child_process");
 const { emit } = require(path.join(__dirname, "lib", "instruct-and-wait.js"));
+const { readStdinBounded } = require(
+  path.join(__dirname, "lib", "read-stdin-bounded.js"),
+);
+// loom#1549 F3 — the SHARED git-invocation parser, the same one
+// validate-bash-command.js consults. See lib/git-command-parse.js § why.
+const { findGitSubcommand } = require(
+  path.join(__dirname, "lib", "git-command-parse.js"),
+);
 
 const HOOK_EVENT = "PostToolUse";
 const RULE_ID = "multi-operator-coordination/MUST-7-paired-landing";
@@ -133,9 +141,17 @@ const FOLD_F86_SYMBOLS = [
   "pre_correction_root_commit",
 ];
 
+// loom#1549 F3 locks 4+5 — the commit under inspection is the one git actually
+// made, which `git -C <dir> commit` puts in ANOTHER repository. This helper
+// used to spawn with neither `-C` nor `cwd`, so it always diffed the SESSION
+// repo: a pairing violation committed into a `-C` target went unseen, and the
+// session repo's own unrelated HEAD~1 was inspected in its place. `repoDir` is
+// the parsed invocation's effective work tree (null = session cwd).
+let repoDir = null;
+
 function git(args) {
   try {
-    return execFileSync("git", args, {
+    return execFileSync("git", repoDir ? ["-C", repoDir, ...args] : args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 2000,
@@ -145,43 +161,59 @@ function git(args) {
   }
 }
 
-function readPayload() {
+async function readPayload() {
   // CC delivers the hook payload on stdin as JSON. The hook MUST
   // tolerate empty / malformed stdin (silent pass-through) per
   // hook-output-discipline.md MUST-1's pass-on-edge-case principle.
-  try {
-    const chunks = [];
-    let buf = process.stdin.read();
-    while (buf !== null) {
-      chunks.push(buf);
-      buf = process.stdin.read();
-    }
-    const raw = Buffer.concat(chunks.map((c) => Buffer.from(c))).toString(
-      "utf8",
-    );
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch (err) {
-    return null;
-  }
+  //
+  // loom#1368 part 3: this previously drained stdin with a SYNCHRONOUS
+  // `process.stdin.read()` loop. The stream is not in flowing mode at that
+  // point, so the very first read() returned null, the loop exited having
+  // collected ZERO bytes, and readPayload() returned null on EVERY
+  // invocation — main() then took its `!payload` branch and passed through
+  // unconditionally. The guard was registered, wired, and structurally
+  // incapable of firing. It was invisible because the source contains the
+  // literal `process.stdin`, which is exactly what the old substring check
+  // in scripts/ci/validate-hooks.js looked for.
+  //
+  // readStdinBounded is the canonical event-driven reader (hooks/lib): it
+  // resolves on `end`, keeps the event loop live so the TIMEOUT_MS fallback
+  // above still fires, and returns the fallback on any non-happy path.
+  // `fallback: null` preserves this function's original contract — null
+  // means "no usable payload".
+  return readStdinBounded({ fallback: null });
 }
 
+/**
+ * Does this payload actually RUN `git commit`?
+ *
+ * loom#1549 F3 locks 1/2/3/6/7. This used to be two regexes tested against the
+ * whole command string — `/\bgit\b/` and `/\bcommit(?![\w-])/` — which asked
+ * only "do the words appear ANYWHERE", not "is `commit` the SUBCOMMAND". It
+ * therefore fired on `git log --grep=commit` (an ARGUMENT), on `commit` sitting
+ * in a trailing `#` comment, and on `echo commit && git status` (the git
+ * segment's subcommand is `status`). Each false positive halts a session and
+ * diffs HEAD~1..HEAD for a commit that was never made.
+ *
+ * kailash-rs held seven regression locks for exactly this and rejected loom's
+ * Gate-2 sync because loom's guard did not carry them. The fix is not a better
+ * regex — it is to ask the ONE parser that already answers this question for
+ * validate-bash-command.js, so the two cannot drift again.
+ *
+ * Returns the parsed invocation (whose `.dir` names the tree git will commit
+ * in) or null. The lookahead the old regex needed for `commit-tree` /
+ * `commit-graph` is gone: those are DIFFERENT subcommands, and an exact match
+ * on the parsed subcommand distinguishes them structurally.
+ */
 function isGitCommit(payload) {
-  // The hook only acts on `git commit` invocations. Other Bash commands
-  // (pytest, gh issue, etc.) pass through without any subprocess work.
   const cmd =
     payload &&
     payload.tool_input &&
     typeof payload.tool_input.command === "string"
-      ? payload.tool_input.command.trim()
+      ? payload.tool_input.command
       : "";
-  if (!cmd) return false;
-  // Match: `git commit ...`, `git commit -m ...`, `git -c X commit ...`,
-  // `cd foo && git commit ...`, etc. Use a structural grep rather than
-  // strict prefix so chained / env-prefixed forms still trigger.
-  if (!/\bgit\b/.test(cmd)) return false;
-  if (!/\bcommit\b/.test(cmd)) return false;
-  return true;
+  if (!cmd) return null;
+  return findGitSubcommand(cmd, "commit");
 }
 
 function commitHasParent() {
@@ -252,14 +284,41 @@ function emitHalt({ helperTouched, foldTouched, helperHasF86, foldHasF86 }) {
   });
 }
 
-function main() {
-  const payload = readPayload();
-  if (!payload || !isGitCommit(payload)) {
+async function main() {
+  const payload = await readPayload();
+  const invocation = payload ? isGitCommit(payload) : null;
+  if (!invocation) {
     // Not a git commit (or stdin empty / malformed) — silent pass.
     process.stdout.write(JSON.stringify({ continue: true }) + "\n");
     clearTimeout(_timeoutHandle);
     process.exit(0);
   }
+  // loom#1549 F3 lock 8 — an UNRESOLVABLE `-C` (`git -C $(…) commit`) names a
+  // tree only the shell can produce, and this hook must not evaluate shell
+  // (hook-output-discipline.md Rule 3 / security.md § no-eval). Every git call
+  // below would then run against the literal `$(…)` bytes: they resolve no
+  // directory, `commitHasParent()` returns false, and the hook passes — the
+  // right OUTCOME, but reached by a spawn happening to fail rather than by
+  // decision. Made explicit, and placed BEFORE the spawns so it costs nothing.
+  //
+  // Pass-through, NOT halt-and-report — deliberately the opposite disposition
+  // to validate-bash-command.js's destructive-op fence. That fence is
+  // fail-closed and pre-action, so "unresolvable ranks TIGHTEST" applies there;
+  // its own comment records that the ranking does NOT transfer to the advisory
+  // lane. This is a PostToolUse advisory whose commit has ALREADY landed, and
+  // this file's contract is that it "degrades to pass-through silently
+  // (advisory hooks must never block legitimate workflows on a tooling edge
+  // case)". Guessing a repo would be worse: it would diff the WRONG tree and
+  // report a pairing verdict about a commit that is not the one that landed.
+  if (invocation.unresolvable) {
+    process.stdout.write(JSON.stringify({ continue: true }) + "\n");
+    clearTimeout(_timeoutHandle);
+    process.exit(0);
+  }
+  // Point every subsequent git call at the tree the commit was actually made
+  // in. `dir` is null for an ordinary `git commit`, which leaves the spawns on
+  // the session cwd exactly as before.
+  repoDir = invocation.dir || null;
   if (!commitHasParent()) {
     // Root commit — no diff to inspect. Pass.
     process.stdout.write(JSON.stringify({ continue: true }) + "\n");
@@ -319,7 +378,14 @@ function main() {
 // symbol sets so the F88 dispatch-contract refinement is regression-locked
 // per cc-artifacts.md Rule 9 + hook-output-discipline.md MUST-4.
 if (require.main === module) {
-  main();
+  // main() is async since loom#1368 (event-driven stdin read). Any rejection
+  // MUST fail OPEN — an advisory hook never blocks a legitimate commit on a
+  // tooling edge case (cc-artifacts.md Rule 7 / hook-output-discipline MUST-1).
+  main().catch(() => {
+    process.stdout.write(JSON.stringify({ continue: true }) + "\n");
+    clearTimeout(_timeoutHandle);
+    process.exit(0);
+  });
 } else {
   clearTimeout(_timeoutHandle);
 }
