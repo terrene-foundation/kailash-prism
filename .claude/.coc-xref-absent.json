@@ -1,0 +1,389 @@
+{
+  "format": 1,
+  "target": "prism",
+  "mode": "build",
+  "generated_by": "sync-tier-aware.mjs (loom Gate-2 distribution)",
+  "note": "Tokens cited by artifacts in THIS tree whose referents the distribution manifest PROVES are not delivered here. Absent-by-design, not dangling. A reader that does not recognise `format` MUST ignore this file and behave as if it were absent (forward-compat). A file that IS this format but is unreadable or structurally wrong is MALFORMED, and MUST be reported as an incomplete run — never read as 'nothing is absent by design'. SOURCE-SCOPED, and this is load-bearing: each entry is keyed on the bare token, but the absence was PROVED only for the citing files in its `sources` array. A reader MUST excuse a finding only when BOTH the token matches AND the finding's citing file is in that entry's `sources`. Matching on the token alone over-suppresses — it would silently excuse a NEW citer this declaration never adjudicated, which is the dangerous direction: a genuinely dangling reference reported as absent-by-design.",
+  "absent": {
+    ".claude/agents/_README.md": {
+      "why": "exclude",
+      "sources": [
+        ".claude/guides/claude-code/12-troubleshooting.md"
+      ]
+    },
+    ".claude/agents/management/coc-sync.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/guides/co-setup/05-variant-architecture.md"
+      ]
+    },
+    ".claude/agents/management/repo-ops.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/guides/co-setup/05-variant-architecture.md"
+      ]
+    },
+    ".claude/agents/management/settings-manager.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/guides/co-setup/05-variant-architecture.md"
+      ]
+    },
+    ".claude/agents/management/todo-manager.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/guides/model-optimization/04-implementation-plan.md"
+      ]
+    },
+    ".claude/audit-fixtures/log-triage-gate/": {
+      "why": "directory_not_shipped",
+      "sources": [
+        ".claude/guides/rule-extracts/observability.md"
+      ]
+    },
+    ".claude/bin/lib/loom-links.mjs": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/commands/ecosystem-init.md",
+        ".claude/commands/enroll.md",
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    ".claude/commands/clean-instantiate.md": {
+      "why": "tier_not_subscribed",
+      "sources": [
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    ".claude/commands/govern.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    ".claude/commands/inspect.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/guides/co-setup/05-variant-architecture.md"
+      ]
+    },
+    ".claude/commands/repos.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/guides/co-setup/05-variant-architecture.md"
+      ]
+    },
+    ".claude/commands/settings.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/guides/co-setup/05-variant-architecture.md"
+      ]
+    },
+    ".claude/commands/sync-from-build.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    ".claude/commands/sync-from-downstream.md": {
+      "why": "build_exclude",
+      "sources": [
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    ".claude/commands/sync-from-template.md": {
+      "why": "build_exclude",
+      "sources": [
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    ".claude/commands/sync-from-use.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    ".claude/commands/sync-to-build.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    ".claude/commands/sync-to-use.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/rules/self-referential-codify.md"
+      ]
+    },
+    "bin/check-sync-freshness.mjs": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/rules/sync-completeness.md"
+      ]
+    },
+    "bin/lib/loom-links.mjs": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/rules/artifact-flow.md",
+        ".claude/skills/30-claude-code-patterns/sync-flow.md"
+      ]
+    },
+    "commands/cli-audit.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/skills/30-claude-code-patterns/multi-cli-migration.md"
+      ]
+    },
+    "commands/deploy.md": {
+      "why": "build_exclude",
+      "sources": [
+        ".claude/rules/deploy-hygiene.md",
+        ".claude/skills/10-deployment-git/application-deployment.md"
+      ]
+    },
+    "commands/sync-from-template.md": {
+      "why": "build_exclude",
+      "sources": [
+        ".claude/skills/30-claude-code-patterns/multi-cli-migration.md"
+      ]
+    },
+    "commands/sync-to-build.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/guides/co-setup/07-sync-flow.md",
+        ".claude/guides/co-setup/08-versioning.md"
+      ]
+    },
+    "commands/sync-to-use.md": {
+      "why": "loom_only",
+      "sources": [
+        ".claude/rules/sync-completeness.md"
+      ]
+    },
+    "journal/0003-RISK-spec04-silent-regression-via-parallel-merge.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/skills/30-claude-code-patterns/parallel-merge-workflow.md"
+      ]
+    },
+    "journal/0006-DECISION-wrapper-emission-disposition-strip.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/skills/command-authoring/SKILL.md",
+        ".claude/skills/hook-authoring/SKILL.md"
+      ]
+    },
+    "journal/0042-DECISION-feature-set.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0055": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0059": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0059-DISCOVERY-value-prioritization-f1-5-empirical-results.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/guides/rule-extracts/value-prioritization.md"
+      ]
+    },
+    "journal/0060": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0063": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0065": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0067": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0068": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0069": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/value-prioritization.md"
+      ]
+    },
+    "journal/0073": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/sync-completeness.md"
+      ]
+    },
+    "journal/0073-DECISION-v6.2-shards-1-2-3-converged-2026-05-15.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/guides/rule-extracts/sync-completeness.md"
+      ]
+    },
+    "journal/0074": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/sync-completeness.md"
+      ]
+    },
+    "journal/0089": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/commands/wrapup.md"
+      ]
+    },
+    "journal/0117": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/commands/whoami.md"
+      ]
+    },
+    "journal/0128-DECISION-multi-operator-coc-m1-complete-2026-05-21.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/commands/claim.md",
+        ".claude/commands/claims.md",
+        ".claude/commands/release-claim.md"
+      ]
+    },
+    "journal/0143-DECISION-m9-3-closure-partial-py-rb-shipped-rs-deferred-2026-05-22.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/skills/30-claude-code-patterns/closure-parity-specialist-discipline.md"
+      ]
+    },
+    "journal/0144": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/rule-authoring.md"
+      ]
+    },
+    "journal/0146": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/rule-authoring.md",
+        ".claude/skills/skill-authoring/proximity-band-named-rationale-template.md"
+      ]
+    },
+    "journal/0147": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/rule-authoring.md",
+        ".claude/skills/skill-authoring/proximity-band-named-rationale-template.md"
+      ]
+    },
+    "journal/0148": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/rule-authoring.md",
+        ".claude/skills/skill-authoring/proximity-band-named-rationale-template.md"
+      ]
+    },
+    "journal/0149": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/skills/skill-authoring/proximity-band-named-rationale-template.md"
+      ]
+    },
+    "journal/0158-DECISION-certify-onboarding-mechanism-2026-05-25.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/commands/certify.md",
+        ".claude/skills/42-certify/SKILL.md"
+      ]
+    },
+    "journal/0170-esperie-DECISION-f86-f70-f71-parallel-wave-2026-05-29.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/multi-operator-coordination.md"
+      ]
+    },
+    "journal/0171": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/skills/30-claude-code-patterns/genesis-migration-n1-org-admin-anchor.md"
+      ]
+    },
+    "journal/0173": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/multi-operator-coordination.md",
+        ".claude/skills/30-claude-code-patterns/genesis-migration-n1-org-admin-anchor.md"
+      ]
+    },
+    "journal/0182": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/commands/cc-audit.md"
+      ]
+    },
+    "journal/0226": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/wave-loop.md"
+      ]
+    },
+    "journal/0230-esperie-DECISION-382-journal-contract-reconciliation.md": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/journal.md"
+      ]
+    },
+    "journal/0280": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/artifact-flow.md"
+      ]
+    },
+    "journal/0282": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/artifact-flow.md",
+        ".claude/rules/multi-operator-coordination.md"
+      ]
+    },
+    "journal/0284": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/multi-operator-coordination.md"
+      ]
+    },
+    "journal/0289": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/artifact-flow.md"
+      ]
+    },
+    "journal/0335": {
+      "why": "outside_owned_surfaces",
+      "sources": [
+        ".claude/rules/artifact-flow.md"
+      ]
+    }
+  }
+}

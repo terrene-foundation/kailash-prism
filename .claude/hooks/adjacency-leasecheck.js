@@ -6,15 +6,26 @@
  * multi-operator session now surfaces sibling activity per §4.1's
  * SAME / ADJACENT / INDEPENDENT relation.
  *
- * Per architecture v11 §4.3 hook-table row:
+ * Per architecture v11 §4.3 hook-table row, with the §4.2 severity as
+ * SHIPPED (block → halt-and-report, loom#1323):
  *
  *   Event:    pre-tool-use (Edit | Write)
  *   Severity: halt-and-report (SAME)
- *             block (§4.2 filesystem exception — `git status --porcelain`
- *                    is the structural primitive — only branch that may
- *                    carry block per hook-output-discipline.md MUST-2)
+ *             halt-and-report (§4.2 filesystem exception — `git status
+ *                    --porcelain` IS a valid structural primitive, so
+ *                    hook-output-discipline.md MUST-2 WOULD PERMIT block
+ *                    here; the downgrade is proportionality, NOT a MUST-2
+ *                    violation fix. Sibling worktrees have physically
+ *                    separate working trees: this write cannot clobber the
+ *                    sibling's bytes on disk, so the only real collision
+ *                    is a 3-way merge conflict at merge time — which git
+ *                    surfaces loudly and NON-destructively. block stays
+ *                    reserved for IRRECOVERABLE outcomes.)
  *             advisory (ADJACENT)
  *             silent + auto-claim (INDEPENDENT)
+ *
+ *   NO branch of this hook carries severity: block.
+ *
  *   Budget:   ≤5s; setTimeout fallback per cc-artifacts.md Rule 7.
  *
  * Flow:
@@ -30,8 +41,10 @@
  *
  * The §4.2 filesystem exception: when a sibling worktree's `git status
  * --porcelain` shows the EXACT target path as uncommitted-modified, the
- * structural signal IS deterministic (process-local primitive) and the
- * hook MAY return severity: block. Surrogate for tests: the
+ * structural signal IS deterministic (process-local primitive), so
+ * hook-output-discipline.md MUST-2 would permit severity: block — the
+ * hook nonetheless returns halt-and-report on the proportionality grounds
+ * in the severity table above (loom#1323). Surrogate for tests: the
  * COC_PORCELAIN_OVERRIDE env var injects a newline-separated list of
  * paths the harness wants the hook to treat as sibling-uncommitted; in
  * production this is replaced by an actual `git -C <sibling-worktree>
@@ -90,7 +103,7 @@ const { isMutationTool } = require(
 const { isCoordinationEnabled } = require(
   path.join(__dirname, "lib", "coordination-mode.js"),
 );
-const { resolveMainCheckout } = require(
+const { requireMainCheckout } = require(
   path.join(__dirname, "lib", "state-resolver.js"),
 );
 
@@ -296,12 +309,26 @@ function detectFilesystemExceptionMatch(candidateRelPath, repoDir) {
   }
   // Production primitive — sibling-porcelain.js (B3a Step 6 wiring).
   if (!repoDir) return null;
-  const matches = siblingPorcelain.detectSiblingMutation(
-    repoDir,
-    candidateRelPath,
-  );
-  if (matches && matches.length > 0) {
-    return matches[0].target;
+  // loom#1471 shard 5. Result-object API now. This surface is ADVISORY (it
+  // answers "is a sibling already touching this path", feeding an adjacency
+  // notice, not a fence), so an indeterminate answer keeps returning null —
+  // but it says so on stderr rather than being indistinguishable from a clean
+  // negative. Deliberately narrower than signing-mutation-guard, which
+  // halt-and-reports: that surface gates a write, this one annotates one.
+  const res = siblingPorcelain.detectSiblingMutation(repoDir, candidateRelPath);
+  if (!res.ok) {
+    try {
+      process.stderr.write(
+        `[ADVISORY] adjacency-leasecheck: sibling contention INDETERMINATE for ` +
+          `${candidateRelPath} — ${res.reason}. Reported as no-adjacency; it is not a clean negative.\n`,
+      );
+    } catch {
+      // best-effort
+    }
+    return null;
+  }
+  if (res.matches.length > 0) {
+    return res.matches[0].target;
   }
   return null;
 }
@@ -371,23 +398,61 @@ function discoverKeyPath() {
     const repoDir = resolveRepoDir(payload);
 
     // MO-OPT W1-e — opt-in gate (workspaces/multi-operator-optional, journal/0330).
-    // Claims, adjacency, and the §4.2 cross-worktree-contention block are all
+    // Claims, adjacency, and the §4.2 cross-worktree-contention halt are all
     // coordination features. A solo / fresh repo (coordination OFF) MUST NOT
-    // get the sibling-worktree block (a solo dev may legitimately run multiple
+    // get the sibling-worktree halt (a solo dev may legitimately run multiple
     // worktrees of their own). Passthrough when OFF. When ENABLED, byte-unchanged
     // (this guard already fail-opens on empty-log / unresolvable identity; the
-    // gate makes the solo no-op explicit + covers the §4.2 block path too).
+    // gate makes the solo no-op explicit + covers the §4.2 halt path too).
     //
     // MO-OPT holistic post-multi-wave redteam (Cluster A): the predicate's tier-2
     // local-override (.claude/learning/coordination-mode.json) is GITIGNORED →
     // ABSENT in a worktree. Reading it against the worktree cwd would split a
     // tier-2-enrolled repo OFF here while integrity-guard / journal-write-guard
-    // read it ON from main — and the §4.2 cross-worktree-contention block (this
+    // read it ON from main — and the §4.2 cross-worktree-contention halt (this
     // guard's whole reason to exist in a parallel-worktree run) is exactly what
     // gets silenced. Resolve the MAIN checkout for the predicate ONLY (the same
     // main-checkout discipline as trust-posture.md MUST-1 / integrity-guard.js
     // :362); repoDir stays the worktree cwd for the claim + repoRelative below.
-    if (!isCoordinationEnabled(resolveMainCheckout(repoDir) || repoDir)) {
+    // loom#1471 F7b — fail CLOSED when git cannot identify the main checkout.
+    // The former `resolveMainCheckout(repoDir) || repoDir` could not fire (the
+    // legacy accessor returns its argument, never falsy), so an unidentifiable
+    // root reached the predicate against a directory with no coordination state
+    // → false → `passthrough()`, silencing the §4.2 cross-worktree-contention
+    // halt that is this guard's whole reason to exist in a parallel run.
+    // `repoDir` deliberately STAYS the worktree cwd below (claim + repoRelative);
+    // only the predicate reads main.
+    const mainRes = requireMainCheckout(repoDir);
+    if (!mainRes.ok) {
+      clearTimeout(fallback);
+      emit({
+        hookEvent,
+        severity: "halt-and-report",
+        what_happened: `Adjacency lease-check could not run: the MAIN checkout could not be identified — ${mainRes.reason}`,
+        why: "multi-operator-coc/adjacency-leasecheck — sibling claims live in the MAIN checkout's coordination log. Unidentified, the coordination-enabled predicate returns false and its branch is `passthrough()`, so cross-worktree contention goes unchecked exactly when the resolver is confused about which tree it is in. Refusing is the fail-closed direction (`rules/security.md` § Enforcement-Surface Parity).",
+        agent_must_report: [
+          `Worktree cwd: ${repoDir}`,
+          `Resolver reason: ${mainRes.reason}`,
+          "Sibling-claim contention was NOT checked — its result is UNKNOWN, not clean.",
+          "A differently-owned checkout reports `detected dubious ownership`; take ownership, or set CLAUDE_TRUST_STATE_DIR.",
+        ],
+        agent_must_wait:
+          "Do not retry until git can identify the main checkout, or the operator pins CLAUDE_TRUST_STATE_DIR.",
+        // SAME CLAIM, SAME CORRECTION as `analyze-completeness-guard.js`, swept
+        // in the same change (`security.md` § Enforcement-Surface Parity). These
+        // two are the only TRUST_BEARING hooks whose indeterminate branch is
+        // `halt-and-report` rather than `block` — i.e. the only two where
+        // "refused rather than passed through" is FALSE, because
+        // `instruct-and-wait.js` maps this severity to `{continue: true}` and the
+        // tool RUNS. The other four making this claim emit `block` and it holds
+        // for them, so they are deliberately left alone. This is the only line
+        // the user actually sees.
+        user_summary:
+          "adjacency-leasecheck — main checkout unidentifiable; contention NOT checked, action proceeds with its result UNKNOWN",
+      });
+      // emit() exits
+    }
+    if (!isCoordinationEnabled(mainRes.repoDir)) {
       passthrough();
     }
 
@@ -418,20 +483,51 @@ function discoverKeyPath() {
     // Read + fold the coordination log via filesystem Transport.
     const transport = createFilesystemTransport(repoDir);
     let records;
+    let readIndeterminate = null;
     try {
       records = await transport.readAllRecords();
-    } catch {
-      // Transport read failure → treat as empty log; passthrough.
-      passthrough();
+    } catch (err) {
+      // INDETERMINATE — NOT an empty log. "Treat as empty log; passthrough" was
+      // verbatim the disposition the transport contract forbids: the read failed,
+      // so sibling claims are UNKNOWN, and a silent passthrough reports that as
+      // "no adjacent claims" (rules/instrument-discipline.md MUST-1).
+      readIndeterminate = err && err.message ? err.message : String(err);
     }
     const rosterPath = path.join(repoDir, ".claude", "operators.roster.json");
     const roster = loadRoster(rosterPath);
     let foldResult;
-    try {
-      foldResult = foldLog(records, roster, {});
-    } catch {
-      // Fold engine failure → passthrough (advisory at most).
-      passthrough();
+    if (!readIndeterminate) {
+      try {
+        foldResult = foldLog(records, roster, {});
+      } catch (err) {
+        // Same class as the transport failure above: a fold that threw did not
+        // compute an empty claim set, so passthrough would report UNKNOWN as
+        // "no adjacent claims". fold-rule-10.js:271 calls peerHighWaterFor()
+        // unwrapped, so a git-ref-transport deployment can surface the shard-7
+        // indeterminate throw right here.
+        readIndeterminate = err && err.message ? err.message : String(err);
+      }
+    }
+
+    if (readIndeterminate) {
+      clearTimeout(fallback);
+      emit({
+        hookEvent,
+        severity: "halt-and-report",
+        what_happened: `Adjacency lease check could not run: the coordination log could not be read or folded — ${readIndeterminate}`,
+        why: "multi-operator-coc/adjacency-leasecheck — sibling claim adjacency is projected from the folded coordination log, and that read/fold FAILED. Adjacent sibling claims are therefore UNKNOWN, not absent, and the previous `passthrough()` reported the two identically (rules/instrument-discipline.md MUST-1). Severity is halt-and-report, NOT block, matching this guard's own indeterminate-ROOT branch above and on the same proportionality grounds: this guard gates an ADVISORY on claim adjacency rather than fencing a mutation, so its off-branch does not let an unauthorized write land — the two mutation fences on this same predicate (integrity-guard, journal-write-guard) do, which is why they take block and this one does not.",
+        agent_must_report: [
+          `Why the check could not answer: ${readIndeterminate}`,
+          "State explicitly that adjacent sibling claims are UNKNOWN for this work — NOT that there are none.",
+          "A sibling operator may hold an active claim on an adjacent path; the log that would show it could not be read.",
+          "Remediation: make .claude/learning/coordination-log.jsonl readable (check permissions, and that it is a regular file), then retry.",
+        ],
+        agent_must_wait:
+          "Report that adjacency is UNKNOWN and wait for the operator's direction before proceeding on adjacent paths.",
+        user_summary:
+          "adjacency-leasecheck — coordination log UNREADABLE; sibling adjacency INDETERMINATE (not a clean result)",
+      });
+      // emit() exits
     }
     const accepted =
       foldResult && Array.isArray(foldResult.accepted)
@@ -461,19 +557,20 @@ function discoverKeyPath() {
       clearTimeout(fallback);
       emit({
         hookEvent,
-        severity: "block",
+        severity: "halt-and-report",
         what_happened: `Sibling worktree has '${candidateRelPath}' uncommitted-modified (porcelain match).`,
-        why: "multi-operator-coc/adjacency-leasecheck §4.2 filesystem exception — structural primitive: `git status --porcelain` reports the exact target file modified in a sibling worktree (hook-output-discipline.md MUST-2 satisfied: block grounded in structural process-local signal, not lexical match)",
+        why: "multi-operator-coc/adjacency-leasecheck §4.2 filesystem exception — structural primitive: `git status --porcelain` reports the exact target file modified in a sibling worktree. That signal IS structural + process-local, so hook-output-discipline.md MUST-2 would PERMIT severity: block; the branch emits halt-and-report on proportionality grounds (loom#1323) — sibling worktrees have physically separate working trees, so this write cannot clobber the sibling's bytes on disk, and the only real collision is a 3-way merge conflict at merge time, which git surfaces loudly and non-destructively. Surface the contention; the operator adjudicates.",
         agent_must_report: [
           `Target path: ${candidateRelPath}`,
           matchedClaim && matchedClaim.claim_id
             ? `Conflicting active claim: ${matchedClaim.claim_id} (operator ${matchedClaim.sibling_display_id || matchedClaim.sibling_person_id || "unknown"})`
             : "No active sibling claim recorded; the porcelain signal alone established cross-worktree contention.",
-          "Coordinate with the sibling operator before retrying (commit/stash their WIP, or wait for them to land their edits).",
+          "The sibling's on-disk work is NOT at risk (separate working trees); the exposure is a 3-way merge conflict when both branches land.",
+          "Adjudication options: reconcile at merge, coordinate with the sibling operator (they commit/stash/land first), or re-scope this edit.",
         ],
         agent_must_wait:
-          "Do not retry the Edit/Write until the sibling worktree's working tree no longer shows this file as modified.",
-        user_summary: `adjacency-leasecheck — BLOCK on cross-worktree contention for ${candidateRelPath}`,
+          "Report the contention and your recommended option, then wait for the operator's direction before further edits to this path.",
+        user_summary: `adjacency-leasecheck — cross-worktree contention on ${candidateRelPath} (sibling worktree holds it uncommitted-modified)`,
       });
       // emit() exits
     }
@@ -490,7 +587,7 @@ function discoverKeyPath() {
         hookEvent,
         severity: "halt-and-report",
         what_happened: `SAME-class conflict on '${candidateRelPath}' against active sibling claim ${sameVerdict.claim_id} (predicate: ${sameVerdict.predicate}, sibling: ${sameVerdict.sibling_display_id || sameVerdict.sibling_person_id || "unknown"}).`,
-        why: "multi-operator-coc/adjacency-leasecheck §4.1 SAME predicate — registry-record-class signal (not structural per hook-output-discipline.md MUST-2; severity: halt-and-report). Architecture v11 §4.3 specifies SAME → halt-and-report; the registry record IS the lease database, not a structural primitive, so block severity is reserved for the §4.2 filesystem exception only.",
+        why: "multi-operator-coc/adjacency-leasecheck §4.1 SAME predicate — registry-record-class signal (not structural per hook-output-discipline.md MUST-2; severity: halt-and-report). Architecture v11 §4.3 specifies SAME → halt-and-report; the registry record IS the lease database, not a structural primitive, so block severity is unavailable here on MUST-2 grounds. The structurally-grounded cross-worktree-contention branch COULD take block under MUST-2 but emits halt-and-report on proportionality grounds (loom#1323) — no branch of this hook carries block.",
         agent_must_report: [
           `Target path: ${candidateRelPath}`,
           `Conflicting active claim: ${sameVerdict.claim_id}`,
