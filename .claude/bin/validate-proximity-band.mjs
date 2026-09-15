@@ -57,6 +57,25 @@
  *        addition in diff; cc-architect demands paired extraction
  *        OR named-rationale exception per Rule 10
  *    2 = usage / IO error
+ *    3 = UNRUN — the emit dry-run did not produce a readable lane set
+ *        (non-zero exit, or zero lanes parsed). NOTHING WAS MEASURED;
+ *        this is NOT a pass. See § Coverage floor below.
+ *
+ *  Coverage floor (loom#1537) — the verdict is only readable when the
+ *  emit dry-run actually produced lanes. Before this gate the final
+ *  exit was `ruleFires ? 1 : 0`, and `ruleFires` is computed from
+ *  `nearBreachLanes`, which is derived from `emit.lanes`. A failed emit
+ *  dry-run yields zero lanes → zero near-breach lanes → ruleFires false
+ *  → exit 0. The gate reported SUCCESS *because* it measured nothing:
+ *  the output is identical whether every lane is safely above the band
+ *  or no lane was ever examined, which is exactly the non-discriminating
+ *  instrument `instrument-discipline.md` MUST-1 forbids citing as
+ *  evidence. `coverage_asserted` (JSON) and the UNRUN banner (text) are
+ *  the discriminator; consumers MUST read one of them, not the exit code
+ *  alone. Same shape as `coc-eval-all.mjs`'s `coverage_asserted` +
+ *  "NO STRUCTURAL COVERAGE" banner (`coc-artifact-eval-coverage.md`
+ *  MUST-3) and `sync-flow.md` §0b(iv)'s "`Total checks: 0` is UNRUN,
+ *  not PASS".
  *
  *  Value-anchor (per `value-prioritization.md` MUST-1 source c — journal
  *  DECISION entries): `journal/0155` § F23e names this script as the
@@ -85,6 +104,8 @@ import {
   HEADROOM_PROXIMITY_BAND_PCT_DEFAULT,
   getProximityBandAdvisory,
 } from "./emit.mjs";
+// loom#1501 (L4) — the lang axis, declared once. See VALID_LANGS below.
+import { EMIT_LANGS, EMIT_CLIS } from "./lib/emit-axes.mjs";
 
 // --- Constants ----------------------------------------------------------
 
@@ -234,27 +255,63 @@ export function runEmitDryRun(repoRoot, { langs = [null] } = {}) {
     // we surface the worst exit code observed across lang passes.
     if (result.status !== 0 && exitCode === 0) exitCode = result.status;
 
-    // Parse ADVISORY lines for live headroom_pct values.
+    // loom#1501 (L4) — ALL THREE line shapes carry an OPTIONAL lane qualifier.
+    // emit.mjs prints `[<cli>]` on a no-`--lang` run and `[<cli> <lang>]` — cli,
+    // SPACE, lane — whenever `--lang` is set. `floorRe` below already had the
+    // `(?: ([a-z]+))?` group; `advisoryRe` and `tierRe` did NOT, so their
+    // `\[([a-z]+)\]` could not match a lane-qualified bracket at all. The
+    // consequence was total, not partial: EVERY non-null lane tripped the
+    // parse-drift guard below and returned exit 2 / zero lanes —
+    //
+    //   langs=[null]     exit=0 lanes=2      (the only shape that ever worked)
+    //   langs=["py"]     exit=2 lanes=0  "parse drift: … zero tier-summary matches"
+    //   langs=["rs"]     exit=2 lanes=0
+    //   langs=["rb"]     exit=2 lanes=0
+    //   langs=["base"]   exit=2 lanes=0
+    //   langs=["prism"]  exit=2 lanes=0
+    //
+    // so `--lang` was non-functional on this gate for every value it accepted.
+    // It stayed hidden because the two reachable paths both produce UNqualified
+    // rows: the default is `null`, and `--lang base` was silently rewritten to
+    // `null` by the aliasing bug fixed above. Fixing that aliasing is what
+    // surfaced this.
+    //
     // Line shape (emit.mjs:679-683):
-    //   `[<cli>] ADVISORY: headroom X.XX% within Y% proximity band — next ...`
+    //   `[<cli>( <lang>)?] ADVISORY: headroom X.XX% within Y% proximity band — …`
     const advisoryRe =
-      /^\[([a-z]+)\] ADVISORY: headroom (-?\d+\.\d+|-?\d+)% within (\d+(?:\.\d+)?)% proximity band/;
+      /^\[([a-z]+)(?: ([a-z][a-z0-9._-]*))?\] ADVISORY: headroom (-?\d+\.\d+|-?\d+)% within (\d+(?:\.\d+)?)% proximity band/;
     // We also note tier-summary lines so non-advisory lanes are
     // recorded (advisory_fired=false). Without the tier-summary we
     // would silently miss lanes whose headroom_pct is clean.
     // Line shape (emit.mjs:1250):
-    //   `[<cli>] <TIER>: <rules> rules, <bytes>B → <path>`
-    const tierRe = /^\[([a-z]+)\] (OK|WARN|BLOCK): (\d+) rules, (\d+)B/;
+    //   `[<cli>( <lang>)?] <TIER>: <rules> rules, <bytes>B → <path>`
+    const tierRe =
+      /^\[([a-z]+)(?: ([a-z][a-z0-9._-]*))?\] (OK|WARN|BLOCK): (\d+) rules, (\d+)B/;
     // Floor-breach line shape (emit.mjs:1305):
     //   `[<cli>(<lang>)?] headroom-floor (BLOCK|WARN): X.XX% < Y% floor`
     const floorRe =
       /^\[([a-z]+)(?: ([a-z]+))?\] headroom-floor (BLOCK|WARN): (-?\d+\.\d+|-?\d+)% < (\d+(?:\.\d+)?)% floor/;
+    // loom#1539 (B) — the UNCONDITIONAL headroom line (emit.mjs, printed for
+    // every lane on every run). This, not `advisoryRe`, is now the carrier of
+    // the measurement; `advisoryRe` carries only the FLAG that emit's own band
+    // check fired. Line shape:
+    //   `[<cli>( <lang>)?] headroom: X.XX% (band Y%, floor Z%, cap NB)`
+    const headroomRe =
+      /^\[([a-z]+)(?: ([a-z][a-z0-9._-]*))?\] headroom: (-?\d+(?:\.\d+)?)% \((?:band (\d+(?:\.\d+)?)%)/;
 
-    // Per-lang lane key: cli + lang. base lane has lang=null.
-    const laneKey = (cli) => `${cli}|${lang || "base"}`;
+    // Per-lang lane key: cli + lang.
+    // loom#1501 (L4) — the no-`--lang` pass is labelled `(no-overlay)`, NOT
+    // "base". `base` is a real declared lane with its own overlay and its own
+    // bytes (54143B vs 53168B on codex), and it is now reachable as `--lang
+    // base`, so labelling the no-overlay pass "base" would put two different
+    // compositions under one name in the same report.
+    const NO_OVERLAY_LABEL = "(no-overlay)";
+    const laneLabel = lang || NO_OVERLAY_LABEL;
+    const laneKey = (cli) => `${cli}|${laneLabel}`;
     const advisorySeen = new Map();
     const tierSeen = new Map();
     const floorSeen = new Map();
+    const headroomSeen = new Map();
     // Reviewer R1 M1: parse-drift loud failure. After processing the lines
     // below, if stdout had bytes BUT zero tier-summary matches, the
     // emit.mjs output format has drifted and the validator MUST surface
@@ -265,9 +322,9 @@ export function runEmitDryRun(repoRoot, { langs = [null] } = {}) {
       if (m) {
         advisorySeen.set(laneKey(m[1]), {
           cli: m[1],
-          lang: lang || "base",
-          headroom_pct: Number(m[2]),
-          proximity_band_pct: Number(m[3]),
+          lang: m[2] || laneLabel,
+          headroom_pct: Number(m[3]),
+          proximity_band_pct: Number(m[4]),
           advisory_fired: true,
           raw_line: line,
         });
@@ -277,10 +334,21 @@ export function runEmitDryRun(repoRoot, { langs = [null] } = {}) {
       if (m) {
         tierSeen.set(laneKey(m[1]), {
           cli: m[1],
-          lang: lang || "base",
-          tier: m[2],
-          rules: Number(m[3]),
-          emission_bytes: Number(m[4]),
+          lang: m[2] || laneLabel,
+          tier: m[3],
+          rules: Number(m[4]),
+          emission_bytes: Number(m[5]),
+          raw_line: line,
+        });
+        continue;
+      }
+      m = line.match(headroomRe);
+      if (m) {
+        headroomSeen.set(laneKey(m[1]), {
+          cli: m[1],
+          lang: m[2] || laneLabel,
+          headroom_pct: Number(m[3]),
+          proximity_band_pct: Number(m[4]),
           raw_line: line,
         });
         continue;
@@ -289,7 +357,7 @@ export function runEmitDryRun(repoRoot, { langs = [null] } = {}) {
       if (m) {
         floorSeen.set(laneKey(m[1]), {
           cli: m[1],
-          lang: m[2] || lang || "base",
+          lang: m[2] || laneLabel,
           headroom_pct: Number(m[4]),
           headroom_floor_pct: Number(m[5]),
           floor_breach: true,
@@ -323,6 +391,7 @@ export function runEmitDryRun(repoRoot, { langs = [null] } = {}) {
     for (const [key, tier] of tierSeen) {
       const adv = advisorySeen.get(key);
       const fl = floorSeen.get(key);
+      const hr = headroomSeen.get(key);
       lanes.push({
         cli: tier.cli,
         lang: tier.lang,
@@ -330,13 +399,31 @@ export function runEmitDryRun(repoRoot, { langs = [null] } = {}) {
         rules: tier.rules,
         emission_bytes: tier.emission_bytes,
         advisory_fired: !!adv,
-        headroom_pct: adv ? adv.headroom_pct : null,
-        proximity_band_pct: adv
-          ? adv.proximity_band_pct
-          : HEADROOM_PROXIMITY_BAND_PCT_DEFAULT,
+        // loom#1539 (B) — read the measurement from the UNCONDITIONAL
+        // headroom line first. `adv` is the fallback only so a lane emitted
+        // by an older emit.mjs (advisory line, no headroom line) still
+        // carries a number rather than reading as unmeasured. A lane with
+        // NEITHER lands headroom_pct=null, which `main()` now treats as an
+        // UNRUN reason — the case that previously read as "above band".
+        headroom_pct: hr
+          ? hr.headroom_pct
+          : adv
+            ? adv.headroom_pct
+            : null,
+        headroom_source: hr ? "headroom_line" : adv ? "advisory_line" : null,
+        proximity_band_pct: hr
+          ? hr.proximity_band_pct
+          : adv
+            ? adv.proximity_band_pct
+            : HEADROOM_PROXIMITY_BAND_PCT_DEFAULT,
         floor_breach: !!fl,
         floor_breach_headroom_pct: fl ? fl.headroom_pct : null,
-        raw_lines: [tier.raw_line, adv?.raw_line, fl?.raw_line].filter(Boolean),
+        raw_lines: [
+          tier.raw_line,
+          adv?.raw_line,
+          hr?.raw_line,
+          fl?.raw_line,
+        ].filter(Boolean),
       });
     }
   }
@@ -472,8 +559,22 @@ export function scanProposalDiffForBaselineAdditions(
 // Input-validation predicates (security-reviewer R1 fixes):
 //   MEDIUM-1: git refs must not start with `-` (option-injection class).
 //   MEDIUM-3: --lang must be from a closed allowlist.
+//
+// loom#1501 (L4) — the allowlist is now the SHARED declaration, not a local
+// literal. Its option-injection purpose is unchanged (this value is spliced into
+// an `emit.mjs --lang <v>` spawn), but the local copy had DRIFTED to
+// ["py","rs","base"] and rejected two lanes loom actually declares:
+//
+//   validate-proximity-band.mjs --lang rb → exit 2
+//     "error: --lang must be one of py, rs, base; got 'rb'"
+//   validate-proximity-band.mjs --lang py → exit 0, empty stderr   (control)
+//
+// A closed allowlist is only as correct as its set. Deriving it from the same
+// declaration `emit.mjs` validates against makes the two surfaces incapable of
+// disagreeing, which is what `security.md` § Enforcement-Surface Parity asks for
+// (ONE shared function, not N synchronised copies).
 const GIT_REF_RE = /^[A-Za-z0-9._/\-]+$/;
-const VALID_LANGS = new Set(["py", "rs", "base"]);
+const VALID_LANGS = new Set(EMIT_LANGS);
 
 function isValidGitRef(s) {
   return (
@@ -490,7 +591,11 @@ function parseArgs(argv) {
     head: DEFAULT_HEAD_REF,
     proximityBandPct: HEADROOM_PROXIMITY_BAND_PCT_DEFAULT,
     repoRoot: null,
-    langs: [null], // base lane only by default; pass --lang to extend
+    // `null` means "spawn emit.mjs with NO --lang", i.e. the no-overlay
+    // composition. loom#1501 (L4): that is NOT the `base` lane — `base` has its
+    // own overlay and its own bytes (see the --lang branch below). The default
+    // is unchanged; only its description was wrong.
+    langs: [null],
     json: false,
     help: false,
   };
@@ -532,9 +637,21 @@ function parseArgs(argv) {
         );
         process.exit(2);
       }
-      // Allow --lang py, --lang rs, or --lang base (=null)
-      if (v === "base") out.langs.push(null);
-      else out.langs.push(v);
+      // loom#1501 (L4) — `base` is a LANE, not a synonym for "omit the flag".
+      // This branch used to read `if (v === "base") out.langs.push(null)`,
+      // which dropped `--lang` from the spawn entirely. The two are not the
+      // same composition; measured on the codex CLI:
+      //
+      //   emit.mjs --cli codex --lang base --dry-run  →  54143B  "[codex base]"
+      //   emit.mjs --cli codex             --dry-run  →  53168B  "[codex]"
+      //
+      // 975 bytes apart, because `.claude/variants/base/rules/agents.md` is a
+      // real overlay. So an operator asking this gate to check the `base` lane
+      // was handed the no-overlay lane's headroom instead — a valid measurement
+      // of the WRONG lane (`instrument-discipline.md` MUST-1), inside the gate
+      // whose entire job is reporting proximity to the byte ceiling, and
+      // understating it by 975B every time.
+      out.langs.push(v);
     } else if (a.startsWith("--")) {
       console.error(`unknown flag: ${a}`);
       process.exit(2);
@@ -555,7 +672,7 @@ usage:
   node .claude/bin/validate-proximity-band.mjs [--base REF] [--head REF] \\
                                                [--proximity-band-pct N] \\
                                                [--repo-root PATH] \\
-                                               [--lang py|rs|base] \\
+                                               [--lang ${EMIT_LANGS.join("|")}] \\
                                                [--json] [--help]
 
 optional:
@@ -564,8 +681,11 @@ optional:
   --proximity-band-pct N  proximity-band percentage override
                           (default: emit.mjs HEADROOM_PROXIMITY_BAND_PCT_DEFAULT)
   --repo-root PATH        explicit repo root (default: git rev-parse)
-  --lang py|rs|base       additional lang lanes to scan (repeatable);
-                          default scans only base lanes (codex+gemini)
+  --lang <lane>           additional lang lanes to scan (repeatable).
+                          One of: ${EMIT_LANGS.join(", ")}.
+                          Default scans the NO-OVERLAY composition only
+                          (codex+gemini); note that is not the same thing as
+                          the \`base\` lane, which carries its own overlay.
   --json                  emit JSON report to stdout
   --help, -h              show this message and exit 0
 
@@ -575,7 +695,15 @@ exit codes:
   1   Rule 10 FIRES — ≥1 near-breach lane AND ≥1 baseline-rule addition
       in diff; cc-architect demands paired extraction OR named-rationale
       exception per rule-authoring.md MUST Rule 10
-  2   usage / IO error
+  2   usage / IO error (unknown flag, unresolvable --base/--head ref,
+      repo root that is not a loom-class checkout)
+  3   UNRUN — the gate could not LOOK. Emit dry-run failed, produced no
+      parseable lane, produced an INCOMPLETE lane set, produced a lane
+      with no headroom measurement, or the proposal-diff scan failed.
+      NOT a pass and NOT a clean Rule 10 disposition: nothing was
+      measured, so neither "clean" nor "fires" is readable. Distinct
+      from 1 (the gate found a problem) and 2 (the gate was called
+      wrong) — see coverage_asserted + unrun_reasons in --json.
 
 what it does (per rule-authoring.md MUST Rule 10 Detection mechanism):
   - runs \`node .claude/bin/emit.mjs --all --dry-run\` and parses stdout
@@ -627,15 +755,27 @@ function main() {
     process.exit(2);
   }
 
-  // Analyst FM-B (HIGH): validate that the diff base ref is resolvable
-  // BEFORE running emit. A stale or shallow clone where `origin/main`
-  // does not exist would otherwise produce a silent "ok:false, no diff"
-  // verdict that callers could mistake for "Rule 10 cleared". Convert
-  // the unresolvable-base case to a loud exit 2 per
-  // `verify-resource-existence.md` MUST-1.
-  if (args.base !== "HEAD") {
+  // Analyst FM-B (HIGH): validate that the diff refs are resolvable BEFORE
+  // running emit. A stale or shallow clone where `origin/main` does not exist
+  // would otherwise produce a silent "ok:false, no diff" verdict that callers
+  // could mistake for "Rule 10 cleared". Convert the unresolvable-ref case to
+  // a loud exit 2 per `verify-resource-existence.md` MUST-1.
+  //
+  // loom#1539 (A) — validate the HEAD ref too, not just the base.
+  // `scanProposalDiffForBaselineAdditions` swallows any git failure into
+  // `ok:false` + an EMPTY additions array, and Rule 10 needs a non-empty one
+  // to fire — so an unresolvable head produced `ok:true, verdict:
+  // advisory_only_no_diff, coverage_asserted: true`, exit 0. Measured:
+  // `--head refs/heads/does-not-exist-xyz` exited 0 while carrying
+  // `proposal_diff.ok: false` and `fatal: bad revision` in its own warnings.
+  // Same disposition as the base pre-check below it (analyst FM-B).
+  for (const [flag, ref] of [
+    ["--base", args.base],
+    ["--head", args.head],
+  ]) {
+    if (ref === "HEAD") continue; // always resolvable in a non-empty checkout
     try {
-      execFileSync("git", ["rev-parse", "--verify", args.base], {
+      execFileSync("git", ["rev-parse", "--verify", ref], {
         cwd: repoRoot,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
@@ -643,10 +783,10 @@ function main() {
       });
     } catch {
       console.error(
-        `error: --base ref '${args.base}' is not resolvable in this checkout. ` +
+        `error: ${flag} ref '${ref}' is not resolvable in this checkout. ` +
           `In CI runners with shallow clones, run \`git fetch origin main --depth=N\` ` +
-          `first OR pass an explicit --base REF. Refusing to silently proceed ` +
-          `with an unresolvable diff base (analyst FM-B).`,
+          `first OR pass an explicit ${flag} REF. Refusing to silently proceed ` +
+          `with an unresolvable diff ${flag === "--base" ? "base" : "head"} (analyst FM-B; loom#1539).`,
       );
       process.exit(2);
     }
@@ -654,6 +794,82 @@ function main() {
 
   // Run emit dry-run + parse lanes.
   const emit = runEmitDryRun(repoRoot, { langs: args.langs });
+
+  // Scan proposal diff. Hoisted ABOVE the coverage floor (loom#1539 A): the
+  // diff is the SECOND input to `ruleFires`, so its failure is a coverage
+  // failure, not a footnote. It used to be computed below the floor and its
+  // `ok` flag was never read by anything.
+  const diff = scanProposalDiffForBaselineAdditions(
+    repoRoot,
+    args.base,
+    args.head,
+  );
+
+  // COVERAGE FLOOR (loom#1537). Everything below reads `emit.lanes`; if
+  // that array is empty the whole verdict chain silently degenerates to
+  // "clean" — no lane can be near-breach when no lane exists. Compute
+  // whether this run measured anything BEFORE the verdict, and let it
+  // override the verdict rather than sit unread beside it (the exit=N /
+  // M-lane line was already printed here and simply not acted on).
+  const unrunReasons = [];
+  if (emit.exit_code !== 0) {
+    unrunReasons.push(
+      `emit dry-run exited ${emit.exit_code} (expected 0) — no lane data is trustworthy`,
+    );
+  }
+  if (emit.lanes.length === 0) {
+    unrunReasons.push(
+      "emit dry-run produced 0 parseable lanes — no lane was examined",
+    );
+  }
+  // loom#1539 (C) — CARDINALITY. `lanes.length === 0` was the only count
+  // check, so a PARTIAL lane set passed the floor: mutating one CLI's tier
+  // line yielded `1 lane(s) scanned`, `coverage_asserted: true`, exit 0 —
+  // half the lane set silently dropped, and the dropped half is exactly
+  // where an unmeasured near-breach would hide. The expected count is
+  // DERIVED from the shared axis declaration (`lib/emit-axes.mjs`), not
+  // restated here: a restated literal is the drift shape that file exists to
+  // retire. Guarded on `> 0` so a zero-lane run reports the single reason
+  // above rather than two names for one failure.
+  const expectedLanes = EMIT_CLIS.length * args.langs.length;
+  if (emit.lanes.length > 0 && emit.lanes.length !== expectedLanes) {
+    unrunReasons.push(
+      `emit dry-run produced ${emit.lanes.length} lane(s) but ${expectedLanes} were expected ` +
+        `(${EMIT_CLIS.length} CLI(s) [${EMIT_CLIS.join(", ")}] × ${args.langs.length} lang lane(s) ` +
+        `[${args.langs.map((l) => l ?? "(no-overlay)").join(", ")}]) — the lane set is INCOMPLETE, ` +
+        `so an unmeasured lane may be in the proximity band`,
+    );
+  }
+  // loom#1539 (B) — a lane with NO headroom measurement is UNRUN, never
+  // "above band". emit.mjs now prints the number on every lane on every run,
+  // so null here means the line drifted or the lane genuinely emitted no
+  // measurement — both of which make every downstream near-breach claim on
+  // that lane unreadable. This is the clause that reds the reviewer's
+  // one-token ADVISORY drift IF the headroom line ever drifts with it.
+  const unmeasuredLanes = emit.lanes.filter((l) => l.headroom_pct === null);
+  if (unmeasuredLanes.length > 0) {
+    unrunReasons.push(
+      `${unmeasuredLanes.length} of ${emit.lanes.length} lane(s) carry NO headroom measurement ` +
+        `(${unmeasuredLanes.map((l) => `${l.cli} ${l.lang}`).join(", ")}) — emit printed neither the ` +
+        `unconditional headroom line nor an ADVISORY line for them, so their distance to the cap is ` +
+        `UNKNOWN and cannot be read as "above band"`,
+    );
+  }
+  // loom#1539 (A) — the diff is the SECOND input to `ruleFires`, and its
+  // failure mode is silent: the scanner swallows any git error into
+  // `ok:false` + an EMPTY additions array, and Rule 10 fires only on a
+  // NON-empty one. Nothing read `diff.ok`, so a failed diff was
+  // indistinguishable from a clean one. The ref pre-check above cannot cover
+  // this alone: a 30s timeout or a 64MB maxBuffer overflow fails the diff
+  // with both refs perfectly valid.
+  if (!diff.ok) {
+    unrunReasons.push(
+      `proposal diff scan FAILED (base=${args.base} head=${args.head}) — no baseline-rule ` +
+        `addition could have been found, so a "no additions" reading is vacuous: ` +
+        `${(diff.warnings || []).join("; ") || "no detail reported"}`,
+    );
+  }
+  const coverageAsserted = unrunReasons.length === 0;
 
   // Identify near-breach lanes. A lane is near-breach iff EITHER
   // (a) emit.mjs printed the ADVISORY line (advisory_fired=true), OR
@@ -670,17 +886,18 @@ function main() {
     return false;
   });
 
-  // Scan proposal diff.
-  const diff = scanProposalDiffForBaselineAdditions(repoRoot, args.base, args.head);
-
+  // (proposal diff scanned above, before the coverage floor — loom#1539 A)
   const baselineAdditions = diff.baseline_additions || [];
   // Rule 10 FIRES iff BOTH near-breach lanes AND baseline-rule
   // additions are present.
   const ruleFires = nearBreachLanes.length > 0 && baselineAdditions.length > 0;
 
-  // Compose verdict.
+  // Compose verdict. UNRUN outranks every other branch: when no lane was
+  // examined, "clean" and "fires" are both unreadable claims, so neither
+  // string may be printed.
   let verdict;
-  if (ruleFires) verdict = "fires";
+  if (!coverageAsserted) verdict = "unrun_no_coverage";
+  else if (ruleFires) verdict = "fires";
   else if (nearBreachLanes.length > 0 && baselineAdditions.length === 0)
     verdict = "advisory_only_no_diff";
   else if (nearBreachLanes.length === 0 && baselineAdditions.length > 0)
@@ -688,8 +905,18 @@ function main() {
   else verdict = "clean";
 
   const report = {
-    ok: !ruleFires,
+    // `ok` is FALSE on an UNRUN run: the gate cannot vouch for a tree it
+    // never measured. `rule_10_fires` stays false because Rule 10 genuinely
+    // did not fire — but a consumer reading only that field would take a
+    // vacuous run for a clean one, which is why `coverage_asserted` exists
+    // and why `ok` folds it in.
+    ok: coverageAsserted && !ruleFires,
     rule_10_fires: ruleFires,
+    // loom#1537 — the discriminator. exit 0 says "Rule 10 did not fire";
+    // this says whether any lane was examined at all. Cite this, not the
+    // exit code alone.
+    coverage_asserted: coverageAsserted,
+    unrun_reasons: unrunReasons,
     verdict,
     // Analyst FM-C (HIGH): name the sub-items this validator does NOT
     // cover so cc-architect's prompt cannot conflate Phase-2a clean
@@ -764,7 +991,33 @@ function main() {
     process.stdout.write(`  near-breach lanes: ${nearBreachLanes.length}\n`);
     process.stdout.write(`  verdict: ${verdict}\n`);
 
-    if (ruleFires) {
+    if (!coverageAsserted) {
+      // The UNRUN banner. `verdict: clean` on a zero-lane run was the string
+      // that made a vacuous run read as a verified one; it is never printed
+      // again. Mirrors coc-eval-all.mjs's NO STRUCTURAL COVERAGE banner.
+      process.stdout.write(
+        "\n" +
+          "=".repeat(58) +
+          "\n" +
+          "  !!  UNRUN — NO LANE COVERAGE; THIS RUN IS NOT EVIDENCE  !!\n" +
+          "  The emit dry-run did not yield a readable lane set, so NO lane was\n" +
+          "  checked against the proximity band. This is NOT a pass and NOT a\n" +
+          "  clean Rule 10 disposition — nothing was measured.\n" +
+          unrunReasons.map((r) => `    - ${r}\n`).join("") +
+          "  Fix the emit dry-run and re-run; do not cite this run as coverage.\n" +
+          "=".repeat(58) +
+          "\n",
+      );
+      if (emit.stderr) {
+        process.stdout.write(
+          `  emit stderr (tail):\n${emit.stderr
+            .split("\n")
+            .slice(-10)
+            .map((l) => `    ${l}\n`)
+            .join("")}`,
+        );
+      }
+    } else if (ruleFires) {
       process.stdout.write(
         "\nRULE 10 FIRES — near-breach lane(s) AND new baseline-rule MUST/MUST NOT/BLOCKED additions.\n\n" +
           "Required disposition (per rule-authoring.md MUST Rule 10):\n" +
@@ -791,6 +1044,10 @@ function main() {
     }
   }
 
+  // Fail closed on a non-discriminating run (loom#1537). Exit 3 is distinct
+  // from 1 (FIRES) and 2 (usage/IO) so a caller can tell "the gate found a
+  // problem" from "the gate could not look".
+  if (!coverageAsserted) process.exit(3);
   process.exit(ruleFires ? 1 : 0);
 }
 
@@ -806,6 +1063,10 @@ export {
   LOAD_BEARING_MARKERS,
   DEFAULT_BASE_REF,
   DEFAULT_HEAD_REF,
+  // loom#1501 (L4) — exported so the parity test can assert this surface's
+  // allowlist IS the shared declaration rather than restating the expected set
+  // (a test that re-typed it would drift exactly as the code did).
+  VALID_LANGS,
 };
 
 if (isMain) main();
